@@ -12,68 +12,113 @@
         SizeToContent="Manual">
 
     <Grid>
-        <!-- Área transparente donde merodean los gatos. Fondo null: solo los gatos capturan clics. -->
-        <Canvas x:Name="Yard" Background="{x:Null}" />
+        <!-- Área transparente donde merodean los gatos y vive la casa. -->
+        <Canvas x:Name="Yard" Background="{x:Null}">
+            <!-- Casa de configuración (esquina). Posición fijada en código. -->
+            <Image x:Name="House" Cursor="Hand"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   RenderOptions.EdgeMode="Aliased"
+                   MouseLeftButtonDown="House_Click"
+                   MouseRightButtonUp="House_Click" />
+        </Canvas>
 
-        <!-- Aviso cuando no hay gatos (p. ej. el servicio no está en ejecución) -->
-        <Border x:Name="EmptyHint" Background="#CC202124" CornerRadius="8" Padding="12,8"
-                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8"
-                Visibility="Collapsed">
-            <TextBlock x:Name="EmptyHintText" Foreground="#FFFFD633" FontSize="12"
-                       FontFamily="Consolas" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
-        </Border>
-
-        <!-- Menú de información por gato (clic derecho). Su DataContext se fija al gato pulsado. -->
+        <!-- Menú de cada gato (clic derecho), en formato lista redondeada. -->
         <Popup x:Name="InfoPopup" Placement="Top" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade">
-            <Border Background="#FF202124" CornerRadius="10" Padding="12" MinWidth="260"
+            <Border Background="#FF202124" CornerRadius="12" Padding="10" MinWidth="250"
                     BorderBrush="#FFFFC400" BorderThickness="1.5">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>
                 <StackPanel>
-                    <TextBlock Text="{Binding DisplayName}" Foreground="#FFFFD633"
-                               FontWeight="Bold" FontSize="14" FontFamily="Consolas" />
-                    <TextBlock Text="{Binding StateText}" Foreground="#FFB0B0B0"
-                               FontSize="11" Margin="0,2,0,8" />
+                    <!-- Nombre de usuario + estado -->
+                    <Border Style="{StaticResource ListCard}" Background="#FF33341A">
+                        <StackPanel>
+                            <TextBlock Text="{Binding DisplayName}" Foreground="#FFFFD633"
+                                       FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
+                            <TextBlock Text="{Binding StateText}" Foreground="#FFB0B0B0" FontSize="11" />
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="Apps activas:" Foreground="#FF9AA0A6" FontSize="11"
-                               Margin="0,0,0,2" />
+                    <!-- Apps abiertas -->
+                    <TextBlock Text="Apps abiertas" Foreground="#FF9AA0A6" FontSize="10" Margin="2,2,0,4" />
                     <ItemsControl ItemsSource="{Binding Apps}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" Foreground="#FFDADCE0" FontSize="11"
-                                           Margin="6,1,0,1" TextTrimming="CharacterEllipsis" />
+                                <Border Style="{StaticResource ListCard}" Padding="10,6">
+                                    <TextBlock Text="{Binding}" Foreground="#FFDADCE0" FontSize="11"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="Cargando apps…" Foreground="#FF808080" FontSize="11" Margin="6,2,0,0"
-                               Visibility="{Binding AppsLoading, Converter={StaticResource BoolToVis}}" />
+                    <Border Style="{StaticResource ListCard}" Padding="10,6"
+                            Visibility="{Binding AppsLoading, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Cargando apps…" Foreground="#FF808080" FontSize="11" />
+                    </Border>
 
-                    <Button Content="Cambiar a esta sesión" Margin="0,10,0,0" Padding="8,5"
-                            Tag="{Binding SessionId}" Click="Switch_Click"
-                            Visibility="{Binding CanSwitch, Converter={StaticResource BoolToVis}}"
-                            Background="#FFFFC400" Foreground="#FF202124"
-                            FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" />
-
-                    <Separator Margin="0,10,0,8" Background="#FF3C4043" />
-
-                    <TextBlock Text="Opciones" Foreground="#FF9AA0A6" FontSize="10" Margin="0,0,0,4" />
-                    <WrapPanel>
-                        <Button Content="Gatos +" Click="CatsBigger_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Gatos −" Click="CatsSmaller_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Franja +" Click="StripTaller_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Franja −" Click="StripShorter_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Recolocar" Click="SnapToTaskbar_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Etiquetas" Click="ToggleLabels_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Actualizar" Click="Update_Click" Style="{StaticResource OptBtn}" />
-                        <Button Content="Salir" Click="Exit_Click" Style="{StaticResource OptBtn}" />
-                    </WrapPanel>
-
-                    <TextBlock x:Name="StatusText" Foreground="#FFFF8A65" FontSize="11"
-                               TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+                    <!-- Cambiar (última opción) -->
+                    <Button Content="Cambiar a esta sesión" Style="{StaticResource ListRowAccent}"
+                            Margin="0,4,0,0" Tag="{Binding SessionId}" Click="Switch_Click"
+                            Visibility="{Binding CanSwitch, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </Border>
         </Popup>
+
+        <!-- Menú de configuración (la casa), en formato lista redondeada. -->
+        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=House}" Placement="Top"
+               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#FF202124" CornerRadius="12" Padding="10" MinWidth="230"
+                    BorderBrush="#FFFFC400" BorderThickness="1.5">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
+                </Border.Effect>
+                <StackPanel>
+                    <Border Style="{StaticResource ListCard}" Background="#FF33341A">
+                        <TextBlock Text="Configuración de Swip" Foreground="#FFFFD633"
+                                   FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
+                    </Border>
+
+                    <Button x:Name="MoveBtn" Content="Mover ventana" Style="{StaticResource ListRow}"
+                            Click="ToggleMove_Click" />
+                    <Button x:Name="VisibleBtn" Content="Hacer visible la ventana"
+                            Style="{StaticResource ListRow}" Click="ToggleVisible_Click" />
+                    <Button Content="Aumentar tamaño de gatos" Style="{StaticResource ListRow}"
+                            Click="CatsBigger_Click" />
+                    <Button Content="Disminuir tamaño de gatos" Style="{StaticResource ListRow}"
+                            Click="CatsSmaller_Click" />
+                    <Button Content="Aumentar alto de la franja" Style="{StaticResource ListRow}"
+                            Click="StripTaller_Click" />
+                    <Button Content="Disminuir alto de la franja" Style="{StaticResource ListRow}"
+                            Click="StripShorter_Click" />
+                    <Button x:Name="LabelsBtn" Content="Ocultar etiquetas" Style="{StaticResource ListRow}"
+                            Click="ToggleLabels_Click" />
+                    <Button Content="Recolocar sobre la barra" Style="{StaticResource ListRow}"
+                            Click="SnapToTaskbar_Click" />
+                    <Button Content="Actualizar Swip" Style="{StaticResource ListRow}"
+                            Click="Update_Click" />
+                    <Button Content="Salir" Style="{StaticResource ListRow}" Click="Exit_Click" />
+
+                    <TextBlock x:Name="StatusText" Foreground="#FFFF8A65" FontSize="11"
+                               TextWrapping="Wrap" Margin="2,6,0,0" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- Aviso cuando no hay gatos (p. ej. el servicio no está en ejecución) -->
+        <Border x:Name="EmptyHint" Background="#CC202124" CornerRadius="8" Padding="12,8"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8"
+                IsHitTestVisible="False" Visibility="Collapsed">
+            <TextBlock x:Name="EmptyHintText" Foreground="#FFFFD633" FontSize="12"
+                       FontFamily="Consolas" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+        </Border>
+
+        <!-- Aviso en modo mover -->
+        <Border x:Name="MoveHint" Background="#EE202124" CornerRadius="8" Padding="12,8"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                IsHitTestVisible="False" BorderBrush="#FFFFC400" BorderThickness="1.5">
+            <TextBlock Foreground="#FFFFE08A" FontSize="12" FontFamily="Consolas" TextAlignment="Center"
+                       Text="Arrastra la franja a su sitio.&#x0a;Pulsa la casa 🏠 para terminar." />
+        </Border>
     </Grid>
 </Window>

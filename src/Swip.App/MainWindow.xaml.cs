@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Swip.App.Art;
 using Swip.App.Controls;
 using Swip.App.Models;
 using Swip.App.Native;
@@ -33,6 +34,15 @@ public partial class MainWindow : Window
     private bool _clickThrough = true;
     private CatAgent? _openAgent;
     private bool _refreshing;
+    private bool _moveMode;
+
+    private static readonly Brush StripBrush = CreateStripBrush();
+    private static Brush CreateStripBrush()
+    {
+        var b = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xCD, 0x1A));
+        b.Freeze();
+        return b;
+    }
 
     public MainWindow()
     {
@@ -41,6 +51,8 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         InfoPopup.Closed += (_, _) => _openAgent = null;
     }
+
+    private double HouseSize => Math.Clamp(_settings.CatSize, 48, 96);
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -53,7 +65,11 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
+        House.Source = PixelHouse.Get();
+        Yard.MouseLeftButtonDown += Yard_MouseLeftButtonDown;
         ApplyStripBounds();
+        ApplyStripBackground();
+        UpdateConfigLabels();
 
         _loop.Interval = TimeSpan.FromMilliseconds(33); // ~30 fps
         _loop.Tick += Loop_Tick;
@@ -113,6 +129,25 @@ public partial class MainWindow : Window
         }
         foreach (var (_, sprite) in _sprites)
             sprite.SetCatSize(_settings.CatSize);
+
+        // La casa vive en la esquina inferior izquierda, sobre el suelo.
+        House.Width = HouseSize;
+        House.Height = HouseSize;
+        Canvas.SetLeft(House, 8);
+        Canvas.SetTop(House, Height - HouseSize - 8);
+    }
+
+    private void ApplyStripBackground()
+    {
+        // Fondo visible si el usuario lo activó o mientras se mueve la ventana.
+        Yard.Background = (_settings.ShowStripBackground || _moveMode) ? StripBrush : null;
+    }
+
+    private void UpdateConfigLabels()
+    {
+        MoveBtn.Content = _moveMode ? "Terminar de mover" : "Mover ventana";
+        VisibleBtn.Content = _settings.ShowStripBackground ? "Ocultar la franja" : "Hacer visible la ventana";
+        LabelsBtn.Content = _settings.ShowLabels ? "Ocultar etiquetas" : "Mostrar etiquetas";
     }
 
     // --- Bucle de animación -----------------------------------------------------
@@ -138,11 +173,13 @@ public partial class MainWindow : Window
         UpdateClickThrough();
     }
 
-    /// <summary>Hace la ventana "click-through" salvo cuando el cursor está sobre un gato.</summary>
+    /// <summary>
+    /// Hace la ventana "click-through" salvo cuando el cursor está sobre un gato o la casa.
+    /// En modo mover, la ventana captura todo el ratón para poder arrastrarla.
+    /// </summary>
     private void UpdateClickThrough()
     {
-        bool overCat = CursorOverAnyCat();
-        bool wantThrough = !overCat;
+        bool wantThrough = !_moveMode && !CursorOverInteractive();
         if (wantThrough != _clickThrough)
         {
             InteropNative.SetClickThrough(_hwnd, wantThrough);
@@ -150,25 +187,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool CursorOverAnyCat()
+    private bool CursorOverInteractive()
     {
         if (!InteropNative.GetCursorPos(out var p))
             return false;
 
         var dpi = VisualTreeHelper.GetDpi(this);
+        if (IsPointOver(House, p, dpi)) return true;
         foreach (var sprite in _sprites.Values)
-        {
-            if (sprite.ActualWidth <= 0) continue;
-            Point tl;
-            try { tl = sprite.PointToScreen(new Point(0, 0)); }
-            catch { continue; }
-
-            double w = sprite.ActualWidth * dpi.DpiScaleX;
-            double h = sprite.ActualHeight * dpi.DpiScaleY;
-            if (p.X >= tl.X && p.X <= tl.X + w && p.Y >= tl.Y && p.Y <= tl.Y + h)
-                return true;
-        }
+            if (IsPointOver(sprite, p, dpi)) return true;
         return false;
+    }
+
+    private static bool IsPointOver(FrameworkElement el, InteropNative.POINT p, DpiScale dpi)
+    {
+        if (el.ActualWidth <= 0 || !el.IsVisible) return false;
+        Point tl;
+        try { tl = el.PointToScreen(new Point(0, 0)); }
+        catch { return false; }
+        double w = el.ActualWidth * dpi.DpiScaleX;
+        double h = el.ActualHeight * dpi.DpiScaleY;
+        return p.X >= tl.X && p.X <= tl.X + w && p.Y >= tl.Y && p.Y <= tl.Y + h;
     }
 
     // --- Sincronización de sesiones <-> gatos -----------------------------------
@@ -291,6 +330,68 @@ public partial class MainWindow : Window
         _ = LoadAppsAsync(sprite.Agent);
     }
 
+    // --- Casa / configuración / mover -----------------------------------------
+
+    private void House_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (_moveMode)
+        {
+            ExitMoveMode(); // en modo mover, pulsar la casa termina de mover
+            return;
+        }
+        ShowStatus(null);
+        UpdateConfigLabels();
+        ConfigPopup.IsOpen = true;
+    }
+
+    private void Yard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_moveMode) return;
+        try { DragMove(); } catch { /* sin botón presionado */ }
+        _settings.Left = Left;
+        _settings.Top = Top;
+        _settings.PositionLocked = true;
+        _store.Save(_settings);
+    }
+
+    private void ToggleMove_Click(object sender, RoutedEventArgs e)
+    {
+        ConfigPopup.IsOpen = false;
+        if (_moveMode) ExitMoveMode();
+        else EnterMoveMode();
+    }
+
+    private void EnterMoveMode()
+    {
+        _moveMode = true;
+        MoveHint.Visibility = Visibility.Visible;
+        ApplyStripBackground();
+        UpdateConfigLabels();
+        InteropNative.SetClickThrough(_hwnd, false);
+        _clickThrough = false;
+    }
+
+    private void ExitMoveMode()
+    {
+        _moveMode = false;
+        MoveHint.Visibility = Visibility.Collapsed;
+        _settings.Left = Left;
+        _settings.Top = Top;
+        _settings.PositionLocked = true;
+        _store.Save(_settings);
+        ApplyStripBackground();
+        UpdateConfigLabels();
+    }
+
+    private void ToggleVisible_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.ShowStripBackground = !_settings.ShowStripBackground;
+        _store.Save(_settings);
+        ApplyStripBackground();
+        UpdateConfigLabels();
+    }
+
     private async Task LoadAppsAsync(CatAgent agent)
     {
         if (!agent.HasSession)
@@ -389,6 +490,7 @@ public partial class MainWindow : Window
         foreach (var sprite in _sprites.Values)
             sprite.ShowLabel(_settings.ShowLabels);
         _store.Save(_settings);
+        UpdateConfigLabels();
     }
 
     private void Update_Click(object sender, RoutedEventArgs e)
@@ -416,7 +518,7 @@ public partial class MainWindow : Window
                 Verb = "runas",
             };
             Process.Start(psi);
-            InfoPopup.IsOpen = false;
+            ConfigPopup.IsOpen = false;
         }
         catch (Exception ex)
         {

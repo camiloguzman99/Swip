@@ -116,13 +116,16 @@ powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 
 ### Controles
 
-| Acción                | Resultado                                                    |
-|-----------------------|--------------------------------------------------------------|
-| Clic izquierdo        | Interactúas con el gato (reacción feliz + saltito)           |
-| Clic derecho          | Abre el menú de esa sesión: apps activas + cambiar de sesión |
+| Acción                       | Resultado                                                      |
+|------------------------------|----------------------------------------------------------------|
+| Clic izquierdo en un gato    | Interactúas con el gato (reacción feliz + saltito)             |
+| Clic derecho en un gato      | Menú de ese usuario: nombre, apps abiertas y, al final, cambiar |
+| Clic en la 🏠 (esquina)       | Abre la configuración de Swip                                   |
 
-El menú (clic derecho) también trae **Opciones**: tamaño de los gatos (+ / −), alto de la
-franja (+ / −), recolocar sobre la barra, mostrar/ocultar etiquetas y salir. Las
+La **casa** de la esquina abre la configuración (en formato lista con bordes redondeados):
+**Mover ventana** (arrastra la franja y pulsa la casa para terminar), **Hacer visible la
+ventana** (fondo tenue para ubicarla), **tamaño de gatos** (+ / −), **alto de la franja**
+(+ / −), **etiquetas**, **recolocar sobre la barra**, **Actualizar Swip** y **salir**. Las
 preferencias se guardan en `%AppData%\Swip\settings.json`.
 
 ### Estados del gato

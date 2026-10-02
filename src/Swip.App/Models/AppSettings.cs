@@ -29,4 +29,7 @@ public sealed class AppSettings
 
     /// <summary>Mostrar la etiqueta con el nombre de la sesión bajo cada gato.</summary>
     public bool ShowLabels { get; set; } = true;
+
+    /// <summary>Mostrar un fondo tenue en la franja para verla (útil al moverla).</summary>
+    public bool ShowStripBackground { get; set; }
 }
