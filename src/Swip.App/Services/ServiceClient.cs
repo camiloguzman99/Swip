@@ -18,6 +18,10 @@ public sealed class ServiceClient
         SendAsync(new IpcRequest { Kind = RequestKind.ListSessions }, ct,
             r => (IReadOnlyList<SessionInfo>)r.Sessions);
 
+    public Task<IReadOnlyList<UserInfo>> GetUsersAsync(CancellationToken ct = default) =>
+        SendAsync(new IpcRequest { Kind = RequestKind.ListUsers }, ct,
+            r => (IReadOnlyList<UserInfo>)r.Users);
+
     public Task<IReadOnlyList<AppInfo>> GetWindowedAppsAsync(int sessionId, CancellationToken ct = default) =>
         SendAsync(new IpcRequest { Kind = RequestKind.ListWindowedApps, TargetSessionId = sessionId }, ct,
             r => (IReadOnlyList<AppInfo>)r.Apps);

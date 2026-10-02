@@ -20,8 +20,8 @@ public partial class MainWindow : Window
 {
     private readonly ServiceClient _client = new();
     private readonly SettingsStore _store = new();
-    private readonly Dictionary<int, CatAgent> _agents = new();
-    private readonly Dictionary<int, CatSprite> _sprites = new();
+    private readonly Dictionary<string, CatAgent> _agents = new();
+    private readonly Dictionary<string, CatSprite> _sprites = new();
     private readonly DispatcherTimer _loop = new(DispatcherPriority.Render);
     private readonly DispatcherTimer _refresh = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -63,12 +63,12 @@ public partial class MainWindow : Window
         _refresh.Interval = TimeSpan.FromSeconds(Math.Max(3, _settings.RefreshSeconds));
         _refresh.Tick += async (_, _) =>
         {
-            await RefreshSessionsAsync();
+            await RefreshUsersAsync();
             if (_openAgent is not null) await LoadAppsAsync(_openAgent);
         };
         _refresh.Start();
 
-        await RefreshSessionsAsync();
+        await RefreshUsersAsync();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -173,18 +173,18 @@ public partial class MainWindow : Window
 
     // --- Sincronización de sesiones <-> gatos -----------------------------------
 
-    private async Task RefreshSessionsAsync()
+    private async Task RefreshUsersAsync()
     {
         if (_refreshing) return;
         _refreshing = true;
         try
         {
             ShowStatus(null);
-            IReadOnlyList<SessionInfo> sessions = await _client.GetSessionsAsync();
-            var liveIds = sessions.Select(s => s.SessionId).ToHashSet();
+            IReadOnlyList<UserInfo> users = await _client.GetUsersAsync();
+            var liveKeys = users.Select(u => u.UserName).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            // Quitar gatos de sesiones que ya no existen.
-            foreach (int gone in _agents.Keys.Where(id => !liveIds.Contains(id)).ToList())
+            // Quitar gatos de usuarios que ya no existen.
+            foreach (string gone in _agents.Keys.Where(k => !liveKeys.Contains(k)).ToList())
             {
                 if (_sprites.Remove(gone, out var sprite))
                     Yard.Children.Remove(sprite);
@@ -194,24 +194,26 @@ public partial class MainWindow : Window
             double maxX = Math.Max(0, Width - _settings.CatSize);
             double baseY = Height - _settings.CatSize - 14;
 
-            foreach (var s in sessions)
+            foreach (var u in users)
             {
-                var state = CatAgent.StateFor(s);
-                string stateText = CatAgent.DescribeState(s);
+                var state = CatAgent.StateFor(u);
+                string stateText = CatAgent.DescribeState(u);
 
-                if (_agents.TryGetValue(s.SessionId, out var agent))
+                if (_agents.TryGetValue(u.UserName, out var agent))
                 {
                     agent.State = state;
                     agent.StateText = stateText;
-                    agent.IsCurrent = s.IsCurrent;
+                    agent.IsCurrent = u.IsCurrent;
+                    agent.SessionId = u.SessionId;
                 }
                 else
                 {
                     agent = new CatAgent
                     {
-                        SessionId = s.SessionId,
-                        DisplayName = s.DisplayName,
-                        IsCurrent = s.IsCurrent,
+                        Key = u.UserName,
+                        SessionId = u.SessionId,
+                        DisplayName = u.DisplayName,
+                        IsCurrent = u.IsCurrent,
                         State = state,
                         StateText = stateText,
                         BaseY = baseY,
@@ -219,7 +221,7 @@ public partial class MainWindow : Window
                         FacingRight = _rng.NextDouble() < 0.5,
                     };
                     agent.Y = baseY;
-                    _agents[s.SessionId] = agent;
+                    _agents[u.UserName] = agent;
 
                     var sprite = new CatSprite(agent, _settings.CatSize);
                     sprite.ShowLabel(_settings.ShowLabels);
@@ -227,12 +229,12 @@ public partial class MainWindow : Window
                     Canvas.SetLeft(sprite, agent.X);
                     Canvas.SetTop(sprite, agent.Y);
                     Yard.Children.Add(sprite);
-                    _sprites[s.SessionId] = sprite;
+                    _sprites[u.UserName] = sprite;
                 }
             }
 
             UpdateEmptyHint(_sprites.Count == 0
-                ? "No se detectaron sesiones de usuario."
+                ? "No se detectaron usuarios."
                 : null);
         }
         catch (ServiceUnavailableException ex)
@@ -291,6 +293,14 @@ public partial class MainWindow : Window
 
     private async Task LoadAppsAsync(CatAgent agent)
     {
+        if (!agent.HasSession)
+        {
+            agent.Apps.Clear();
+            agent.Apps.Add("(sin sesión iniciada)");
+            agent.AppsLoading = false;
+            return;
+        }
+
         agent.AppsLoading = true;
         try
         {

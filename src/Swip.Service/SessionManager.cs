@@ -117,7 +117,85 @@ internal sealed class SessionManager
                 : (string.IsNullOrEmpty(s.Domain) ? s.User : $"{s.Domain}\\{s.User}");
             sb.AppendLine($"{s.SessionId,2} | {s.State,-13} | {s.WinStation,-16} | {user,-18} | {(IsUserSession(s) ? "sí" : "no")}");
         }
+
+        sb.AppendLine();
+        sb.AppendLine("Gatos (un usuario = un gato):");
+        sb.AppendLine("Usuario                    | Sesión | Estado        | ¿actual?");
+        sb.AppendLine(new string('-', 70));
+        foreach (var u in GetUsers())
+        {
+            string sess = u.HasSession ? u.SessionId.ToString() : "ninguna";
+            sb.AppendLine($"{u.DisplayName,-26} | {sess,-6} | {u.State,-13} | {(u.IsCurrent ? "sí" : "no")}");
+        }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Devuelve una entrada por cada CUENTA de usuario del equipo (no por sesión), uniendo las
+    /// cuentas locales habilitadas con las sesiones vivas. Un usuario con sesión abierta trae su
+    /// SessionId; uno sin sesión trae SessionId = -1. También incluye usuarios con sesión que no
+    /// son cuentas locales (dominio / Microsoft / AzureAD).
+    /// </summary>
+    public List<UserInfo> GetUsers()
+    {
+        int console = WtsInterop.WTSGetActiveConsoleSessionId();
+        string machine = Environment.MachineName;
+
+        // Sesiones vivas agrupadas por nombre de usuario (preferimos la de consola/activa).
+        var sessionByUser = new Dictionary<string, RawSession>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in EnumerateRaw())
+        {
+            if (!IsUserSession(raw) || string.IsNullOrEmpty(raw.User))
+                continue;
+            bool exists = sessionByUser.TryGetValue(raw.User, out var existing);
+            bool prefer = !exists
+                || raw.SessionId == console
+                || (raw.State == WtsInterop.WTS_CONNECTSTATE_CLASS.WTSActive
+                    && existing.State != WtsInterop.WTS_CONNECTSTATE_CLASS.WTSActive);
+            if (prefer)
+                sessionByUser[raw.User] = raw;
+        }
+
+        var byName = new Dictionary<string, UserInfo>(StringComparer.OrdinalIgnoreCase);
+
+        // 1) Cuentas locales habilitadas: haya o no sesión abierta.
+        List<string> locals;
+        try { locals = NetApiInterop.EnumerateEnabledLocalUsers(); }
+        catch { locals = new(); }
+
+        foreach (var name in locals)
+        {
+            var info = new UserInfo { UserName = name, Domain = machine };
+            if (sessionByUser.TryGetValue(name, out var s))
+            {
+                info.SessionId = s.SessionId;
+                info.State = MapState(s.State);
+                info.IsCurrent = s.SessionId == console;
+                info.Domain = string.IsNullOrEmpty(s.Domain) ? machine : s.Domain;
+            }
+            byName[name] = info;
+        }
+
+        // 2) Usuarios con sesión que no son cuentas locales (dominio / Microsoft / AzureAD).
+        foreach (var (name, s) in sessionByUser)
+        {
+            if (byName.ContainsKey(name))
+                continue;
+            byName[name] = new UserInfo
+            {
+                UserName = name,
+                Domain = string.IsNullOrEmpty(s.Domain) ? machine : s.Domain,
+                SessionId = s.SessionId,
+                State = MapState(s.State),
+                IsCurrent = s.SessionId == console,
+            };
+        }
+
+        return byName.Values
+            .OrderByDescending(u => u.IsCurrent)
+            .ThenByDescending(u => u.HasSession)
+            .ThenBy(u => u.UserName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>

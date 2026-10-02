@@ -23,9 +23,21 @@ public sealed class CatAgent : INotifyPropertyChanged
 {
     private static readonly Random Rng = new();
 
-    // --- Identidad / info de sesión (para el menú) -----------------------------
-    public int SessionId { get; init; }
+    // --- Identidad / info de usuario (para el menú) ----------------------------
+    /// <summary>Clave estable del gato = nombre de usuario (único en el equipo).</summary>
+    public string Key { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
+
+    private int _sessionId = -1;
+    /// <summary>Id de la sesión del usuario, o -1 si no tiene sesión iniciada.</summary>
+    public int SessionId
+    {
+        get => _sessionId;
+        set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); }
+    }
+
+    /// <summary>True si el usuario tiene una sesión abierta.</summary>
+    public bool HasSession => _sessionId >= 0;
 
     private bool _isCurrent;
     public bool IsCurrent
@@ -34,7 +46,8 @@ public sealed class CatAgent : INotifyPropertyChanged
         set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); }
     }
 
-    public bool CanSwitch => !IsCurrent;
+    /// <summary>Se puede cambiar: tiene sesión abierta y no es la que está en pantalla.</summary>
+    public bool CanSwitch => HasSession && !IsCurrent;
 
     private string _stateText = string.Empty;
     public string StateText
@@ -151,10 +164,11 @@ public sealed class CatAgent : INotifyPropertyChanged
         }
     }
 
-    public static CatState StateFor(SessionInfo s)
+    public static CatState StateFor(UserInfo u)
     {
-        if (s.IsCurrent) return CatState.Active;
-        return s.State switch
+        if (!u.HasSession) return CatState.Sleeping;
+        if (u.IsCurrent) return CatState.Active;
+        return u.State switch
         {
             SessionConnectionState.Active => CatState.Active,
             SessionConnectionState.Connected => CatState.Active,
@@ -162,16 +176,17 @@ public sealed class CatAgent : INotifyPropertyChanged
         };
     }
 
-    public static string DescribeState(SessionInfo s)
+    public static string DescribeState(UserInfo u)
     {
-        if (s.IsCurrent) return "En esta pantalla ahora";
-        return s.State switch
+        if (!u.HasSession) return "Sin sesión iniciada (dormido)";
+        if (u.IsCurrent) return "En esta pantalla ahora";
+        return u.State switch
         {
             SessionConnectionState.Active => "Activa",
             SessionConnectionState.Connected => "Conectada",
             SessionConnectionState.Disconnected => "Abierta en el otro escritorio (dormida)",
             SessionConnectionState.Idle => "Inactiva (dormida)",
-            _ => s.State + " (dormida)",
+            _ => u.State + " (dormida)",
         };
     }
 

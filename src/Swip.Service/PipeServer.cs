@@ -101,6 +101,9 @@ internal sealed class PipeServer
         RequestKind.ListSessions =>
             new IpcResponse { Ok = true, Sessions = _sessions.GetSessions() },
 
+        RequestKind.ListUsers =>
+            new IpcResponse { Ok = true, Users = _sessions.GetUsers() },
+
         RequestKind.ListWindowedApps =>
             new IpcResponse { Ok = true, Apps = _sessions.GetWindowedApps(request.TargetSessionId) },
 

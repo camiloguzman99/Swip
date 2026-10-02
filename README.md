@@ -12,10 +12,11 @@ escribir la contraseña.
 
 ## Qué hace
 
-- 🐱 **Un gato por sesión** (si hay 5 sesiones, 5 gatos) merodeando en una franja
-  transparente sobre la barra de tareas. Diseño **pixel art**.
-- 😺 **Dos estados**: la sesión activa/conectada → el gato se **mueve** por el viewport;
-  la sesión cerrada (en segundo plano) → el gato **duerme** (con sus "z z").
+- 🐱 **Un gato por cuenta de usuario del equipo** (si hay 5 usuarios, 5 gatos) merodeando
+  en una franja transparente sobre la barra de tareas. Diseño **pixel art**. Cada gato
+  apunta a su usuario, tenga o no una sesión abierta.
+- 😺 **Dos estados**: usuario con sesión activa/en pantalla → el gato se **mueve**;
+  usuario en segundo plano o **sin sesión iniciada** → el gato **duerme** (con sus "z z").
 - 🖱️ **Clic izquierdo** → interactúas con el gato (se pone feliz y da un saltito).
 - 🖱️ **Clic derecho** → menú con las **apps activas** de esa sesión y el botón de
   **cambiar de sesión** (sin contraseña).
@@ -126,10 +127,15 @@ preferencias se guardan en `%AppData%\Swip\settings.json`.
 
 ### Estados del gato
 
-| Estado de la sesión (Windows)        | Gato                 |
-|--------------------------------------|----------------------|
-| Activa / Conectada / en pantalla     | Despierto, merodeando|
-| Desconectada / inactiva (segundo plano) | Durmiendo ("z z") |
+| Estado del usuario                      | Gato                 |
+|-----------------------------------------|----------------------|
+| Con sesión activa / en pantalla         | Despierto, merodeando|
+| En segundo plano o sin sesión iniciada  | Durmiendo ("z z")    |
+
+Swip enumera las **cuentas de usuario del equipo** (locales habilitadas, más cualquier
+usuario con sesión abierta que sea de dominio/Microsoft/AzureAD) y crea **un gato por
+cuenta**, no por sesión. Un usuario con la sesión abierta en segundo plano se puede cambiar
+sin contraseña; uno sin sesión iniciada aparece dormido y sin opción de cambio.
 
 ## Seguridad
 

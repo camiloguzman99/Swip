@@ -28,6 +28,9 @@ public enum RequestKind
     /// <summary>Devuelve las sesiones de usuario activas/conectadas en esta máquina.</summary>
     ListSessions,
 
+    /// <summary>Devuelve las cuentas de usuario del equipo (una por usuario), con su sesión si la hay.</summary>
+    ListUsers,
+
     /// <summary>Devuelve las apps con ventana visible de la sesión indicada.</summary>
     ListWindowedApps,
 
@@ -55,8 +58,39 @@ public sealed class IpcResponse
     /// <summary>Sesiones, poblado en respuesta a ListSessions.</summary>
     public List<SessionInfo> Sessions { get; set; } = new();
 
+    /// <summary>Usuarios del equipo, poblado en respuesta a ListUsers.</summary>
+    public List<UserInfo> Users { get; set; } = new();
+
     /// <summary>Apps con ventana, poblado en respuesta a ListWindowedApps.</summary>
     public List<AppInfo> Apps { get; set; } = new();
+}
+
+/// <summary>
+/// Una cuenta de usuario del equipo. Si el usuario tiene una sesión abierta (activa o en
+/// segundo plano), <see cref="SessionId"/> &gt;= 0; si no tiene sesión iniciada, es -1.
+/// </summary>
+public sealed class UserInfo
+{
+    /// <summary>Nombre de la cuenta (sin dominio), p. ej. "camilo".</summary>
+    public string UserName { get; set; } = string.Empty;
+
+    /// <summary>Dominio o nombre de equipo de la cuenta.</summary>
+    public string Domain { get; set; } = string.Empty;
+
+    /// <summary>Id de la sesión del usuario, o -1 si no tiene sesión iniciada.</summary>
+    public int SessionId { get; set; } = -1;
+
+    /// <summary>Estado de la sesión (solo significativo cuando HasSession es true).</summary>
+    public SessionConnectionState State { get; set; }
+
+    /// <summary>True si es el usuario cuya sesión está en pantalla ahora mismo.</summary>
+    public bool IsCurrent { get; set; }
+
+    /// <summary>True si el usuario tiene una sesión abierta en el equipo.</summary>
+    public bool HasSession => SessionId >= 0;
+
+    public string DisplayName =>
+        string.IsNullOrEmpty(Domain) ? UserName : $"{Domain}\\{UserName}";
 }
 
 /// <summary>Estado de conexión de una sesión de Windows, tal como lo reporta WTS.</summary>
