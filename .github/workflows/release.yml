@@ -1,0 +1,44 @@
+name: build-release
+
+# Compila Swip en Windows y publica/actualiza un release "latest" con el zip listo para usar.
+# Así puedes actualizar la app con update.ps1 sin volver a descargar el repo.
+
+on:
+  push:
+    branches:
+      - claude/quick-user-switcher-app-w747wk
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publicar servicio
+        run: dotnet publish src/Swip.Service/Swip.Service.csproj -c Release -r win-x64 --self-contained false -o publish/Service
+
+      - name: Publicar app
+        run: dotnet publish src/Swip.App/Swip.App.csproj -c Release -r win-x64 --self-contained false -o publish/App
+
+      - name: Empaquetar
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath Swip-win-x64.zip -Force
+
+      - name: Publicar release "latest"
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          try { gh release delete latest --yes --cleanup-tag } catch { Write-Host "No había release previo." }
+          gh release create latest Swip-win-x64.zip `
+            --title "Swip (latest)" `
+            --notes "Compilación automática de ${{ github.sha }}" `
+            --target ${{ github.sha }}

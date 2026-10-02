@@ -80,6 +80,30 @@ Para desinstalar todo (servicio, arranque y archivos):
 powershell -ExecutionPolicy Bypass -File uninstall.ps1
 ```
 
+### Actualizar sin descargar el repo
+
+Cada push a la rama compila la app en GitHub Actions y publica un release **`latest`**.
+Para actualizar, clic derecho en cualquier gato → **Opciones → Actualizar** (se auto-eleva,
+descarga, reemplaza y relanza). O manualmente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File update.ps1
+```
+
+### Solución de problemas: no aparece la otra sesión
+
+Swip crea un gato por cada **sesión de usuario conectada**. Si solo ves un gato:
+
+1. Confirma que Windows ve dos sesiones. En una consola escribe `qwinsta` (o `query session`):
+   deberías ver tu usuario y el otro (normalmente en estado `Disc` = desconectado).
+   Si solo aparece el tuyo, el otro usuario **no tiene sesión iniciada**: entra a esa cuenta
+   con *Cambio rápido de usuario* (sin cerrar sesión) y volverá a quedar en segundo plano.
+2. Diagnóstico de Swip (consola de **administrador**):
+   ```powershell
+   & "$env:ProgramFiles\Swip\Service\Swip.Service.exe" --diagnose
+   ```
+   Muestra todas las sesiones que Windows reporta y cuáles cuenta Swip como usuario.
+
 ### Manual (para desarrollo)
 
 ```powershell

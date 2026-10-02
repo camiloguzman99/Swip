@@ -76,6 +76,9 @@ dotnet publish $appProj -c Release -r win-x64 --self-contained false -o $appDir 
 $appExe = Join-Path $appDir "Swip.exe"
 if (-not (Test-Path $appExe)) { throw "No se publicó la app en $appExe" }
 
+# --- Copiar el actualizador junto a la instalación -------------------------------
+Copy-Item -Path (Join-Path $repoRoot "update.ps1") -Destination (Join-Path $InstallRoot "update.ps1") -Force
+
 # --- 3) Arranque automático al iniciar sesión ------------------------------------
 Write-Host "==> [4/4] Creando acceso directo de arranque..." -ForegroundColor Cyan
 $startup  = [Environment]::GetFolderPath('Startup')

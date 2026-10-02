@@ -17,18 +17,69 @@ internal sealed class SessionManager
 
     public SessionManager(ILogger log) => _log = log;
 
-    /// <summary>Enumera las sesiones de usuario reales (con nombre de usuario) de esta máquina.</summary>
+    /// <summary>Enumera las sesiones de usuario reales de esta máquina (una por usuario conectado).</summary>
     public List<SessionInfo> GetSessions()
     {
         var result = new List<SessionInfo>();
         int currentConsole = WtsInterop.WTSGetActiveConsoleSessionId();
 
+        foreach (var raw in EnumerateRaw())
+        {
+            if (!IsUserSession(raw))
+                continue;
+
+            string display = !string.IsNullOrEmpty(raw.User)
+                ? raw.User
+                : (!string.IsNullOrEmpty(raw.WinStation) ? raw.WinStation : $"Sesión {raw.SessionId}");
+
+            result.Add(new SessionInfo
+            {
+                SessionId = raw.SessionId,
+                UserName = display,
+                Domain = raw.Domain,
+                State = MapState(raw.State),
+                IsCurrent = raw.SessionId == currentConsole,
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Decide si una sesión representa a un usuario (y por tanto debe tener gato).
+    /// Incluye la sesión con nombre de usuario y las sesiones desconectadas (usuarios en
+    /// segundo plano cuyo nombre a veces no se puede consultar). Excluye la sesión de
+    /// servicios (0), los listeners RDP y la pantalla de inicio de sesión (sin usuario y conectada).
+    /// </summary>
+    private static bool IsUserSession(RawSession s)
+    {
+        if (s.SessionId == 0) return false;
+        if (string.Equals(s.WinStation, "Services", StringComparison.OrdinalIgnoreCase)) return false;
+        if (s.State == WtsInterop.WTS_CONNECTSTATE_CLASS.WTSListen) return false;
+        if (s.State == WtsInterop.WTS_CONNECTSTATE_CLASS.WTSDown) return false;
+
+        if (!string.IsNullOrEmpty(s.User))
+            return true;
+
+        // Sin nombre de usuario: solo cuenta si está desconectada (usuario en segundo plano).
+        // Una sesión Active/Connected sin usuario suele ser la pantalla de inicio de sesión.
+        return s.State == WtsInterop.WTS_CONNECTSTATE_CLASS.WTSDisconnected;
+    }
+
+    private readonly record struct RawSession(
+        int SessionId, string WinStation, string User, string Domain,
+        WtsInterop.WTS_CONNECTSTATE_CLASS State);
+
+    private IEnumerable<RawSession> EnumerateRaw()
+    {
         if (!WtsInterop.WTSEnumerateSessions(WtsInterop.WTS_CURRENT_SERVER_HANDLE, 0, 1,
                 out IntPtr buffer, out int count))
         {
-            throw new InvalidOperationException($"WTSEnumerateSessions falló (error {Marshal.GetLastWin32Error()}).");
+            throw new InvalidOperationException(
+                $"WTSEnumerateSessions falló (error {Marshal.GetLastWin32Error()}).");
         }
 
+        var list = new List<RawSession>();
         try
         {
             int size = Marshal.SizeOf<WtsInterop.WTS_SESSION_INFO>();
@@ -37,27 +88,36 @@ internal sealed class SessionManager
             {
                 var si = Marshal.PtrToStructure<WtsInterop.WTS_SESSION_INFO>(current);
                 current += size;
-
-                string user = QueryString(si.SessionId, WtsInterop.WTS_INFO_CLASS.WTSUserName);
-                if (string.IsNullOrEmpty(user))
-                    continue; // sesiones de servicio / sin usuario: se omiten
-
-                result.Add(new SessionInfo
-                {
-                    SessionId = si.SessionId,
-                    UserName = user,
-                    Domain = QueryString(si.SessionId, WtsInterop.WTS_INFO_CLASS.WTSDomainName),
-                    State = MapState(si.State),
-                    IsCurrent = si.SessionId == currentConsole,
-                });
+                list.Add(new RawSession(
+                    si.SessionId,
+                    si.pWinStationName ?? string.Empty,
+                    QueryString(si.SessionId, WtsInterop.WTS_INFO_CLASS.WTSUserName),
+                    QueryString(si.SessionId, WtsInterop.WTS_INFO_CLASS.WTSDomainName),
+                    si.State));
             }
         }
         finally
         {
             WtsInterop.WTSFreeMemory(buffer);
         }
+        return list;
+    }
 
-        return result;
+    /// <summary>Texto de diagnóstico con TODAS las sesiones que Windows reporta (modo --diagnose).</summary>
+    public string DiagnoseText()
+    {
+        int console = WtsInterop.WTSGetActiveConsoleSessionId();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Consola activa: sesión {console}");
+        sb.AppendLine("Id | Estado        | WinStation       | Usuario            | ¿es usuario?");
+        sb.AppendLine(new string('-', 78));
+        foreach (var s in EnumerateRaw())
+        {
+            string user = string.IsNullOrEmpty(s.User) ? "(vacío)"
+                : (string.IsNullOrEmpty(s.Domain) ? s.User : $"{s.Domain}\\{s.User}");
+            sb.AppendLine($"{s.SessionId,2} | {s.State,-13} | {s.WinStation,-16} | {user,-18} | {(IsUserSession(s) ? "sí" : "no")}");
+        }
+        return sb.ToString();
     }
 
     /// <summary>

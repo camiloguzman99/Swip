@@ -66,6 +66,7 @@
                         <Button Content="Franja −" Click="StripShorter_Click" Style="{StaticResource OptBtn}" />
                         <Button Content="Recolocar" Click="SnapToTaskbar_Click" Style="{StaticResource OptBtn}" />
                         <Button Content="Etiquetas" Click="ToggleLabels_Click" Style="{StaticResource OptBtn}" />
+                        <Button Content="Actualizar" Click="Update_Click" Style="{StaticResource OptBtn}" />
                         <Button Content="Salir" Click="Exit_Click" Style="{StaticResource OptBtn}" />
                     </WrapPanel>
 

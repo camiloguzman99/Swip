@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -378,6 +379,40 @@ public partial class MainWindow : Window
         foreach (var sprite in _sprites.Values)
             sprite.ShowLabel(_settings.ShowLabels);
         _store.Save(_settings);
+    }
+
+    private void Update_Click(object sender, RoutedEventArgs e)
+    {
+        // update.ps1 se instala en la carpeta raíz de Swip (un nivel por encima de \App).
+        string scriptPath = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "update.ps1"));
+
+        if (!File.Exists(scriptPath))
+        {
+            MessageBox.Show(
+                "No se encontró update.ps1. Reinstala con install.ps1 para habilitar la actualización.",
+                "Swip", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            // Se lanza elevado (UAC); el script detiene el gato, actualiza y lo relanza.
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                UseShellExecute = true,
+                Verb = "runas",
+            };
+            Process.Start(psi);
+            InfoPopup.IsOpen = false;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("No se pudo iniciar la actualización: " + ex.Message,
+                "Swip", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
