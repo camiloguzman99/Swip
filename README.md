@@ -65,20 +65,28 @@ Por eso el proyecto tiene dos ejecutables:
 
 ## Instalación y uso
 
-Desde la raíz del repositorio, en PowerShell:
+### Instalación de un paso (recomendada)
+
+Desde la raíz del repositorio, en PowerShell. El instalador se auto-eleva a administrador,
+compila e instala el servicio, publica el gato, crea el arranque automático y lo lanza:
 
 ```powershell
-# 1) Instalar el servicio (una sola vez, como administrador)
-powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1
-
-# 2) Ejecutar el gato (como tu usuario normal)
-powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Para desinstalar el servicio:
+Para desinstalar todo (servicio, arranque y archivos):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+### Manual (para desarrollo)
+
+```powershell
+# 1) Instalar solo el servicio (como administrador)
+powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1
+# 2) Ejecutar el gato desde el código
+powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 ```
 
 ### Controles
