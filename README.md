@@ -12,13 +12,17 @@ escribir la contraseña.
 
 ## Qué hace
 
-- 🐱 **Gato animado** en una ventana transparente, siempre visible, que puedes arrastrar
-  sobre la barra de tareas y cuyo **tamaño puedes bloquear** según tu pantalla.
-- 🖱️ **Clic en el gato** → menú con tus sesiones. La otra sesión aparece como
-  *"Abierta en el otro escritorio"* y lista sus apps con ventana.
-- 🔀 **Cambio rápido** a la otra sesión sin contraseña (última opción del menú).
-- 👀 **Apps de la otra sesión**: solo las que tienen ventana visible (primer plano),
-  nunca los procesos en segundo plano.
+- 🐱 **Un gato por sesión** (si hay 5 sesiones, 5 gatos) merodeando en una franja
+  transparente sobre la barra de tareas. Diseño **pixel art**.
+- 😺 **Dos estados**: la sesión activa/conectada → el gato se **mueve** por el viewport;
+  la sesión cerrada (en segundo plano) → el gato **duerme** (con sus "z z").
+- 🖱️ **Clic izquierdo** → interactúas con el gato (se pone feliz y da un saltito).
+- 🖱️ **Clic derecho** → menú con las **apps activas** de esa sesión y el botón de
+  **cambiar de sesión** (sin contraseña).
+- 👀 **Apps**: solo las que tienen ventana visible (primer plano), nunca procesos en
+  segundo plano.
+- 🫥 **Click-through**: el espacio vacío de la franja deja pasar los clics al escritorio
+  y a la barra; solo los gatos capturan el ratón.
 
 ---
 
@@ -51,7 +55,7 @@ Por eso el proyecto tiene dos ejecutables:
 |-----------------|--------------------------------------------------------------------|
 | `Swip.Shared`   | Contratos de IPC compartidos (peticiones/respuestas, DTOs).        |
 | `Swip.Service`  | Servicio de Windows (SYSTEM): sesiones, cambio, enumeración.       |
-| `Swip.App`      | El gato (WPF): ventana transparente, menú, animación.              |
+| `Swip.App`      | Los gatos (WPF): franja transparente, pixel art, animación, menú.  |
 
 ## Requisitos
 
@@ -77,13 +81,23 @@ Para desinstalar el servicio:
 powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1
 ```
 
-### Controles del gato
+### Controles
 
-| Acción                | Resultado                                              |
-|-----------------------|-------------------------------------------------------|
-| Clic izquierdo        | Abre/cierra el menú de sesiones                        |
-| Arrastrar             | Mueve el gato (la posición se recuerda)                |
-| Clic derecho          | Opciones: bloquear tamaño, tamaño, colocar, salir     |
+| Acción                | Resultado                                                    |
+|-----------------------|--------------------------------------------------------------|
+| Clic izquierdo        | Interactúas con el gato (reacción feliz + saltito)           |
+| Clic derecho          | Abre el menú de esa sesión: apps activas + cambiar de sesión |
+
+El menú (clic derecho) también trae **Opciones**: tamaño de los gatos (+ / −), alto de la
+franja (+ / −), recolocar sobre la barra, mostrar/ocultar etiquetas y salir. Las
+preferencias se guardan en `%AppData%\Swip\settings.json`.
+
+### Estados del gato
+
+| Estado de la sesión (Windows)        | Gato                 |
+|--------------------------------------|----------------------|
+| Activa / Conectada / en pantalla     | Despierto, merodeando|
+| Desconectada / inactiva (segundo plano) | Durmiendo ("z z") |
 
 ## Seguridad
 
@@ -99,10 +113,11 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1
 
 ## Alcance y limitaciones
 
-**Incluido (Fase 1):**
-- Gato animado, transparente, tamaño bloqueable, colocable sobre la barra.
-- Listado de sesiones con estado y cambio sin contraseña.
-- Apps con ventana de la otra sesión.
+**Incluido (Fase 1 + Fase 2):**
+- Un gato pixel art por sesión, en una franja transparente sobre la barra.
+- Estados activo (merodeando) y durmiendo (sesión en segundo plano).
+- Clic izquierdo = interactuar; clic derecho = menú de apps + cambio de sesión.
+- Click-through del espacio vacío. Cambio de sesión sin contraseña.
 
 **Fuera de alcance (por decisión):**
 - Compartir portapapeles o archivos entre sesiones.
@@ -115,9 +130,10 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1
 - La lista de apps se toma en el momento de abrir el menú (se refresca cada ~10 s mientras
   el menú está abierto).
 
-## Posibles mejoras (Fase 2+)
+## Posibles mejoras (Fase 3+)
 
-- Icono/animaciones que reaccionen a eventos (p. ej., el gato salta al cambiar de sesión).
+- Más frames de caminar (ciclo de patas) y sprites por raza/color de gato por sesión.
 - Atajo de teclado global para cambiar sin abrir el menú.
 - Restringir la ACL del pipe a tu SID.
 - Arranque automático del gato al iniciar sesión (acceso directo en `shell:startup`).
+- Notificación visual cuando una sesión dormida tiene actividad nueva.

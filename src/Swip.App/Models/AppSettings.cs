@@ -1,26 +1,32 @@
 namespace Swip.App.Models;
 
 /// <summary>
-/// Preferencias del gato, persistidas en %AppData%\Swip\settings.json.
-/// El ancho/alto se pueden bloquear para que se mantengan fijos según la pantalla.
+/// Preferencias de Swip, persistidas en %AppData%\Swip\settings.json.
+/// La ventana es una franja transparente sobre la barra de tareas donde merodean los gatos.
 /// </summary>
 public sealed class AppSettings
 {
-    /// <summary>Ancho del gato en píxeles independientes del dispositivo (DIP).</summary>
-    public double Width { get; set; } = 96;
+    /// <summary>Alto de la franja en DIP (se puede ajustar según la pantalla).</summary>
+    public double StripHeight { get; set; } = 160;
 
-    /// <summary>Alto del gato en DIP.</summary>
-    public double Height { get; set; } = 96;
+    /// <summary>Ancho de la franja en DIP, o null para ocupar todo el ancho del área de trabajo.</summary>
+    public double? StripWidth { get; set; }
 
-    /// <summary>Si true, el tamaño queda bloqueado y no se redimensiona.</summary>
-    public bool SizeLocked { get; set; } = true;
+    /// <summary>Tamaño en pantalla de cada gato (lado del sprite) en DIP.</summary>
+    public double CatSize { get; set; } = 64;
 
-    /// <summary>Posición izquierda en pantalla, o null para auto-colocar sobre la barra de tareas.</summary>
+    /// <summary>Si true, la franja no se recoloca automáticamente al arrancar.</summary>
+    public bool PositionLocked { get; set; }
+
+    /// <summary>Posición izquierda, o null para auto-colocar a la izquierda del área de trabajo.</summary>
     public double? Left { get; set; }
 
-    /// <summary>Posición superior en pantalla, o null para auto-colocar.</summary>
+    /// <summary>Posición superior, o null para auto-colocar sobre la barra de tareas.</summary>
     public double? Top { get; set; }
 
-    /// <summary>Segundos entre refrescos automáticos de la lista de sesiones/apps.</summary>
+    /// <summary>Segundos entre refrescos automáticos de sesiones y apps.</summary>
     public int RefreshSeconds { get; set; } = 10;
+
+    /// <summary>Mostrar la etiqueta con el nombre de la sesión bajo cada gato.</summary>
+    public bool ShowLabels { get; set; } = true;
 }

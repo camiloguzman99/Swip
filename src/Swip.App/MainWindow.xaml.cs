@@ -1,11 +1,16 @@
-using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
+using Swip.App.Controls;
 using Swip.App.Models;
+using Swip.App.Native;
 using Swip.App.Services;
-using Swip.App.ViewModels;
+using Swip.App.World;
 using Swip.Shared;
 
 namespace Swip.App;
@@ -14,38 +19,55 @@ public partial class MainWindow : Window
 {
     private readonly ServiceClient _client = new();
     private readonly SettingsStore _store = new();
-    private readonly ObservableCollection<SessionViewModel> _sessions = new();
-    private readonly DispatcherTimer _refreshTimer = new();
+    private readonly Dictionary<int, CatAgent> _agents = new();
+    private readonly Dictionary<int, CatSprite> _sprites = new();
+    private readonly DispatcherTimer _loop = new(DispatcherPriority.Render);
+    private readonly DispatcherTimer _refresh = new();
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly Random _rng = new();
+
     private AppSettings _settings = new();
-    private bool _busy;
+    private IntPtr _hwnd;
+    private long _lastTicks;
+    private bool _clickThrough = true;
+    private CatAgent? _openAgent;
+    private bool _refreshing;
 
     public MainWindow()
     {
         InitializeComponent();
-        SessionsList.ItemsSource = _sessions;
         Loaded += OnLoaded;
         Closing += OnClosing;
+        InfoPopup.Closed += (_, _) => _openAgent = null;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _hwnd = new WindowInteropHelper(this).Handle;
+        InteropNative.InitOverlayStyles(_hwnd);
+        InteropNative.SetClickThrough(_hwnd, true); // empieza dejando pasar los clics
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
-        ApplySize(_settings.Width, _settings.Height);
-        LockMenuItem.IsChecked = _settings.SizeLocked;
+        ApplyStripBounds();
 
-        if (_settings.Left is double l && _settings.Top is double t)
-        {
-            Left = l;
-            Top = t;
-        }
-        else
-        {
-            SnapToTaskbar();
-        }
+        _loop.Interval = TimeSpan.FromMilliseconds(33); // ~30 fps
+        _loop.Tick += Loop_Tick;
+        _lastTicks = _clock.ElapsedTicks;
+        _loop.Start();
 
-        _refreshTimer.Interval = TimeSpan.FromSeconds(Math.Max(3, _settings.RefreshSeconds));
-        _refreshTimer.Tick += async (_, _) => { if (MenuPopup.IsOpen) await RefreshAsync(); };
-        _refreshTimer.Start();
+        _refresh.Interval = TimeSpan.FromSeconds(Math.Max(3, _settings.RefreshSeconds));
+        _refresh.Tick += async (_, _) =>
+        {
+            await RefreshSessionsAsync();
+            if (_openAgent is not null) await LoadAppsAsync(_openAgent);
+        };
+        _refresh.Start();
+
+        await RefreshSessionsAsync();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -55,114 +77,246 @@ public partial class MainWindow : Window
         _store.Save(_settings);
     }
 
-    // --- Interacción con el gato ------------------------------------------------
+    // --- Posición y tamaño de la franja ----------------------------------------
 
-    private async void Cat_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void ApplyStripBounds()
     {
-        double beforeLeft = Left, beforeTop = Top;
-        try { DragMove(); } catch { /* DragMove falla si no hay botón presionado */ }
+        var work = SystemParameters.WorkArea;
+        Width = _settings.StripWidth ?? work.Width;
+        Height = _settings.StripHeight;
 
-        bool moved = Math.Abs(Left - beforeLeft) > 2 || Math.Abs(Top - beforeTop) > 2;
-        if (moved)
+        if (_settings.PositionLocked && _settings.Left is double l && _settings.Top is double t)
         {
-            _settings.Left = Left;
-            _settings.Top = Top;
-            _store.Save(_settings);
-            return;
-        }
-
-        // Fue un clic, no un arrastre: alternar el menú.
-        if (MenuPopup.IsOpen)
-        {
-            MenuPopup.IsOpen = false;
+            Left = l;
+            Top = t;
         }
         else
         {
-            MenuPopup.IsOpen = true;
-            await RefreshAsync();
+            Left = work.Left;
+            Top = work.Bottom - Height; // justo sobre la barra de tareas
         }
+
+        RepositionCats();
     }
 
-    private void Cat_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    /// <summary>Recalcula la "línea de suelo" y reubica a los gatos dentro de la franja.</summary>
+    private void RepositionCats()
     {
-        if (ContextMenu is not null)
+        double baseY = Height - _settings.CatSize - 14;
+        double maxX = Math.Max(0, Width - _settings.CatSize);
+        foreach (var (_, agent) in _agents)
         {
-            ContextMenu.IsOpen = true;
-            e.Handled = true;
+            agent.BaseY = baseY;
+            if (agent.X > maxX) agent.X = maxX;
+            if (agent.X < 0) agent.X = 0;
+        }
+        foreach (var (_, sprite) in _sprites)
+            sprite.SetCatSize(_settings.CatSize);
+    }
+
+    // --- Bucle de animación -----------------------------------------------------
+
+    private void Loop_Tick(object? sender, EventArgs e)
+    {
+        long now = _clock.ElapsedTicks;
+        double dt = (now - _lastTicks) / (double)Stopwatch.Frequency;
+        _lastTicks = now;
+        if (dt > 0.1) dt = 0.1; // evita saltos tras pausas
+
+        foreach (var (id, agent) in _agents)
+        {
+            agent.Update(dt, Width, Height, _settings.CatSize);
+            if (_sprites.TryGetValue(id, out var sprite))
+            {
+                Canvas.SetLeft(sprite, agent.X);
+                Canvas.SetTop(sprite, agent.Y);
+                sprite.Render();
+            }
+        }
+
+        UpdateClickThrough();
+    }
+
+    /// <summary>Hace la ventana "click-through" salvo cuando el cursor está sobre un gato.</summary>
+    private void UpdateClickThrough()
+    {
+        bool overCat = CursorOverAnyCat();
+        bool wantThrough = !overCat;
+        if (wantThrough != _clickThrough)
+        {
+            InteropNative.SetClickThrough(_hwnd, wantThrough);
+            _clickThrough = wantThrough;
         }
     }
 
-    // --- Refresco de sesiones y apps -------------------------------------------
-
-    private async Task RefreshAsync()
+    private bool CursorOverAnyCat()
     {
-        if (_busy) return;
-        _busy = true;
+        if (!InteropNative.GetCursorPos(out var p))
+            return false;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        foreach (var sprite in _sprites.Values)
+        {
+            if (sprite.ActualWidth <= 0) continue;
+            Point tl;
+            try { tl = sprite.PointToScreen(new Point(0, 0)); }
+            catch { continue; }
+
+            double w = sprite.ActualWidth * dpi.DpiScaleX;
+            double h = sprite.ActualHeight * dpi.DpiScaleY;
+            if (p.X >= tl.X && p.X <= tl.X + w && p.Y >= tl.Y && p.Y <= tl.Y + h)
+                return true;
+        }
+        return false;
+    }
+
+    // --- Sincronización de sesiones <-> gatos -----------------------------------
+
+    private async Task RefreshSessionsAsync()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
         try
         {
             ShowStatus(null);
             IReadOnlyList<SessionInfo> sessions = await _client.GetSessionsAsync();
+            var liveIds = sessions.Select(s => s.SessionId).ToHashSet();
 
-            _sessions.Clear();
-            foreach (var s in sessions.OrderByDescending(s => s.IsCurrent).ThenBy(s => s.DisplayName))
+            // Quitar gatos de sesiones que ya no existen.
+            foreach (int gone in _agents.Keys.Where(id => !liveIds.Contains(id)).ToList())
             {
-                var vm = new SessionViewModel
-                {
-                    SessionId = s.SessionId,
-                    DisplayName = s.DisplayName,
-                    IsCurrent = s.IsCurrent,
-                    StateText = SessionViewModel.DescribeState(s.State, s.IsCurrent),
-                };
-                _sessions.Add(vm);
+                if (_sprites.Remove(gone, out var sprite))
+                    Yard.Children.Remove(sprite);
+                _agents.Remove(gone);
             }
 
-            // Para las otras sesiones, cargar las apps con ventana en segundo plano.
-            foreach (var vm in _sessions.Where(v => !v.IsCurrent))
-                _ = LoadAppsAsync(vm);
+            double maxX = Math.Max(0, Width - _settings.CatSize);
+            double baseY = Height - _settings.CatSize - 14;
+
+            foreach (var s in sessions)
+            {
+                var state = CatAgent.StateFor(s);
+                string stateText = CatAgent.DescribeState(s);
+
+                if (_agents.TryGetValue(s.SessionId, out var agent))
+                {
+                    agent.State = state;
+                    agent.StateText = stateText;
+                    agent.IsCurrent = s.IsCurrent;
+                }
+                else
+                {
+                    agent = new CatAgent
+                    {
+                        SessionId = s.SessionId,
+                        DisplayName = s.DisplayName,
+                        IsCurrent = s.IsCurrent,
+                        State = state,
+                        StateText = stateText,
+                        BaseY = baseY,
+                        X = _rng.NextDouble() * maxX,
+                        FacingRight = _rng.NextDouble() < 0.5,
+                    };
+                    agent.Y = baseY;
+                    _agents[s.SessionId] = agent;
+
+                    var sprite = new CatSprite(agent, _settings.CatSize);
+                    sprite.ShowLabel(_settings.ShowLabels);
+                    WireSprite(sprite);
+                    Canvas.SetLeft(sprite, agent.X);
+                    Canvas.SetTop(sprite, agent.Y);
+                    Yard.Children.Add(sprite);
+                    _sprites[s.SessionId] = sprite;
+                }
+            }
+
+            UpdateEmptyHint(_sprites.Count == 0
+                ? "No se detectaron sesiones de usuario."
+                : null);
         }
         catch (ServiceUnavailableException ex)
         {
-            ShowStatus(ex.Message + "\nInstala el servicio con install-service.ps1 (como administrador).");
+            ShowStatus(ex.Message);
+            UpdateEmptyHint(ex.Message +
+                "\nInstala el servicio: scripts\\install-service.ps1 (como administrador).");
         }
         catch (Exception ex)
         {
             ShowStatus(ex.Message);
+            UpdateEmptyHint("Error: " + ex.Message);
         }
         finally
         {
-            _busy = false;
+            _refreshing = false;
         }
     }
 
-    private async Task LoadAppsAsync(SessionViewModel vm)
+    private void UpdateEmptyHint(string? message)
     {
-        vm.AppsLoading = true;
-        vm.Apps.Clear();
+        // Solo se muestra el aviso si no hay gatos en pantalla.
+        if (_sprites.Count > 0 || string.IsNullOrEmpty(message))
+        {
+            EmptyHint.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            EmptyHintText.Text = message;
+            EmptyHint.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void WireSprite(CatSprite sprite)
+    {
+        sprite.MouseLeftButtonDown += (_, e) =>
+        {
+            sprite.Agent.Interact();
+            e.Handled = true;
+        };
+        sprite.MouseRightButtonUp += (_, e) =>
+        {
+            OpenInfo(sprite);
+            e.Handled = true;
+        };
+    }
+
+    private void OpenInfo(CatSprite sprite)
+    {
+        _openAgent = sprite.Agent;
+        InfoPopup.DataContext = sprite.Agent;
+        InfoPopup.PlacementTarget = sprite;
+        InfoPopup.IsOpen = true;
+        _ = LoadAppsAsync(sprite.Agent);
+    }
+
+    private async Task LoadAppsAsync(CatAgent agent)
+    {
+        agent.AppsLoading = true;
         try
         {
-            IReadOnlyList<AppInfo> apps = await _client.GetWindowedAppsAsync(vm.SessionId);
+            IReadOnlyList<AppInfo> apps = await _client.GetWindowedAppsAsync(agent.SessionId);
+            agent.Apps.Clear();
             if (apps.Count == 0)
             {
-                vm.Apps.Add("(sin apps con ventana)");
+                agent.Apps.Add("(sin apps con ventana)");
             }
             else
             {
                 foreach (var a in apps)
-                    vm.Apps.Add($"• {FriendlyName(a)}");
+                    agent.Apps.Add("• " + (string.IsNullOrWhiteSpace(a.WindowTitle)
+                        ? a.ProcessName
+                        : $"{a.ProcessName} — {a.WindowTitle}"));
             }
         }
         catch (Exception ex)
         {
-            vm.Apps.Add($"(no se pudieron leer: {ex.Message})");
+            agent.Apps.Clear();
+            agent.Apps.Add($"(no se pudieron leer: {ex.Message})");
         }
         finally
         {
-            vm.AppsLoading = false;
+            agent.AppsLoading = false;
         }
     }
-
-    private static string FriendlyName(AppInfo a) =>
-        string.IsNullOrWhiteSpace(a.WindowTitle) ? a.ProcessName : $"{a.ProcessName} — {a.WindowTitle}";
 
     // --- Cambio de sesión -------------------------------------------------------
 
@@ -177,7 +331,7 @@ public partial class MainWindow : Window
 
         try
         {
-            MenuPopup.IsOpen = false;
+            InfoPopup.IsOpen = false;
             await _client.SwitchToSessionAsync(sessionId);
         }
         catch (Exception ex)
@@ -186,52 +340,43 @@ public partial class MainWindow : Window
         }
     }
 
-    // --- Opciones del menú contextual ------------------------------------------
+    // --- Opciones ---------------------------------------------------------------
 
-    private void LockSize_Click(object sender, RoutedEventArgs e)
+    private void CatsBigger_Click(object sender, RoutedEventArgs e) => ChangeCatSize(+16);
+    private void CatsSmaller_Click(object sender, RoutedEventArgs e) => ChangeCatSize(-16);
+
+    private void ChangeCatSize(double delta)
     {
-        _settings.SizeLocked = LockMenuItem.IsChecked;
+        _settings.CatSize = Math.Clamp(_settings.CatSize + delta, 32, 160);
+        RepositionCats();
         _store.Save(_settings);
     }
 
-    private void SizeSmall_Click(object sender, RoutedEventArgs e) => SetSize(64);
-    private void SizeMedium_Click(object sender, RoutedEventArgs e) => SetSize(96);
-    private void SizeLarge_Click(object sender, RoutedEventArgs e) => SetSize(128);
+    private void StripTaller_Click(object sender, RoutedEventArgs e) => ChangeStripHeight(+40);
+    private void StripShorter_Click(object sender, RoutedEventArgs e) => ChangeStripHeight(-40);
 
-    private void SetSize(double size)
+    private void ChangeStripHeight(double delta)
     {
-        if (_settings.SizeLocked)
-        {
-            MessageBox.Show(
-                "El tamaño está bloqueado. Desmarca «Bloquear tamaño» para cambiarlo.",
-                "Swip", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        ApplySize(size, size);
-        _settings.Width = size;
-        _settings.Height = size;
+        _settings.StripHeight = Math.Clamp(_settings.StripHeight + delta, 100, 400);
         _store.Save(_settings);
+        ApplyStripBounds();
     }
 
-    private void ApplySize(double width, double height)
+    private void SnapToTaskbar_Click(object sender, RoutedEventArgs e)
     {
-        Width = width;
-        Height = height;
+        _settings.PositionLocked = false;
+        _settings.Left = null;
+        _settings.Top = null;
+        _settings.StripWidth = null;
+        _store.Save(_settings);
+        ApplyStripBounds();
     }
 
-    private void SnapToTaskbar_Click(object sender, RoutedEventArgs e) => SnapToTaskbar();
-
-    /// <summary>
-    /// Coloca el gato en la esquina inferior derecha del área de trabajo, justo sobre la barra
-    /// de tareas. Usa el área de trabajo para no quedar tapado por la barra.
-    /// </summary>
-    private void SnapToTaskbar()
+    private void ToggleLabels_Click(object sender, RoutedEventArgs e)
     {
-        var work = SystemParameters.WorkArea;
-        Left = work.Right - Width - 8;
-        Top = work.Bottom - Height - 4;
-        _settings.Left = Left;
-        _settings.Top = Top;
+        _settings.ShowLabels = !_settings.ShowLabels;
+        foreach (var sprite in _sprites.Values)
+            sprite.ShowLabel(_settings.ShowLabels);
         _store.Save(_settings);
     }
 
