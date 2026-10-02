@@ -1,0 +1,96 @@
+<Window x:Class="Swip.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Swip.App.Controls"
+        Title="Swip"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        SizeToContent="Manual">
+
+    <Grid>
+        <!-- El gato: clic izquierdo abre el menú, arrastre lo mueve, clic derecho opciones -->
+        <controls:CatControl x:Name="Cat"
+                             Cursor="Hand"
+                             MouseLeftButtonDown="Cat_MouseLeftButtonDown"
+                             MouseRightButtonUp="Cat_MouseRightButtonUp" />
+
+        <!-- Menú desplegable con las sesiones -->
+        <Popup x:Name="MenuPopup"
+               PlacementTarget="{Binding ElementName=Cat}"
+               Placement="Top"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border Background="#FF202124" CornerRadius="10" Padding="12" MinWidth="260"
+                    BorderBrush="#FFFFC400" BorderThickness="1.5">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Sesiones" Foreground="#FFFFD633" FontWeight="Bold"
+                               FontSize="14" Margin="0,0,0,8" />
+
+                    <ItemsControl x:Name="SessionsList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#FF2A2B2E" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding DisplayName}" Foreground="White"
+                                                   FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Text="{Binding StateText}" Foreground="#FFB0B0B0"
+                                                   FontSize="11" Margin="0,2,0,0" />
+
+                                        <!-- Apps abiertas en la otra sesión -->
+                                        <ItemsControl ItemsSource="{Binding Apps}" Margin="0,6,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" Foreground="#FFDADCE0"
+                                                               FontSize="11" Margin="8,1,0,1" TextTrimming="CharacterEllipsis" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <TextBlock Text="Cargando apps…" Foreground="#FF808080" FontSize="11"
+                                                   Margin="8,4,0,0"
+                                                   Visibility="{Binding AppsLoading, Converter={StaticResource BoolToVis}}" />
+
+                                        <Button Content="Cambiar a esta sesión"
+                                                Margin="0,8,0,0" Padding="8,5"
+                                                Tag="{Binding SessionId}"
+                                                Click="Switch_Click"
+                                                Visibility="{Binding CanSwitch, Converter={StaticResource BoolToVis}}"
+                                                Background="#FFFFC400" Foreground="#FF202124"
+                                                FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock x:Name="StatusText" Foreground="#FFFF8A65" FontSize="11"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+        </Popup>
+
+    </Grid>
+
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem x:Name="LockMenuItem" Header="Bloquear tamaño" IsCheckable="True"
+                      Click="LockSize_Click" />
+            <MenuItem Header="Tamaño">
+                <MenuItem Header="Pequeño (64 px)" Click="SizeSmall_Click" />
+                <MenuItem Header="Mediano (96 px)" Click="SizeMedium_Click" />
+                <MenuItem Header="Grande (128 px)" Click="SizeLarge_Click" />
+            </MenuItem>
+            <MenuItem Header="Colocar sobre la barra de tareas" Click="SnapToTaskbar_Click" />
+            <Separator />
+            <MenuItem Header="Salir" Click="Exit_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+</Window>
