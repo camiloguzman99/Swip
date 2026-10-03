@@ -607,15 +607,10 @@ public partial class MainWindow : Window
     {
         if (sender is not Button { Tag: int sessionId }) return;
 
-        var confirm = MessageBox.Show(
-            "¿Cambiar a esta sesión? La sesión actual quedará abierta en segundo plano.",
-            "Swip", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
-
         try
         {
             InfoPopup.IsOpen = false;
-            await _client.SwitchToSessionAsync(sessionId);
+            await _client.SwitchToSessionAsync(sessionId); // cambio directo, sin confirmación
         }
         catch (Exception ex)
         {

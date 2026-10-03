@@ -22,28 +22,50 @@ internal static class WindowEnumeratorFile
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX b);
 
+    private static int _totalWindows;
+    private static int _candidateWindows;
+
     public static int Run(string outFile)
     {
         try
         {
             var apps = Enumerate();
             File.WriteAllText(outFile, JsonSerializer.Serialize(apps, IpcProtocol.Json));
+            HelperLog($"ayudante sesión={Process.GetCurrentProcess().SessionId} ventanasTotales={_totalWindows} candidatas={_candidateWindows} apps={apps.Count}");
             return 0;
         }
-        catch
+        catch (Exception ex)
         {
+            HelperLog($"ayudante EXCEPCIÓN: {ex.Message}");
             return 1;
         }
+    }
+
+    private static void HelperLog(string msg)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "service.log"),
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}   {msg}{Environment.NewLine}");
+        }
+        catch { }
     }
 
     private static List<AppInfo> Enumerate()
     {
         uint ownSession = (uint)Process.GetCurrentProcess().SessionId;
 
+        _totalWindows = 0;
+        _candidateWindows = 0;
+
         // Nombres de proceso con ventana visible (con un título por nombre).
         var windowed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         WindowInterop.EnumWindows((hWnd, _) =>
         {
+            _totalWindows++;
             if (!WindowInterop.IsWindowVisible(hWnd)) return true;
             if ((WindowInterop.GetWindowLong(hWnd, WindowInterop.GWL_EXSTYLE) & WindowInterop.WS_EX_TOOLWINDOW) != 0) return true;
             string title = WindowInterop.GetWindowTitle(hWnd);
@@ -51,6 +73,7 @@ internal static class WindowEnumeratorFile
             WindowInterop.GetWindowThreadProcessId(hWnd, out uint pid);
             if (pid == 0) return true;
             if (WindowInterop.ProcessIdToSessionId(pid, out uint sid) && sid != ownSession) return true;
+            _candidateWindows++;
             try
             {
                 using var p = Process.GetProcessById((int)pid);
