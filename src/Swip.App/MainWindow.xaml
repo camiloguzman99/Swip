@@ -55,12 +55,8 @@
                     <StackPanel x:Name="CatSettingsPanel" Visibility="Collapsed" Margin="0,2,0,0">
                         <TextBlock Text="Color" Foreground="#FF9AA0A6" FontSize="10" Margin="2,0,0,4" />
                         <WrapPanel>
-                            <Button Style="{StaticResource Swatch}" Tag="amarillo" Click="Color_Click" Background="#FFFFCD1A" />
-                            <Button Style="{StaticResource Swatch}" Tag="naranja"  Click="Color_Click" Background="#FFF2913B" />
-                            <Button Style="{StaticResource Swatch}" Tag="gris"     Click="Color_Click" Background="#FFAEB6BD" />
-                            <Button Style="{StaticResource Swatch}" Tag="negro"    Click="Color_Click" Background="#FF4A4A4A" />
-                            <Button Style="{StaticResource Swatch}" Tag="blanco"   Click="Color_Click" Background="#FFF2F2F2" />
-                            <Button Style="{StaticResource Swatch}" Tag="marron"   Click="Color_Click" Background="#FFA9743F" />
+                            <Button Style="{StaticResource Swatch}" Tag="orange" Click="Color_Click" Background="#FFF2913B" />
+                            <Button Style="{StaticResource Swatch}" Tag="gray"   Click="Color_Click" Background="#FF8B8178" />
                         </WrapPanel>
                         <Grid Margin="0,2,0,2">
                             <Grid.ColumnDefinitions>

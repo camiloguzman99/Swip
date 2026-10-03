@@ -121,8 +121,8 @@ powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 
 | Acción                       | Resultado                                                      |
 |------------------------------|----------------------------------------------------------------|
-| Clic izquierdo en un gato    | Interactúas con el gato (reacción feliz + saltito)             |
-| Clic derecho en un gato      | Menú de ese usuario: nombre, apps abiertas, color, engordar/adelgazar y, al final, cambiar |
+| Clic en un gato (izq. o der.)| Abre el menú de ese usuario (3 niveles)                        |
+| Clic derecho MANTENIDO        | Arrastra el gato ("cargado"); al soltar cae por gravedad      |
 | Clic en la 📦 (esquina)       | Abre la configuración de Swip                                   |
 
 La **caja de cartón** 📦 de la esquina (cerrada; se abre al pulsarla, porque a los gatos les
@@ -134,10 +134,14 @@ preferencias se guardan en `%AppData%\Swip\settings.json`.
 
 ### Estados del gato
 
-| Estado del usuario                      | Gato                 |
+| Estado del usuario                      | Acción del gato      |
 |-----------------------------------------|----------------------|
-| Con sesión activa / en pantalla         | Despierto, merodeando|
-| En segundo plano o sin sesión iniciada  | Durmiendo ("z z")    |
+| Sesión cerrada (sin sesión iniciada)    | Durmiendo            |
+| Sesión activa (en pantalla ahora)       | Caminando (merodea)  |
+| Iniciada pero en el otro escritorio     | Jugando              |
+| Mientras lo arrastras                   | Cargado              |
+
+Cada acción tiene 2 frames de animación y dos colores (naranja, gris), elegibles por gato.
 
 Swip enumera las **cuentas de usuario del equipo** (locales habilitadas, más cualquier
 usuario con sesión abierta que sea de dominio/Microsoft/AzureAD) y crea **un gato por

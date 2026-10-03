@@ -16,4 +16,8 @@
     <ProjectReference Include="..\Swip.Shared\Swip.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\**\*.png" />
+  </ItemGroup>
+
 </Project>

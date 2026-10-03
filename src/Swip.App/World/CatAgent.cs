@@ -5,38 +5,25 @@ using Swip.Shared;
 
 namespace Swip.App.World;
 
-/// <summary>Estado visible del gato.</summary>
-public enum CatState
-{
-    /// <summary>Sesión activa/conectada: el gato merodea por el viewport.</summary>
-    Active,
-
-    /// <summary>Sesión cerrada (desconectada en segundo plano): el gato duerme.</summary>
-    Sleeping,
-}
-
 /// <summary>
-/// Un gato = una sesión. Reúne la información mostrada en el menú (clic derecho) y el estado
-/// de movimiento/animación que la ventana actualiza en cada tick del bucle.
+/// Un gato = una cuenta de usuario. Reúne la información del menú y el estado de
+/// simulación (acción, animación, posición y gravedad) que la ventana actualiza cada tick.
 /// </summary>
 public sealed class CatAgent : INotifyPropertyChanged
 {
     private static readonly Random Rng = new();
 
     // --- Identidad / info de usuario (para el menú) ----------------------------
-    /// <summary>Clave estable del gato = nombre de usuario (único en el equipo).</summary>
     public string Key { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
 
     private int _sessionId = -1;
-    /// <summary>Id de la sesión del usuario, o -1 si no tiene sesión iniciada.</summary>
     public int SessionId
     {
         get => _sessionId;
         set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
     }
 
-    /// <summary>True si el usuario tiene una sesión abierta.</summary>
     public bool HasSession => _sessionId >= 0;
 
     private bool _isCurrent;
@@ -46,20 +33,8 @@ public sealed class CatAgent : INotifyPropertyChanged
         set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
     }
 
-    /// <summary>Tema de color del gato (ver PixelCat.Themes).</summary>
-    public string Color { get; set; } = "amarillo";
-
-    /// <summary>Nivel de gordura (0 = normal); ensancha el sprite.</summary>
-    public int FatLevel { get; set; }
-
-    /// <summary>Se puede cambiar: tiene sesión abierta y no es la que está en pantalla.</summary>
     public bool CanSwitch => HasSession && !IsCurrent;
-
-    /// <summary>Mostrar "sin sesión iniciada" (no tiene sesión y no es la actual).</summary>
     public bool ShowNoSession => !HasSession && !IsCurrent;
-
-    /// <summary>True mientras el usuario arrastra el gato (el bucle no lo mueve).</summary>
-    public bool Dragging { get; set; }
 
     private string _stateText = string.Empty;
     public string StateText
@@ -77,135 +52,112 @@ public sealed class CatAgent : INotifyPropertyChanged
 
     public ObservableCollection<string> Apps { get; } = new();
 
-    // --- Estado de simulación (lo lee/escribe el bucle de la ventana) ----------
-    public CatState State { get; set; }
+    // --- Apariencia ------------------------------------------------------------
+    public string Color { get; set; } = "orange";
+    public int FatLevel { get; set; }
+
+    // --- Simulación ------------------------------------------------------------
     public double X { get; set; }
     public double Y { get; set; }
-    public double BaseY { get; set; }
     public double Vx { get; set; }
+    public double Vy { get; set; }
     public bool FacingRight { get; set; } = true;
-    public CatFrame Frame { get; private set; } = CatFrame.SitA;
+    public int FrameIndex { get; private set; }
 
-    private double _frameTimer;
-    private double _wanderTimer;
-    private double _reactionTimer;
-    private double _bobPhase;
+    /// <summary>True mientras el usuario arrastra el gato (lo lleva el ratón; sin gravedad).</summary>
+    public bool Dragging { get; set; }
 
-    /// <summary>Clic izquierdo: el gato reacciona (se pone feliz y da un saltito).</summary>
-    public void Interact()
-    {
-        _reactionTimer = 1.2;
-        _bobPhase = 0;
-    }
-
-    /// <summary>True mientras el gato muestra la reacción al clic izquierdo.</summary>
-    public bool IsReacting => _reactionTimer > 0;
-
-    /// <summary>Desplazamiento vertical del saltito durante la reacción (en píxeles de pantalla).</summary>
-    public double HopOffset { get; private set; }
+    private double _animTimer;
+    private double _wander;
 
     /// <summary>
-    /// Avanza la simulación del gato. <paramref name="dt"/> en segundos; el viewport en DIP;
-    /// <paramref name="catSize"/> es el tamaño en pantalla del gato.
+    /// Acción actual según el estado de la sesión (o Carry si se está arrastrando):
+    /// durmiendo (sin sesión), caminando (sesión activa), jugando (en espera).
     /// </summary>
+    public CatAction Action =>
+        Dragging ? CatAction.Carry
+        : IsCurrent ? CatAction.Walk
+        : HasSession ? CatAction.Play
+        : CatAction.Sleep;
+
     public void Update(double dt, double viewportWidth, double viewportHeight, double catSize)
     {
-        if (Dragging)
+        CatAction act = Action;
+
+        // Animación de 2 frames, a ritmo distinto por acción.
+        double interval = act switch
         {
-            // Mientras se arrastra, el gato se queda donde lo lleva el ratón.
-            Frame = State == CatState.Sleeping ? CatFrame.SleepA : CatFrame.Happy;
-            return;
-        }
-
-        _bobPhase += dt;
-
-        if (_reactionTimer > 0)
-        {
-            _reactionTimer -= dt;
-            Frame = CatFrame.Happy;
-            // Saltito: medio seno a lo largo de la reacción.
-            double p = Math.Clamp(1 - _reactionTimer / 1.2, 0, 1);
-            HopOffset = -Math.Sin(p * Math.PI) * (catSize * 0.35);
-            Y = BaseY + HopOffset;
-            return;
-        }
-        HopOffset = 0;
-
-        if (State == CatState.Sleeping)
-        {
-            AnimateFrame(dt, 0.7, CatFrame.SleepA, CatFrame.SleepB);
-            Y = BaseY;
-            return;
-        }
-
-        // Activo: merodea horizontalmente con pausas ocasionales.
-        AnimateFrame(dt, 0.22, CatFrame.SitA, CatFrame.SitB);
-
-        _wanderTimer -= dt;
-        if (_wanderTimer <= 0)
-        {
-            // 1 de cada 3 veces se queda quieto un momento; si no, elige rumbo y velocidad.
-            if (Rng.NextDouble() < 0.33)
-            {
-                Vx = 0;
-                _wanderTimer = 0.8 + Rng.NextDouble() * 1.6;
-            }
-            else
-            {
-                double speed = 18 + Rng.NextDouble() * 34; // DIP/seg
-                Vx = Rng.NextDouble() < 0.5 ? -speed : speed;
-                FacingRight = Vx > 0;
-                _wanderTimer = 1.2 + Rng.NextDouble() * 2.5;
-            }
-        }
-
-        X += Vx * dt;
-        double maxX = Math.Max(0, viewportWidth - catSize);
-        if (X <= 0) { X = 0; Vx = Math.Abs(Vx); FacingRight = true; }
-        else if (X >= maxX) { X = maxX; Vx = -Math.Abs(Vx); FacingRight = false; }
-
-        // Bamboleo vertical suave al moverse.
-        double amp = Vx != 0 ? catSize * 0.04 : catSize * 0.015;
-        Y = BaseY + Math.Sin(_bobPhase * 6) * amp;
-    }
-
-    private void AnimateFrame(double dt, double interval, CatFrame a, CatFrame b)
-    {
-        _frameTimer += dt;
-        if (_frameTimer >= interval)
-        {
-            _frameTimer = 0;
-            Frame = Frame == a ? b : a;
-        }
-        else if (Frame != a && Frame != b)
-        {
-            Frame = a;
-        }
-    }
-
-    public static CatState StateFor(UserInfo u)
-    {
-        if (!u.HasSession) return CatState.Sleeping;
-        if (u.IsCurrent) return CatState.Active;
-        return u.State switch
-        {
-            SessionConnectionState.Active => CatState.Active,
-            SessionConnectionState.Connected => CatState.Active,
-            _ => CatState.Sleeping,
+            CatAction.Walk => 0.26,
+            CatAction.Play => 0.5,
+            CatAction.Sleep => 0.9,
+            CatAction.Carry => 0.22,
+            _ => 0.5,
         };
+        _animTimer += dt;
+        if (_animTimer >= interval)
+        {
+            _animTimer = 0;
+            FrameIndex ^= 1;
+        }
+
+        if (Dragging)
+            return; // la posición la fija el ratón
+
+        double floor = Math.Max(0, viewportHeight - catSize);
+
+        // Gravedad: si está por encima del suelo, cae.
+        if (Y < floor - 0.5)
+        {
+            Vy += 2200 * dt;
+            Y += Vy * dt;
+            if (Y >= floor) { Y = floor; Vy = 0; }
+            return; // mientras cae no camina
+        }
+        Y = floor;
+        Vy = 0;
+
+        // Solo el gato "caminando" (sesión activa) merodea.
+        if (act == CatAction.Walk)
+        {
+            _wander -= dt;
+            if (_wander <= 0)
+            {
+                if (Rng.NextDouble() < 0.3)
+                {
+                    Vx = 0;
+                    _wander = 0.8 + Rng.NextDouble() * 1.4;
+                }
+                else
+                {
+                    double speed = 20 + Rng.NextDouble() * 36;
+                    Vx = Rng.NextDouble() < 0.5 ? -speed : speed;
+                    FacingRight = Vx > 0;
+                    _wander = 1.2 + Rng.NextDouble() * 2.2;
+                }
+            }
+
+            X += Vx * dt;
+            double maxX = Math.Max(0, viewportWidth - catSize);
+            if (X <= 0) { X = 0; Vx = Math.Abs(Vx); FacingRight = true; }
+            else if (X >= maxX) { X = maxX; Vx = -Math.Abs(Vx); FacingRight = false; }
+        }
+        else
+        {
+            Vx = 0;
+        }
     }
 
     public static string DescribeState(UserInfo u)
     {
-        if (!u.HasSession) return "Sin sesión iniciada (dormido)";
-        if (u.IsCurrent) return "En esta pantalla ahora";
+        if (!u.HasSession) return "Sesión cerrada (durmiendo)";
+        if (u.IsCurrent) return "Sesión activa (en pantalla)";
         return u.State switch
         {
             SessionConnectionState.Active => "Activa",
             SessionConnectionState.Connected => "Conectada",
-            SessionConnectionState.Disconnected => "Abierta en el otro escritorio (dormida)",
-            SessionConnectionState.Idle => "Inactiva (dormida)",
-            _ => u.State + " (dormida)",
+            SessionConnectionState.Disconnected => "En espera (en el otro escritorio)",
+            SessionConnectionState.Idle => "Inactiva",
+            _ => u.State.ToString(),
         };
     }
 

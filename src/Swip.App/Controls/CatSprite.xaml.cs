@@ -6,13 +6,12 @@ using Swip.App.World;
 namespace Swip.App.Controls;
 
 /// <summary>
-/// Vista de un gato. La ventana le empuja el frame y el estado en cada tick; este control solo pinta.
+/// Vista de un gato basada en sprites de imagen. La ventana le empuja el estado cada tick; pinta.
 /// </summary>
 public partial class CatSprite : UserControl
 {
     private double _baseSize = 64;
 
-    /// <summary>El gato que representa este sprite.</summary>
     public CatAgent Agent { get; }
 
     public CatSprite(CatAgent agent, double catSize)
@@ -23,30 +22,29 @@ public partial class CatSprite : UserControl
         SetCatSize(catSize);
     }
 
-    /// <summary>Ajusta el tamaño base del gato y aplica el ensanchado por gordura.</summary>
+    /// <summary>Ajusta el tamaño del gato (alto en DIP) y aplica el ensanchado por gordura.</summary>
     public void SetCatSize(double size)
     {
         _baseSize = size;
         ApplyFat();
     }
 
-    /// <summary>Reaplica el ancho según el nivel de gordura del gato (más gordo = más ancho).</summary>
     public void ApplyFat()
     {
-        Img.Height = _baseSize;
-        Img.Width = _baseSize * (1.0 + Math.Clamp(Agent.FatLevel, 0, 6) * 0.14);
+        double height = _baseSize;
+        double width = height * (CatSprites.AspectW / CatSprites.AspectH);
+        width *= 1.0 + Math.Clamp(Agent.FatLevel, 0, 6) * 0.14;
+        Img.Height = height;
+        Img.Width = width;
     }
 
-    /// <summary>Refresca el frame y los adornos a partir del estado actual del agente.</summary>
+    /// <summary>Refresca el sprite (acción + frame + color) y el espejo según la dirección.</summary>
     public void Render()
     {
-        Img.Source = PixelCat.Get(Agent.Frame, mirrored: !Agent.FacingRight, theme: Agent.Color);
-        Zzz.Visibility = Agent.State == CatState.Sleeping && !Agent.IsReacting
-            ? Visibility.Visible : Visibility.Collapsed;
-        Heart.Visibility = Agent.IsReacting ? Visibility.Visible : Visibility.Collapsed;
+        Img.Source = CatSprites.Get(Agent.Color, Agent.Action, Agent.FrameIndex);
+        Flip.ScaleX = Agent.FacingRight ? 1 : -1;
     }
 
-    /// <summary>Muestra u oculta la etiqueta con el nombre.</summary>
     public void ShowLabel(bool show) =>
         LabelBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
 }

@@ -68,7 +68,7 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         InfoPopup.Closed += (_, _) => _openAgent = null;
         // Al cerrar la configuración, la caja se vuelve a cerrar.
-        ConfigPopup.Closed += (_, _) => Box.Source = PixelBox.Get(open: false);
+        ConfigPopup.Closed += (_, _) => Box.Source = BoxSprites.Get(open: false);
     }
 
     private double BoxSize => Math.Clamp(_settings.CatSize, 48, 96);
@@ -84,7 +84,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
-        Box.Source = PixelBox.Get(false);
+        Box.Source = BoxSprites.Get(false);
         Yard.MouseLeftButtonDown += Yard_MouseLeftButtonDown;
         ApplyStripBounds();
         ApplyStripBackground();
@@ -142,7 +142,7 @@ public partial class MainWindow : Window
         double maxX = Math.Max(0, Width - _settings.CatSize);
         foreach (var (_, agent) in _agents)
         {
-            agent.BaseY = baseY;
+            agent.Y = baseY;
             if (agent.X > maxX) agent.X = maxX;
             if (agent.X < 0) agent.X = 0;
         }
@@ -263,12 +263,10 @@ public partial class MainWindow : Window
 
             foreach (var u in users)
             {
-                var state = CatAgent.StateFor(u);
                 string stateText = CatAgent.DescribeState(u);
 
                 if (_agents.TryGetValue(u.UserName, out var agent))
                 {
-                    agent.State = state;
                     agent.StateText = stateText;
                     agent.IsCurrent = u.IsCurrent;
                     agent.SessionId = u.SessionId;
@@ -281,21 +279,18 @@ public partial class MainWindow : Window
                         SessionId = u.SessionId,
                         DisplayName = u.DisplayName,
                         IsCurrent = u.IsCurrent,
-                        State = state,
                         StateText = stateText,
-                        BaseY = baseY,
+                        Y = baseY,
                         X = _rng.NextDouble() * maxX,
                         FacingRight = _rng.NextDouble() < 0.5,
                     };
-                    agent.Y = baseY;
 
-                    // Preferencias por gato: color (por defecto, distinto por gato), gordura y posición.
+                    // Preferencias por gato: color (por defecto, distinto por gato), gordura y posición X.
                     _settings.Cats.TryGetValue(u.UserName, out var pref);
-                    string defaultColor = PixelCat.Themes[_agents.Count % PixelCat.Themes.Length];
-                    agent.Color = PixelCat.NormalizeTheme(pref?.Color ?? defaultColor);
+                    string defaultColor = CatSprites.Colors[_agents.Count % CatSprites.Colors.Length];
+                    agent.Color = CatSprites.Normalize(pref?.Color ?? defaultColor);
                     agent.FatLevel = pref?.Fat ?? 0;
                     if (pref?.X is double px) agent.X = Math.Clamp(px, 0, maxX);
-                    if (pref?.Y is double py) { agent.BaseY = Math.Clamp(py, 0, Math.Max(0, Height - _settings.CatSize)); agent.Y = agent.BaseY; }
 
                     _agents[u.UserName] = agent;
 
@@ -346,10 +341,11 @@ public partial class MainWindow : Window
 
     private void WireSprite(CatSprite sprite)
     {
-        sprite.MouseLeftButtonDown += Cat_Down;
+        // Arrastrar: botón DERECHO mantenido (el gato se "carga"). Clic (izq o der sin mover): menú.
+        sprite.MouseRightButtonDown += Cat_Down;
         sprite.MouseMove += Cat_Move;
-        sprite.MouseLeftButtonUp += Cat_Up;
-        sprite.MouseRightButtonUp += (s, e) =>
+        sprite.MouseRightButtonUp += Cat_Up;
+        sprite.MouseLeftButtonUp += (s, e) =>
         {
             OpenInfo((CatSprite)s);
             e.Handled = true;
@@ -362,7 +358,7 @@ public partial class MainWindow : Window
         _catDrag = sprite;
         _catMoved = false;
         _dragging = true;
-        sprite.Agent.Dragging = true;
+        sprite.Agent.Dragging = true; // acción "cargado"
         _catGrab = e.GetPosition(sprite);
         sprite.CaptureMouse();
         e.Handled = true;
@@ -375,10 +371,10 @@ public partial class MainWindow : Window
 
         var p = e.GetPosition(Yard);
         double x = Math.Clamp(p.X - _catGrab.X, 0, Math.Max(0, Width - _settings.CatSize));
-        double y = Math.Clamp(p.Y - _catGrab.Y, 0, Math.Max(0, Height - _settings.CatSize));
+        double y = Math.Clamp(p.Y - _catGrab.Y, 0, Math.Max(0, Height));
         sprite.Agent.X = x;
         sprite.Agent.Y = y;
-        sprite.Agent.BaseY = y;
+        sprite.Agent.Vy = 0;
         Canvas.SetLeft(sprite, x);
         Canvas.SetTop(sprite, y);
         _catMoved = true;
@@ -388,24 +384,23 @@ public partial class MainWindow : Window
     {
         var sprite = (CatSprite)sender;
         if (sprite.IsMouseCaptured) sprite.ReleaseMouseCapture();
-        sprite.Agent.Dragging = false;
+        sprite.Agent.Dragging = false; // al soltar, la gravedad lo hace caer al suelo
         _catDrag = null;
         _dragging = false;
 
         if (_catMoved)
         {
-            // Guardar dónde quedó el gato (duerme/camina desde ahí).
+            // Guardar la posición horizontal (cae por gravedad hasta abajo).
             var pref = _settings.Cats.TryGetValue(sprite.Agent.Key, out var p) ? p : new CatPref();
             pref.Color = sprite.Agent.Color;
             pref.Fat = sprite.Agent.FatLevel;
             pref.X = sprite.Agent.X;
-            pref.Y = sprite.Agent.BaseY;
             _settings.Cats[sprite.Agent.Key] = pref;
             _store.Save(_settings);
         }
         else
         {
-            sprite.Agent.Interact(); // fue un clic: interactuar
+            OpenInfo(sprite); // clic derecho sin mover: abrir menú
         }
         e.Handled = true;
     }
@@ -520,7 +515,7 @@ public partial class MainWindow : Window
     {
         ShowStatus(null);
         UpdateConfigLabels();
-        Box.Source = PixelBox.Get(open: true); // la caja se abre
+        Box.Source = BoxSprites.Get(open: true); // la caja se abre
         ConfigPopup.HorizontalOffset = 0;
         ConfigPopup.VerticalOffset = 0;
         ConfigPopup.IsOpen = true;
@@ -649,7 +644,7 @@ public partial class MainWindow : Window
     private void Color_Click(object sender, RoutedEventArgs e)
     {
         if (_openAgent is null || sender is not Button { Tag: string theme }) return;
-        _openAgent.Color = PixelCat.NormalizeTheme(theme);
+        _openAgent.Color = CatSprites.Normalize(theme);
         if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.Render();
         SaveCatPref(_openAgent);
     }
@@ -697,7 +692,6 @@ public partial class MainWindow : Window
         double maxX = Math.Max(0, Width - _settings.CatSize);
         foreach (var agent in _agents.Values)
         {
-            agent.BaseY = baseY;
             agent.X = _rng.NextDouble() * maxX;
             agent.Y = baseY;
         }

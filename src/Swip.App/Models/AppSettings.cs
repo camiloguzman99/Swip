@@ -44,7 +44,7 @@ public sealed class AppSettings
 /// <summary>Preferencias persistentes de un gato concreto.</summary>
 public sealed class CatPref
 {
-    /// <summary>Tema de color (ver PixelCat.Themes); null = asignar por defecto.</summary>
+    /// <summary>Color del gato ("orange" o "gray"); null = asignar por defecto.</summary>
     public string? Color { get; set; }
 
     /// <summary>Nivel de gordura (0 = normal).</summary>
