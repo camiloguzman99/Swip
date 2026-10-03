@@ -11,6 +11,11 @@
             </Image.RenderTransform>
         </Image>
 
+        <!-- Corazón al acariciar -->
+        <TextBlock x:Name="Heart" Text="&#x2665;" Foreground="#FFFF6E8A" FontSize="18"
+                   HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-6,0,0"
+                   Visibility="Collapsed" />
+
         <!-- Etiqueta con el nombre de la sesión -->
         <Border x:Name="LabelBox" Background="#AA202124" CornerRadius="4" Padding="4,1"
                 HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-2">

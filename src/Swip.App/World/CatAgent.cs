@@ -67,8 +67,13 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// <summary>True mientras el usuario arrastra el gato (lo lleva el ratón; sin gravedad).</summary>
     public bool Dragging { get; set; }
 
+    /// <summary>Caricia: muestra un corazón y pone al gato a "jugar" un momento.</summary>
+    public void Pet() => _petTimer = 1.1;
+    public bool IsPetting => _petTimer > 0;
+
     private double _animTimer;
     private double _wander;
+    private double _petTimer;
 
     /// <summary>
     /// Acción actual según el estado de la sesión (o Carry si se está arrastrando):
@@ -76,12 +81,14 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// </summary>
     public CatAction Action =>
         Dragging ? CatAction.Carry
+        : IsPetting ? CatAction.Play
         : IsCurrent ? CatAction.Walk
         : HasSession ? CatAction.Play
         : CatAction.Sleep;
 
     public void Update(double dt, double viewportWidth, double viewportHeight, double catSize)
     {
+        if (_petTimer > 0) _petTimer -= dt;
         CatAction act = Action;
 
         // Animación de 2 frames, a ritmo distinto por acción.

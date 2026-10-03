@@ -43,6 +43,7 @@ public partial class CatSprite : UserControl
     {
         Img.Source = CatSprites.Get(Agent.Color, Agent.Action, Agent.FrameIndex);
         Flip.ScaleX = Agent.FacingRight ? 1 : -1;
+        Heart.Visibility = Agent.IsPetting ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void ShowLabel(bool show) =>
