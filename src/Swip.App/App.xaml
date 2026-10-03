@@ -10,11 +10,11 @@
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />
         <SolidColorBrush x:Key="AccentFgBrush" Color="#FF202124" />
 
-        <!-- Fila de lista pulsable (bordes redondeados) -->
+        <!-- Fila de lista pulsable: transparente, solo resalta con el mouseover -->
         <Style x:Key="ListRow" TargetType="Button">
             <Setter Property="Margin" Value="0,0,0,6" />
             <Setter Property="Padding" Value="12,9" />
-            <Setter Property="Background" Value="#FF2A2B2E" />
+            <Setter Property="Background" Value="#00000000" />
             <Setter Property="Foreground" Value="#FFE8EAED" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="12" />
@@ -32,15 +32,15 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#FF3C4043" />
+                    <Setter Property="Background" Value="#33FFFFFF" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
-        <!-- Fila de lista destacada (acción principal: Cambiar) -->
+        <!-- Fila destacada (Cambiar a esta sesión): verde -->
         <Style x:Key="ListRowAccent" TargetType="Button" BasedOn="{StaticResource ListRow}">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+            <Setter Property="Background" Value="#FF2E9E4F" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Template">
@@ -55,14 +55,14 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+                    <Setter Property="Background" Value="#FF37BB5E" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Fila de lista deshabilitada (p. ej. "Sesión activa") -->
         <Style x:Key="ListRowDisabled" TargetType="Border">
-            <Setter Property="Background" Value="#FF2A2B2E" />
+            <Setter Property="Background" Value="#22FFFFFF" />
             <Setter Property="CornerRadius" Value="9" />
             <Setter Property="Padding" Value="12,9" />
             <Setter Property="Margin" Value="0,4,0,0" />

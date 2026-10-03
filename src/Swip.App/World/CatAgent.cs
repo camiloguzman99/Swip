@@ -77,6 +77,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     private double _animTimer;
     private double _wander;
     private double _petTimer;
+    private double _walkPhase;
 
     /// <summary>
     /// Acción actual según el estado de la sesión (o Carry si se está arrastrando):
@@ -126,23 +127,23 @@ public sealed class CatAgent : INotifyPropertyChanged
         Y = floor;
         Vy = 0;
 
-        // Solo el gato "caminando" (sesión activa) merodea.
+        // Solo el gato "caminando" (sesión activa) merodea, despacio y con un leve trote.
         if (act == CatAction.Walk)
         {
             _wander -= dt;
             if (_wander <= 0)
             {
-                if (Rng.NextDouble() < 0.3)
+                if (Rng.NextDouble() < 0.25)
                 {
                     Vx = 0;
-                    _wander = 0.8 + Rng.NextDouble() * 1.4;
+                    _wander = 1.0 + Rng.NextDouble() * 1.8;
                 }
                 else
                 {
-                    double speed = 20 + Rng.NextDouble() * 36;
+                    double speed = 10 + Rng.NextDouble() * 12; // más lento (antes 20-56)
                     Vx = Rng.NextDouble() < 0.5 ? -speed : speed;
                     FacingRight = Vx > 0;
-                    _wander = 1.2 + Rng.NextDouble() * 2.2;
+                    _wander = 1.6 + Rng.NextDouble() * 2.8;
                 }
             }
 
@@ -150,6 +151,13 @@ public sealed class CatAgent : INotifyPropertyChanged
             double maxX = Math.Max(0, viewportWidth - catSize);
             if (X <= 0) { X = 0; Vx = Math.Abs(Vx); FacingRight = true; }
             else if (X >= maxX) { X = maxX; Vx = -Math.Abs(Vx); FacingRight = false; }
+
+            // Trote: pequeño bote vertical mientras avanza (da sensación de caminar).
+            if (Vx != 0)
+            {
+                _walkPhase += dt * 11;
+                Y = floor - Math.Abs(Math.Sin(_walkPhase)) * (catSize * 0.06);
+            }
         }
         else
         {

@@ -18,8 +18,8 @@ public enum CatAction
 /// </summary>
 public static class CatSprites
 {
-    public const double AspectW = 271.0;
-    public const double AspectH = 381.0;
+    public const double AspectW = 269.0;
+    public const double AspectH = 379.0;
 
     public static readonly string[] Colors = { "orange", "gray" };
 
@@ -57,6 +57,9 @@ public static class CatSprites
 /// <summary>Carga los sprites de la caja de cartón (cerrada / abierta) desde los assets.</summary>
 public static class BoxSprites
 {
+    public const double AspectW = 394.0;
+    public const double AspectH = 284.0;
+
     private static BitmapImage? _closed;
     private static BitmapImage? _open;
 

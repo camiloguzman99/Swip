@@ -34,7 +34,6 @@ public partial class MainWindow : Window
     private bool _clickThrough = true;
     private CatAgent? _openAgent;
     private bool _refreshing;
-    private bool _moveMode;
     private bool _dragging; // mientras se arrastra caja/gato/menú: fuerza captura del ratón
 
     // Arrastre de la caja
@@ -54,14 +53,6 @@ public partial class MainWindow : Window
     private InteropNative.POINT _menuStartCursor;
     private double _menuStartH, _menuStartV;
 
-    private static readonly Brush StripBrush = CreateStripBrush();
-    private static Brush CreateStripBrush()
-    {
-        var b = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xCD, 0x1A));
-        b.Freeze();
-        return b;
-    }
-
     public MainWindow()
     {
         InitializeComponent();
@@ -76,8 +67,10 @@ public partial class MainWindow : Window
         ConfigPopup.Closed += (_, _) => Box.Source = BoxSprites.Get(open: false);
     }
 
-    private double BoxSize => Math.Clamp(_settings.CatSize, 48, 96);
-    private double CatPx => _settings.CatSize * 1.5;
+    // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
+    private const double CatPx = 48;   // alto del gato en pantalla
+    private const double BoxH = 60;    // alto de la caja
+    private double BoxW => BoxH * (BoxSprites.AspectW / BoxSprites.AspectH);
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -91,10 +84,7 @@ public partial class MainWindow : Window
     {
         _settings = _store.Load();
         Box.Source = BoxSprites.Get(false);
-        Yard.MouseLeftButtonDown += Yard_MouseLeftButtonDown;
         ApplyStripBounds();
-        ApplyStripBackground();
-        UpdateConfigLabels();
 
         _loop.Interval = TimeSpan.FromMilliseconds(33); // ~30 fps
         _loop.Tick += Loop_Tick;
@@ -114,30 +104,18 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        _settings.Left = Left;
-        _settings.Top = Top;
         _store.Save(_settings);
     }
 
-    // --- Posición y tamaño de la franja ----------------------------------------
+    // --- Tamaño de la ventana (toda la pantalla, fija) --------------------------
 
     private void ApplyStripBounds()
     {
-        var work = SystemParameters.WorkArea;
-        Width = _settings.StripWidth ?? work.Width;
-        Height = _settings.StripHeight;
-
-        if (_settings.PositionLocked && _settings.Left is double l && _settings.Top is double t)
-        {
-            Left = l;
-            Top = t;
-        }
-        else
-        {
-            Left = work.Left;
-            Top = work.Bottom - Height; // justo sobre la barra de tareas
-        }
-
+        // La franja ocupa TODA la pantalla y no se puede mover ni redimensionar.
+        Left = 0;
+        Top = 0;
+        Width = SystemParameters.PrimaryScreenWidth;
+        Height = SystemParameters.PrimaryScreenHeight;
         RepositionCats();
     }
 
@@ -161,27 +139,14 @@ public partial class MainWindow : Window
     /// <summary>Coloca la caja en su posición guardada, o por defecto en la esquina inferior izquierda.</summary>
     private void RepositionBox()
     {
-        Box.Width = BoxSize;
-        Box.Height = BoxSize;
+        Box.Width = BoxW;
+        Box.Height = BoxH;
         double left = _settings.BoxLeft ?? 8;
-        double top = _settings.BoxTop ?? (Height - BoxSize);
-        left = Math.Clamp(left, 0, Math.Max(0, Width - BoxSize));
-        top = Math.Clamp(top, 0, Math.Max(0, Height - BoxSize));
+        double top = _settings.BoxTop ?? (Height - BoxH);
+        left = Math.Clamp(left, 0, Math.Max(0, Width - BoxW));
+        top = Math.Clamp(top, 0, Math.Max(0, Height - BoxH));
         Canvas.SetLeft(Box, left);
         Canvas.SetTop(Box, top);
-    }
-
-    private void ApplyStripBackground()
-    {
-        // Fondo visible si el usuario lo activó o mientras se mueve la ventana.
-        Yard.Background = (_settings.ShowStripBackground || _moveMode) ? StripBrush : null;
-    }
-
-    private void UpdateConfigLabels()
-    {
-        MoveBtn.Content = _moveMode ? "Terminar de mover" : "Mover ventana";
-        VisibleBtn.Content = _settings.ShowStripBackground ? "Ocultar la franja" : "Hacer visible la ventana";
-        LabelsBtn.Content = _settings.ShowLabels ? "Ocultar etiquetas" : "Mostrar etiquetas";
     }
 
     // --- Bucle de animación -----------------------------------------------------
@@ -212,7 +177,7 @@ public partial class MainWindow : Window
     private void UpdateBoxGravity(double dt)
     {
         if (Box.IsMouseCaptured) return;
-        double floor = Math.Max(0, Height - BoxSize);
+        double floor = Math.Max(0, Height - BoxH);
         double by = Canvas.GetTop(Box);
         if (double.IsNaN(by)) { Canvas.SetTop(Box, floor); return; }
 
@@ -236,7 +201,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateClickThrough()
     {
-        bool wantThrough = !_moveMode && !_dragging && !CursorOverInteractive();
+        bool wantThrough = !_dragging && !CursorOverInteractive();
         if (wantThrough != _clickThrough)
         {
             InteropNative.SetClickThrough(_hwnd, wantThrough);
@@ -499,7 +464,6 @@ public partial class MainWindow : Window
     private void Box_Down(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        if (_moveMode) { ExitMoveMode(); return; } // en modo mover, pulsar la caja termina
         _boxMoved = false;
         _dragging = true;
         _boxStartLeft = Canvas.GetLeft(Box);
@@ -512,8 +476,8 @@ public partial class MainWindow : Window
     {
         if (!Box.IsMouseCaptured) return;
         var p = e.GetPosition(Yard);
-        double left = Math.Clamp(p.X - _boxGrab.X, 0, Math.Max(0, Width - BoxSize));
-        double top = Math.Clamp(p.Y - _boxGrab.Y, 0, Math.Max(0, Height - BoxSize));
+        double left = Math.Clamp(p.X - _boxGrab.X, 0, Math.Max(0, Width - BoxW));
+        double top = Math.Clamp(p.Y - _boxGrab.Y, 0, Math.Max(0, Height - BoxH));
         Canvas.SetLeft(Box, left);
         Canvas.SetTop(Box, top);
         if (Math.Abs(left - _boxStartLeft) > 3 || Math.Abs(top - _boxStartTop) > 3)
@@ -547,58 +511,17 @@ public partial class MainWindow : Window
     private void OpenConfig()
     {
         ShowStatus(null);
-        UpdateConfigLabels();
         Box.Source = BoxSprites.Get(open: true); // la caja se abre
         ConfigPopup.HorizontalOffset = 0;
         ConfigPopup.VerticalOffset = 0;
         ConfigPopup.IsOpen = true;
     }
 
-    private void Yard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    /// <summary>Aplica fondo negro translúcido con desenfoque (acrílico) al abrir un menú.</summary>
+    private void Popup_Opened(object? sender, EventArgs e)
     {
-        if (!_moveMode) return;
-        try { DragMove(); } catch { /* sin botón presionado */ }
-        _settings.Left = Left;
-        _settings.Top = Top;
-        _settings.PositionLocked = true;
-        _store.Save(_settings);
-    }
-
-    private void ToggleMove_Click(object sender, RoutedEventArgs e)
-    {
-        ConfigPopup.IsOpen = false;
-        if (_moveMode) ExitMoveMode();
-        else EnterMoveMode();
-    }
-
-    private void EnterMoveMode()
-    {
-        _moveMode = true;
-        MoveHint.Visibility = Visibility.Visible;
-        ApplyStripBackground();
-        UpdateConfigLabels();
-        InteropNative.SetClickThrough(_hwnd, false);
-        _clickThrough = false;
-    }
-
-    private void ExitMoveMode()
-    {
-        _moveMode = false;
-        MoveHint.Visibility = Visibility.Collapsed;
-        _settings.Left = Left;
-        _settings.Top = Top;
-        _settings.PositionLocked = true;
-        _store.Save(_settings);
-        ApplyStripBackground();
-        UpdateConfigLabels();
-    }
-
-    private void ToggleVisible_Click(object sender, RoutedEventArgs e)
-    {
-        _settings.ShowStripBackground = !_settings.ShowStripBackground;
-        _store.Save(_settings);
-        ApplyStripBackground();
-        UpdateConfigLabels();
+        if (sender is System.Windows.Controls.Primitives.Popup { Child: Visual child })
+            AcrylicHelper.Apply(child);
     }
 
     private async Task LoadAppsAsync(CatAgent agent)
@@ -693,56 +616,12 @@ public partial class MainWindow : Window
 
     // --- Opciones ---------------------------------------------------------------
 
-    private void CatsBigger_Click(object sender, RoutedEventArgs e) => ChangeCatSize(+16);
-    private void CatsSmaller_Click(object sender, RoutedEventArgs e) => ChangeCatSize(-16);
-
-    private void ChangeCatSize(double delta)
-    {
-        _settings.CatSize = Math.Clamp(_settings.CatSize + delta, 32, 160);
-        RepositionCats();
-        _store.Save(_settings);
-    }
-
-    private void StripTaller_Click(object sender, RoutedEventArgs e) => ChangeStripHeight(+40);
-    private void StripShorter_Click(object sender, RoutedEventArgs e) => ChangeStripHeight(-40);
-
-    private void ChangeStripHeight(double delta)
-    {
-        _settings.StripHeight = Math.Clamp(_settings.StripHeight + delta, 100, 400);
-        _store.Save(_settings);
-        ApplyStripBounds();
-    }
-
-    private void SnapToTaskbar_Click(object sender, RoutedEventArgs e)
-    {
-        _settings.PositionLocked = false;
-        _settings.Left = null;
-        _settings.Top = null;
-        _settings.StripWidth = null;
-        _settings.BoxLeft = null;
-        _settings.BoxTop = null;
-
-        // Devolver los gatos a una posición automática.
-        foreach (var pref in _settings.Cats.Values) { pref.X = null; pref.Y = null; }
-        double baseY = Height - CatPx;
-        double maxX = Math.Max(0, Width - CatPx);
-        foreach (var agent in _agents.Values)
-        {
-            agent.X = _rng.NextDouble() * maxX;
-            agent.Y = baseY;
-        }
-
-        _store.Save(_settings);
-        ApplyStripBounds();
-    }
-
     private void ToggleLabels_Click(object sender, RoutedEventArgs e)
     {
         _settings.ShowLabels = !_settings.ShowLabels;
         foreach (var sprite in _sprites.Values)
             sprite.ShowLabel(_settings.ShowLabels);
         _store.Save(_settings);
-        UpdateConfigLabels();
     }
 
     private void Update_Click(object sender, RoutedEventArgs e)
