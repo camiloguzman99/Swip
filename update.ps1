@@ -35,6 +35,12 @@ function Pause-OnError($message) {
 }
 
 try {
+    $Host.UI.RawUI.WindowTitle = "Swip - Actualización"
+    Write-Host "============================================" -ForegroundColor Yellow
+    Write-Host "   Swip - Actualizando a la ultima version" -ForegroundColor Yellow
+    Write-Host "============================================" -ForegroundColor Yellow
+    Write-Host ""
+
     $zipUrl  = "https://github.com/$Owner/$Repo/releases/download/latest/Swip-win-x64.zip"
     $tmp     = Join-Path $env:TEMP ("swip-update-" + [Guid]::NewGuid().ToString("N"))
     $zipPath = Join-Path $env:TEMP "Swip-win-x64.zip"
@@ -92,7 +98,9 @@ try {
 
     Write-Host ""
     Write-Host "Swip actualizado correctamente." -ForegroundColor Green
-    Start-Sleep -Seconds 2
+    Write-Host "El gato ya se relanzó con la nueva versión." -ForegroundColor Green
+    Write-Host ""
+    Read-Host "Pulsa Enter para cerrar"
 }
 catch {
     Pause-OnError $_.Exception.Message

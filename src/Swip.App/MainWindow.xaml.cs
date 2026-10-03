@@ -516,6 +516,7 @@ public partial class MainWindow : Window
                 Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
                 UseShellExecute = true,
                 Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Normal,
             };
             Process.Start(psi);
             ConfigPopup.IsOpen = false;
