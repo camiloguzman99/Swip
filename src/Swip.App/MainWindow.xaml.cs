@@ -69,7 +69,7 @@ public partial class MainWindow : Window
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
     private const double CatPx = 48;   // alto del gato en pantalla
-    private const double BoxH = 60;    // alto de la caja
+    private const double BoxH = 36;    // alto de la caja (reducido 40%)
     private double BoxW => BoxH * (BoxSprites.AspectW / BoxSprites.AspectH);
 
     protected override void OnSourceInitialized(EventArgs e)
