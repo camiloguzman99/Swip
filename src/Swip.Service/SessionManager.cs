@@ -364,26 +364,14 @@ internal sealed class SessionManager
                 return new();
             }
 
-            try
-            {
-                using var helper = Process.GetProcessById(pi.dwProcessId);
-                if (!helper.WaitForExit(6000))
-                {
-                    Log("  el ayudante no terminó en 6s; se cancela");
-                    try { helper.Kill(); } catch { /* best effort */ }
-                    return new();
-                }
-                Log($"  ayudante terminó, exit={helper.ExitCode}");
-            }
-            catch (Exception ex)
-            {
-                Log($"  no se pudo esperar al ayudante: {ex.Message}");
-            }
-            finally
-            {
-                ProcessInterop.CloseHandle(pi.hProcess);
-                ProcessInterop.CloseHandle(pi.hThread);
-            }
+            // Esperar al ayudante con su HANDLE (lo correcto para procesos de CreateProcessAsUser;
+            // Process.GetProcessById/WaitForExit falla con "Process was not started by this object").
+            uint wait = ProcessInterop.WaitForSingleObject(pi.hProcess, 6000);
+            Log(wait == ProcessInterop.WAIT_OBJECT_0 ? "  ayudante terminó"
+                : wait == ProcessInterop.WAIT_TIMEOUT ? "  el ayudante no terminó en 6s"
+                : $"  espera del ayudante devolvió {wait}");
+            ProcessInterop.CloseHandle(pi.hProcess);
+            ProcessInterop.CloseHandle(pi.hThread);
 
             if (!File.Exists(outFile))
             {
