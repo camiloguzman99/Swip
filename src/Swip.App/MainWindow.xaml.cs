@@ -111,11 +111,12 @@ public partial class MainWindow : Window
 
     private void ApplyStripBounds()
     {
-        // La franja ocupa TODA la pantalla y no se puede mover ni redimensionar.
-        Left = 0;
-        Top = 0;
-        Width = SystemParameters.PrimaryScreenWidth;
-        Height = SystemParameters.PrimaryScreenHeight;
+        // La franja ocupa toda el ÁREA DE TRABAJO (pantalla menos la barra de tareas), fija.
+        var work = SystemParameters.WorkArea;
+        Left = work.Left;
+        Top = work.Top;
+        Width = work.Width;
+        Height = work.Height;
         RepositionCats();
     }
 

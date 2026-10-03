@@ -77,7 +77,6 @@ public sealed class CatAgent : INotifyPropertyChanged
     private double _animTimer;
     private double _wander;
     private double _petTimer;
-    private double _walkPhase;
 
     /// <summary>
     /// Acción actual según el estado de la sesión (o Carry si se está arrastrando):
@@ -151,13 +150,6 @@ public sealed class CatAgent : INotifyPropertyChanged
             double maxX = Math.Max(0, viewportWidth - catSize);
             if (X <= 0) { X = 0; Vx = Math.Abs(Vx); FacingRight = true; }
             else if (X >= maxX) { X = maxX; Vx = -Math.Abs(Vx); FacingRight = false; }
-
-            // Trote: pequeño bote vertical mientras avanza (da sensación de caminar).
-            if (Vx != 0)
-            {
-                _walkPhase += dt * 11;
-                Y = floor - Math.Abs(Math.Sin(_walkPhase)) * (catSize * 0.06);
-            }
         }
         else
         {
