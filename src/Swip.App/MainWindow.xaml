@@ -57,6 +57,28 @@
                         <TextBlock Text="Cargando apps…" Foreground="#FF808080" FontSize="11" />
                     </Border>
 
+                    <!-- Personalizar: color y gordura -->
+                    <TextBlock Text="Color" Foreground="#FF9AA0A6" FontSize="10" Margin="2,4,0,4" />
+                    <WrapPanel>
+                        <Button Style="{StaticResource Swatch}" Tag="amarillo" Click="Color_Click" Background="#FFFFCD1A" />
+                        <Button Style="{StaticResource Swatch}" Tag="naranja"  Click="Color_Click" Background="#FFF2913B" />
+                        <Button Style="{StaticResource Swatch}" Tag="gris"     Click="Color_Click" Background="#FFAEB6BD" />
+                        <Button Style="{StaticResource Swatch}" Tag="negro"    Click="Color_Click" Background="#FF4A4A4A" />
+                        <Button Style="{StaticResource Swatch}" Tag="blanco"   Click="Color_Click" Background="#FFF2F2F2" />
+                        <Button Style="{StaticResource Swatch}" Tag="marron"   Click="Color_Click" Background="#FFA9743F" />
+                    </WrapPanel>
+
+                    <Grid Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="Engordar" Style="{StaticResource ListRow}"
+                                Margin="0,0,3,6" Click="Fatten_Click" />
+                        <Button Grid.Column="1" Content="Adelgazar" Style="{StaticResource ListRow}"
+                                Margin="3,0,0,6" Click="Slim_Click" />
+                    </Grid>
+
                     <!-- Cambiar (última opción) -->
                     <Button Content="Cambiar a esta sesión" Style="{StaticResource ListRowAccent}"
                             Margin="0,4,0,0" Tag="{Binding SessionId}" Click="Switch_Click"

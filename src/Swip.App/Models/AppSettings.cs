@@ -32,4 +32,17 @@ public sealed class AppSettings
 
     /// <summary>Mostrar un fondo tenue en la franja para verla (útil al moverla).</summary>
     public bool ShowStripBackground { get; set; }
+
+    /// <summary>Preferencias por gato (clave = nombre de usuario): color y gordura.</summary>
+    public Dictionary<string, CatPref> Cats { get; set; } = new();
+}
+
+/// <summary>Preferencias persistentes de un gato concreto.</summary>
+public sealed class CatPref
+{
+    /// <summary>Tema de color (ver PixelCat.Themes); null = asignar por defecto.</summary>
+    public string? Color { get; set; }
+
+    /// <summary>Nivel de gordura (0 = normal).</summary>
+    public int Fat { get; set; }
 }

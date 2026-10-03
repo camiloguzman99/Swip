@@ -1,135 +1,117 @@
 #!/usr/bin/env python3
-# Uso: python3 tools/catart.py  -> valida ancho/alto de los frames y los previsualiza en ASCII.
-# Las mismas rejillas estan en src/Swip.App/Art/PixelCat.cs; manten ambas en sync al editar.
-# Diseño y validación del pixel art del gato. Cada frame es una lista de filas.
-# Leyenda: . transp | o contorno | y amarillo | g sombra | p rosa | w blanco | k pupila
+# Uso: python3 tools/catart.py  -> valida y previsualiza los frames en ASCII.
+# Estas rejillas (slots de color O/B/H/S/P/E/K/W) estan en src/Swip.App/Art/PixelCat.cs; manten ambas en sync.
+# Slots de color (no colores fijos), para poder recolorear por gato:
+# . transp | O contorno | B cuerpo medio | H highlight(claro) | S sombra | P rosa
+# E ojo(saturado) | K pupila/linea | W brillo-ojo
+W=H=16
+def chk(name,g):
+    ok=len(g)==H
+    for i,r in enumerate(g):
+        if len(r)!=W: print(f"FAIL {name} r{i} len {len(r)}: '{r}'"); ok=False
+    return ok
 
-W = 16
-H = 16
-
-# Gato sentado, frame A (activo, ojos abiertos)
-SIT_A = [
-    "......o..o......",
-    ".....oyooyo.....",
-    "....oyyooyyo....",
-    "....oyyyyyyyo...",
-    "...oyyyyyyyyyo..",
-    "...oywwyyywwyo..",
-    "...oykwyyywkyo..",
-    "...oyyyyyyyyyo..",
-    "...oyyyppyyyyo..",
-    "...oyyyyyyyyyo..",
-    "...ooyyyyyyyoo..",
-    "....oyyyyyyyo...",
-    "....oyyyyyyyo...",
-    "....oyygyygyo...",
-    "....oyoyyoyyo...",
-    ".....oo..oo....."
+SIT_A=[
+ "......O..O......",
+ ".....OBO.OBO....",
+ "....OBPBOBPBO...",
+ "....OBBBBBBBO...",
+ "...OHBBBBBBBBO..",
+ "...OHBWEBBEWBO..",
+ "...OHBBKBBKBBO..",
+ "...OHBBBBBBBBO..",
+ "...OHBBPPBBBBO..",
+ "...OHBBBBBBBSO..",
+ "...OOHBBBBBSOO..",
+ "....OHBBBBBSO...",
+ "....OHBBBBBSO...",
+ "....OHBSBBSBO...",
+ "....OBOBBOBBO...",
+ ".....OO..OO.....",
 ]
-
-# Frame B (activo, parpadeo + cola/patas levemente distinto para dar vida)
-SIT_B = [
-    "......o..o......",
-    ".....oyooyo.....",
-    "....oyyooyyo....",
-    "....oyyyyyyyo...",
-    "...oyyyyyyyyyo..",
-    "...oyyyyyyyyyo..",
-    "...oykkyyykkyo..",
-    "...oyyyyyyyyyo..",
-    "...oyyyppyyyyo..",
-    "...oyyyyyyyyyo..",
-    "...ooyyyyyyyoo..",
-    "....oyyyyyyyo...",
-    "....oyyyyyyyo...",
-    "....oyygyygyo...",
-    "....ooyyyyoo....",
-    ".....oo..oo....."
+SIT_B=[  # parpadeo + cola al otro lado
+ "......O..O......",
+ ".....OBO.OBO....",
+ "....OBPBOBPBO...",
+ "....OBBBBBBBO...",
+ "...OHBBBBBBBBO..",
+ "...OHBBBBBBBBO..",
+ "...OHBKKBBKKBO..",
+ "...OHBBBBBBBBO..",
+ "...OHBBPPBBBBO..",
+ "...OHBBBBBBBSO..",
+ "...OOHBBBBBSOO..",
+ "....OHBBBBBSO...",
+ "....OHBBBBBSO...",
+ "....OHBSBBSBO...",
+ "....OOBBBBOO...."[:16],
+ ".....OO..OO.....",
 ]
-
-# Frame feliz (interacción, ojos ^^)
-HAPPY = [
-    "......o..o......",
-    ".....oyooyo.....",
-    "....oyyooyyo....",
-    "....oyyyyyyyo...",
-    "...oyyyyyyyyyo..",
-    "...oykyyyykyyo..",
-    "...oyykyykyyyo..",
-    "...oyyyyyyyyyo..",
-    "...oyyyppyyyyo..",
-    "...oyyyyyyyyyo..",
-    "...ooyyyyyyyoo..",
-    "....oyyyyyyyo...",
-    "....oyyyyyyyo...",
-    "....oyygyygyo...",
-    "....oyoyyoyyo...",
-    ".....oo..oo....."
+HAPPY=[
+ "......O..O......",
+ ".....OBO.OBO....",
+ "....OBPBOBPBO...",
+ "....OBBBBBBBO...",
+ "...OHBBBBBBBBO..",
+ "...OHBKBBBBKBO..",
+ "...OHKBKBBKBKO.."[:16],
+ "...OHBBBBBBBBO..",
+ "...OHBBPPBBBBO..",
+ "...OHBBBBBBBSO..",
+ "...OOHBBBBBSOO..",
+ "....OHBBBBBSO...",
+ "....OHBBBBBSO...",
+ "....OHBSBBSBO...",
+ "....OBOBBOBBO...",
+ ".....OO..OO.....",
 ]
-
-# Durmiendo frame A (acostado, ojos cerrados)
-SLEEP_A = [
-    "................",
-    "................",
-    "................",
-    "................",
-    "......ooo.......",
-    ".....oyyyoo.....",
-    "..oooyyyyyyoo...",
-    ".oyyyyyyyyyyyo..",
-    ".oykkyyyyyykyo..",
-    ".oyyyyppyyyyyyo.",
-    ".oyyyyyyyyyyyyo.",
-    ".ooyyyyyyyyyyoo.",
-    "..oooooooooooo..",
-    "................",
-    "................",
-    "................"
+# Durmiendo: pegado al fondo (filas 6..15), ovillado, ojos cerrados (K)
+SLEEP_A=[
+ "................",
+ "................",
+ "................",
+ "................",
+ "................",
+ "................",
+ "................",
+ ".......OOO......",
+ "....OOOBBBOO....",
+ "..OOHBBBBBBBOO..",
+ ".OHBBBBBBBBBBBO.",
+ ".OHBKKBBBBBKKBO.",
+ ".OHBBBBPPBBBBSO.",
+ ".OHBBBBBBBBBBSO.",
+ ".OOHBBBBBBBBSOO.",
+ "..OOOOOOOOOOOO..",
 ]
-
-# Durmiendo frame B (respiración: cuerpo 1px más alto)
-SLEEP_B = [
-    "................",
-    "................",
-    "................",
-    "......ooo.......",
-    ".....oyyyoo.....",
-    "....oyyyyyyoo...",
-    "..oooyyyyyyyyo..",
-    ".oyyyyyyyyyyyo..",
-    ".oykkyyyyyykyo..",
-    ".oyyyyppyyyyyyo.",
-    ".oyyyyyyyyyyyyo.",
-    ".ooyyyyyyyyyyoo.",
-    "..oooooooooooo..",
-    "................",
-    "................",
-    "................"
+SLEEP_B=[
+ "................",
+ "................",
+ "................",
+ "................",
+ "................",
+ "................",
+ ".......OOO......",
+ "....OOOBBBOO....",
+ "..OOHBBBBBBBOO..",
+ ".OHBBBBBBBBBBBO.",
+ ".OHBKKBBBBBKKBO.",
+ ".OHBBBBPPBBBBSO.",
+ ".OHBBBBBBBBBBSO.",
+ ".OHBBBBBBBBBBSO.",
+ ".OOHBBBBBBBBSOO.",
+ "..OOOOOOOOOOOO..",
 ]
-
-FRAMES = {
-    "SIT_A": SIT_A, "SIT_B": SIT_B, "HAPPY": HAPPY,
-    "SLEEP_A": SLEEP_A, "SLEEP_B": SLEEP_B,
-}
-
-ok = True
-allowed = set(".oygpwk")
-for name, f in FRAMES.items():
-    if len(f) != H:
-        print(f"[FAIL] {name}: {len(f)} filas (esperado {H})"); ok = False
-    for i, row in enumerate(f):
-        if len(row) != W:
-            print(f"[FAIL] {name} fila {i}: ancho {len(row)} (esperado {W}) -> '{row}'"); ok = False
-        bad = set(row) - allowed
-        if bad:
-            print(f"[FAIL] {name} fila {i}: chars inválidos {bad}"); ok = False
-
-print("VALIDACION:", "OK" if ok else "CON ERRORES")
-print()
-# Vista previa ASCII (o=#, y=@, g=+, p=*, w=., k=o)
-vis = {".":" ", "o":"#", "y":"@", "g":"+", "p":"*", "w":"'", "k":"o"}
-for name, f in FRAMES.items():
-    print(f"--- {name} ---")
-    for row in f:
-        print("".join(vis[c] for c in row))
-    print()
+frames={"SIT_A":SIT_A,"SIT_B":SIT_B,"HAPPY":HAPPY,"SLEEP_A":SLEEP_A,"SLEEP_B":SLEEP_B}
+allowed=set(".OBHSPEKW")
+ok=True
+for n,g in frames.items():
+    if not chk(n,g): ok=False
+    for r in g:
+        bad=set(r)-allowed
+        if bad: print(f"FAIL {n} chars {bad}"); ok=False
+print("VALID" if ok else "ERRORS")
+vis={".":" ","O":"#","B":"@","H":"o","S":"x","P":"*","E":"e","K":"+","W":"."}
+for n,g in frames.items():
+    print("---",n,"---")
+    for r in g: print("".join(vis[c] for c in r))

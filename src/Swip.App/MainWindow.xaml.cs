@@ -260,6 +260,13 @@ public partial class MainWindow : Window
                         FacingRight = _rng.NextDouble() < 0.5,
                     };
                     agent.Y = baseY;
+
+                    // Preferencias por gato: color (por defecto, distinto por gato) y gordura.
+                    _settings.Cats.TryGetValue(u.UserName, out var pref);
+                    string defaultColor = PixelCat.Themes[_agents.Count % PixelCat.Themes.Length];
+                    agent.Color = PixelCat.NormalizeTheme(pref?.Color ?? defaultColor);
+                    agent.FatLevel = pref?.Fat ?? 0;
+
                     _agents[u.UserName] = agent;
 
                     var sprite = new CatSprite(agent, _settings.CatSize);
@@ -450,6 +457,33 @@ public partial class MainWindow : Window
         {
             MessageBox.Show(ex.Message, "Swip", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    // --- Personalización por gato (color / gordura) -----------------------------
+
+    private void Fatten_Click(object sender, RoutedEventArgs e) => ChangeFat(+1);
+    private void Slim_Click(object sender, RoutedEventArgs e) => ChangeFat(-1);
+
+    private void ChangeFat(int delta)
+    {
+        if (_openAgent is null) return;
+        _openAgent.FatLevel = Math.Clamp(_openAgent.FatLevel + delta, 0, 6);
+        if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.ApplyFat();
+        SaveCatPref(_openAgent);
+    }
+
+    private void Color_Click(object sender, RoutedEventArgs e)
+    {
+        if (_openAgent is null || sender is not Button { Tag: string theme }) return;
+        _openAgent.Color = PixelCat.NormalizeTheme(theme);
+        if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.Render();
+        SaveCatPref(_openAgent);
+    }
+
+    private void SaveCatPref(CatAgent agent)
+    {
+        _settings.Cats[agent.Key] = new CatPref { Color = agent.Color, Fat = agent.FatLevel };
+        _store.Save(_settings);
     }
 
     // --- Opciones ---------------------------------------------------------------

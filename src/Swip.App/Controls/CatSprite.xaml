@@ -3,10 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="Transparent">
     <Grid>
-        <!-- "Z z z" cuando duerme -->
-        <TextBlock x:Name="Zzz" Text="z Z" Foreground="#FFBFD7FF" FontWeight="Bold"
-                   FontFamily="Consolas" HorizontalAlignment="Right" VerticalAlignment="Top"
-                   Margin="0,-6,2,0" Visibility="Collapsed" />
+        <!-- "z z" animado cuando duerme: sube y se desvanece en bucle -->
+        <TextBlock x:Name="Zzz" Text="z" Foreground="#FFBFD7FF" FontWeight="Bold"
+                   FontFamily="Consolas" FontSize="13"
+                   HorizontalAlignment="Right" VerticalAlignment="Top"
+                   Margin="0,-4,2,0" Visibility="Collapsed" Opacity="0">
+            <TextBlock.RenderTransform>
+                <TranslateTransform x:Name="ZzzMove" X="0" Y="0" />
+            </TextBlock.RenderTransform>
+        </TextBlock>
 
         <!-- Corazón al interactuar -->
         <TextBlock x:Name="Heart" Text="&#x2665;" Foreground="#FFFF6E8A" FontSize="14"
@@ -25,4 +30,25 @@
                        FontFamily="Consolas" TextTrimming="CharacterEllipsis" MaxWidth="90" />
         </Border>
     </Grid>
+
+    <UserControl.Triggers>
+        <!-- Animación del "z z" durmiendo: flota hacia arriba y se desvanece, en bucle -->
+        <EventTrigger RoutedEvent="UserControl.Loaded">
+            <BeginStoryboard>
+                <Storyboard x:Name="ZzzStory" RepeatBehavior="Forever">
+                    <DoubleAnimation Storyboard.TargetName="ZzzMove" Storyboard.TargetProperty="Y"
+                                     From="0" To="-14" Duration="0:0:1.6" />
+                    <DoubleAnimation Storyboard.TargetName="ZzzMove" Storyboard.TargetProperty="X"
+                                     From="0" To="6" Duration="0:0:1.6" />
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Zzz"
+                                                   Storyboard.TargetProperty="Opacity">
+                        <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                        <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="0.9" />
+                        <LinearDoubleKeyFrame KeyTime="0:0:1.2" Value="0.9" />
+                        <LinearDoubleKeyFrame KeyTime="0:0:1.6" Value="0" />
+                    </DoubleAnimationUsingKeyFrames>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </UserControl.Triggers>
 </UserControl>

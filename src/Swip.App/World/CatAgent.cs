@@ -46,6 +46,12 @@ public sealed class CatAgent : INotifyPropertyChanged
         set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); }
     }
 
+    /// <summary>Tema de color del gato (ver PixelCat.Themes).</summary>
+    public string Color { get; set; } = "amarillo";
+
+    /// <summary>Nivel de gordura (0 = normal); ensancha el sprite.</summary>
+    public int FatLevel { get; set; }
+
     /// <summary>Se puede cambiar: tiene sesión abierta y no es la que está en pantalla.</summary>
     public bool CanSwitch => HasSession && !IsCurrent;
 

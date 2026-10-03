@@ -16,7 +16,10 @@ escribir la contraseña.
   en una franja transparente sobre la barra de tareas. Diseño **pixel art**. Cada gato
   apunta a su usuario, tenga o no una sesión abierta.
 - 😺 **Dos estados**: usuario con sesión activa/en pantalla → el gato se **mueve**;
-  usuario en segundo plano o **sin sesión iniciada** → el gato **duerme** (con sus "z z").
+  usuario en segundo plano o **sin sesión iniciada** → el gato **duerme** con sus "z z"
+  animados (flotan y se desvanecen).
+- 🎨 **Personalizable por gato**: 6 colores (amarillo, naranja, gris, negro, blanco, marrón)
+  y nivel de **gordura** (engordar/adelgazar). Se guarda por usuario.
 - 🖱️ **Clic izquierdo** → interactúas con el gato (se pone feliz y da un saltito).
 - 🖱️ **Clic derecho** → menú con las **apps activas** de esa sesión y el botón de
   **cambiar de sesión** (sin contraseña).
@@ -119,7 +122,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 | Acción                       | Resultado                                                      |
 |------------------------------|----------------------------------------------------------------|
 | Clic izquierdo en un gato    | Interactúas con el gato (reacción feliz + saltito)             |
-| Clic derecho en un gato      | Menú de ese usuario: nombre, apps abiertas y, al final, cambiar |
+| Clic derecho en un gato      | Menú de ese usuario: nombre, apps abiertas, color, engordar/adelgazar y, al final, cambiar |
 | Clic en la 🏠 (esquina)       | Abre la configuración de Swip                                   |
 
 La **casa** de la esquina abre la configuración (en formato lista con bordes redondeados):
