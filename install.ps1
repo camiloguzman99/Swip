@@ -47,6 +47,17 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     return
 }
 
+# --- 0) Cerrar Swip si está en ejecución (evita archivos bloqueados al copiar) ----
+Write-Host "==> [0/4] Cerrando Swip si está abierto..." -ForegroundColor Cyan
+$running = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($running -and $running.Status -ne "Stopped") {
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    try { $running.WaitForStatus("Stopped", "00:00:20") } catch { }
+}
+Get-Process -Name "Swip", "Swip.Service" -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 600
+
 # --- 1) Servicio -----------------------------------------------------------------
 Write-Host "==> [1/4] Publicando el servicio..." -ForegroundColor Cyan
 dotnet publish $serviceProj -c Release -r win-x64 --self-contained false -o $serviceDir | Out-Host
