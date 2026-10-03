@@ -119,7 +119,7 @@ public partial class MainWindow : Window
     /// <summary>Recalcula la "línea de suelo" y reubica a los gatos dentro de la franja.</summary>
     private void RepositionCats()
     {
-        double baseY = Height - _settings.CatSize - 14;
+        double baseY = Height - _settings.CatSize;
         double maxX = Math.Max(0, Width - _settings.CatSize);
         foreach (var (_, agent) in _agents)
         {
@@ -134,7 +134,7 @@ public partial class MainWindow : Window
         House.Width = HouseSize;
         House.Height = HouseSize;
         Canvas.SetLeft(House, 8);
-        Canvas.SetTop(House, Height - HouseSize - 8);
+        Canvas.SetTop(House, Height - HouseSize);
     }
 
     private void ApplyStripBackground()
@@ -231,7 +231,7 @@ public partial class MainWindow : Window
             }
 
             double maxX = Math.Max(0, Width - _settings.CatSize);
-            double baseY = Height - _settings.CatSize - 14;
+            double baseY = Height - _settings.CatSize;
 
             foreach (var u in users)
             {
