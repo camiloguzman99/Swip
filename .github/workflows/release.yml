@@ -28,6 +28,10 @@ jobs:
       - name: Publicar app
         run: dotnet publish src/Swip.App/Swip.App.csproj -c Release -r win-x64 --self-contained false -o publish/App
 
+      - name: Incluir el actualizador en el paquete
+        shell: pwsh
+        run: Copy-Item update.ps1 publish/update.ps1 -Force
+
       - name: Empaquetar
         shell: pwsh
         run: Compress-Archive -Path publish/* -DestinationPath Swip-win-x64.zip -Force
