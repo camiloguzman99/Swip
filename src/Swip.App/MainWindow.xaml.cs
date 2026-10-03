@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, CatSprite> _sprites = new();
     private readonly DispatcherTimer _loop = new(DispatcherPriority.Render);
     private readonly DispatcherTimer _refresh = new();
+    private readonly DispatcherTimer _publish = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Random _rng = new();
 
@@ -113,7 +114,29 @@ public partial class MainWindow : Window
         };
         _refresh.Start();
 
+        // Publicar al servicio las apps de NUESTRA propia sesión, para que el gato de la otra
+        // sesión pueda mostrarlas (el servicio en sesión 0 no puede enumerarlas por sí mismo).
+        _publish.Interval = TimeSpan.FromSeconds(8);
+        _publish.Tick += async (_, _) => await PublishOwnAppsAsync();
+        _publish.Start();
+        _ = PublishOwnAppsAsync();
+
         await RefreshUsersAsync();
+    }
+
+    /// <summary>
+    /// Enumera en proceso las apps de la sesión actual y las publica en el servicio. Así el gato
+    /// de la otra sesión las puede leer sin que el servicio tenga que enumerar un escritorio ajeno.
+    /// </summary>
+    private async Task PublishOwnAppsAsync()
+    {
+        try
+        {
+            int ownSession = Process.GetCurrentProcess().SessionId;
+            var apps = await Task.Run(() => LocalApps.Enumerate());
+            await _client.PublishAppsAsync(ownSession, apps);
+        }
+        catch { /* best effort: si el servicio no está, reintentamos en el próximo tick */ }
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)

@@ -107,12 +107,20 @@ internal sealed class PipeServer
         RequestKind.ListWindowedApps =>
             new IpcResponse { Ok = true, Apps = _sessions.GetWindowedApps(request.TargetSessionId) },
 
+        RequestKind.PublishApps => PublishResponse(request),
+
         RequestKind.SwitchToSession => SwitchResponse(request.TargetSessionId),
 
         RequestKind.StartLogon => StartLogonResponse(),
 
         _ => new IpcResponse { Ok = false, Error = "Petición no reconocida." },
     };
+
+    private IpcResponse PublishResponse(IpcRequest request)
+    {
+        _sessions.PublishApps(request.TargetSessionId, request.Apps);
+        return new IpcResponse { Ok = true };
+    }
 
     private IpcResponse SwitchResponse(int targetSessionId)
     {

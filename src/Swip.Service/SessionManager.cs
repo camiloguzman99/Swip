@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -310,107 +311,45 @@ internal sealed class SessionManager
     }
 
     /// <summary>
-    /// Devuelve las apps con ventana visible de la sesión indicada, lanzando un ayudante dentro
-    /// de esa sesión. Si algo falla devuelve una lista vacía en vez de lanzar excepción.
+    /// Caché de apps publicadas por cada gato, indexada por id de sesión. Cada gato enumera las
+    /// apps de SU propia sesión (puede hacerlo en proceso, sin privilegios) y las publica aquí
+    /// periódicamente. Así otra sesión puede leerlas sin que el servicio (sesión 0) tenga que
+    /// enumerar ventanas de un escritorio ajeno, cosa que Windows no permite de forma fiable.
     /// </summary>
-    public List<AppInfo> GetWindowedApps(int targetSessionId)
+    private static readonly ConcurrentDictionary<int, (DateTime When, List<AppInfo> Apps)> PublishedApps = new();
+
+    /// <summary>Tiempo máximo que se considera "fresca" una publicación de apps.</summary>
+    private static readonly TimeSpan AppsFreshness = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// El gato de una sesión publica aquí las apps que ha enumerado en su propio escritorio.
+    /// </summary>
+    public void PublishApps(int sessionId, List<AppInfo> apps)
     {
-        IntPtr userToken = IntPtr.Zero, dupToken = IntPtr.Zero, envBlock = IntPtr.Zero;
-        // IMPORTANTE: el ayudante corre como el USUARIO objetivo y escribe aquí; por eso debe
-        // ser una carpeta donde los usuarios puedan escribir (no C:\Windows\Temp, que es de SYSTEM).
-        string outFile = Path.Combine(
-            SharedExchangeDir(), $"swip-apps-{targetSessionId}-{Guid.NewGuid():N}.json");
-
-        Log($"GetWindowedApps sesión={targetSessionId} outFile={outFile}");
-        try
-        {
-            if (!ProcessInterop.WTSQueryUserToken(targetSessionId, out userToken))
-            {
-                Log($"  WTSQueryUserToken FALLÓ error={Marshal.GetLastWin32Error()}");
-                _log.LogWarning("WTSQueryUserToken falló para sesión {S} (error {E}).",
-                    targetSessionId, Marshal.GetLastWin32Error());
-                return new();
-            }
-
-            if (!ProcessInterop.DuplicateTokenEx(userToken, ProcessInterop.MAXIMUM_ALLOWED, IntPtr.Zero,
-                    ProcessInterop.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
-                    ProcessInterop.TOKEN_TYPE.TokenPrimary, out dupToken))
-            {
-                Log($"  DuplicateTokenEx FALLÓ error={Marshal.GetLastWin32Error()}");
-                return new();
-            }
-
-            ProcessInterop.CreateEnvironmentBlock(out envBlock, dupToken, false);
-
-            string exePath = Environment.ProcessPath
-                ?? Process.GetCurrentProcess().MainModule!.FileName;
-            string cmdLine = $"\"{exePath}\" --enumerate-windows \"{outFile}\"";
-
-            var si = new ProcessInterop.STARTUPINFO();
-            si.cb = Marshal.SizeOf<ProcessInterop.STARTUPINFO>();
-            si.lpDesktop = @"winsta0\default"; // el escritorio interactivo de la sesión objetivo
-            si.dwFlags = ProcessInterop.STARTF_USESHOWWINDOW;
-            si.wShowWindow = ProcessInterop.SW_HIDE;
-
-            uint flags = ProcessInterop.CREATE_UNICODE_ENVIRONMENT | ProcessInterop.CREATE_NO_WINDOW;
-
-            Log($"  lanzando: {cmdLine}");
-            if (!ProcessInterop.CreateProcessAsUser(dupToken, null, cmdLine, IntPtr.Zero, IntPtr.Zero,
-                    false, flags, envBlock, null, ref si, out var pi))
-            {
-                Log($"  CreateProcessAsUser FALLÓ error={Marshal.GetLastWin32Error()}");
-                _log.LogWarning("CreateProcessAsUser falló para sesión {S} (error {E}).",
-                    targetSessionId, Marshal.GetLastWin32Error());
-                return new();
-            }
-
-            // Esperar al ayudante con su HANDLE (lo correcto para procesos de CreateProcessAsUser;
-            // Process.GetProcessById/WaitForExit falla con "Process was not started by this object").
-            uint wait = ProcessInterop.WaitForSingleObject(pi.hProcess, 6000);
-            Log(wait == ProcessInterop.WAIT_OBJECT_0 ? "  ayudante terminó"
-                : wait == ProcessInterop.WAIT_TIMEOUT ? "  el ayudante no terminó en 6s"
-                : $"  espera del ayudante devolvió {wait}");
-            ProcessInterop.CloseHandle(pi.hProcess);
-            ProcessInterop.CloseHandle(pi.hThread);
-
-            if (!File.Exists(outFile))
-            {
-                Log("  el archivo de salida NO existe (el ayudante no pudo escribir)");
-                return new();
-            }
-
-            string json = File.ReadAllText(outFile);
-            var apps = JsonSerializer.Deserialize<List<AppInfo>>(json, IpcProtocol.Json) ?? new();
-            Log($"  OK apps={apps.Count}");
-            return apps;
-        }
-        catch (Exception ex)
-        {
-            Log($"  EXCEPCIÓN: {ex}");
-            _log.LogWarning(ex, "No se pudieron leer las apps de la sesión {S}.", targetSessionId);
-            return new();
-        }
-        finally
-        {
-            if (envBlock != IntPtr.Zero) ProcessInterop.DestroyEnvironmentBlock(envBlock);
-            if (dupToken != IntPtr.Zero) ProcessInterop.CloseHandle(dupToken);
-            if (userToken != IntPtr.Zero) ProcessInterop.CloseHandle(userToken);
-            try { if (File.Exists(outFile)) File.Delete(outFile); } catch { /* best effort */ }
-        }
+        PublishedApps[sessionId] = (DateTime.UtcNow, apps ?? new());
+        Log($"PublishApps sesión={sessionId} apps={apps?.Count ?? 0}");
     }
 
     /// <summary>
-    /// Carpeta de intercambio bajo %ProgramData%\Swip, con permiso de escritura para los
-    /// usuarios, para que el ayudante (que corre como el usuario objetivo) pueda dejar su JSON.
+    /// Devuelve las apps con ventana visible de la sesión indicada, leídas de la caché que
+    /// publica el gato de esa sesión. Si no hay publicación reciente devuelve una lista vacía.
     /// </summary>
-    private static string SharedExchangeDir()
+    public List<AppInfo> GetWindowedApps(int targetSessionId)
     {
-        string root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip");
-        string dir = Path.Combine(root, "exchange");
-        GrantUsersModify(root);     // para settings.json compartido
-        GrantUsersModify(dir);      // para el JSON del ayudante
-        return dir;
+        if (PublishedApps.TryGetValue(targetSessionId, out var entry))
+        {
+            var age = DateTime.UtcNow - entry.When;
+            if (age <= AppsFreshness)
+            {
+                Log($"GetWindowedApps sesión={targetSessionId} OK apps={entry.Apps.Count} (edad={age.TotalSeconds:F0}s)");
+                return entry.Apps;
+            }
+            Log($"GetWindowedApps sesión={targetSessionId} caché vieja (edad={age.TotalSeconds:F0}s)");
+            return new();
+        }
+
+        Log($"GetWindowedApps sesión={targetSessionId} sin publicación del gato");
+        return new();
     }
 
     /// <summary>Crea la carpeta (si falta) y concede escritura a los usuarios locales.</summary>
