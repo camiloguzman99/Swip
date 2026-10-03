@@ -77,8 +77,21 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource ListCard}" Padding="10,6">
-                                    <TextBlock Text="{Binding}" Foreground="#FFDADCE0" FontSize="11"
-                                               TextTrimming="CharacterEllipsis" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="#FFDADCE0"
+                                                   FontSize="11" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Cpu}" Foreground="#FF8FD0FF"
+                                                   FontSize="11" FontFamily="Consolas" MinWidth="34"
+                                                   TextAlignment="Right" Margin="8,0,0,0" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Ram}" Foreground="#FFB7E39C"
+                                                   FontSize="11" FontFamily="Consolas" MinWidth="34"
+                                                   TextAlignment="Right" Margin="6,0,0,0" />
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

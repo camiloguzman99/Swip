@@ -90,9 +90,11 @@ if (-not (Test-Path $appExe)) { throw "No se publicó la app en $appExe" }
 # --- Copiar el actualizador junto a la instalación -------------------------------
 Copy-Item -Path (Join-Path $repoRoot "update.ps1") -Destination (Join-Path $InstallRoot "update.ps1") -Force
 
-# --- 3) Arranque automático al iniciar sesión ------------------------------------
-Write-Host "==> [4/4] Creando acceso directo de arranque..." -ForegroundColor Cyan
-$startup  = [Environment]::GetFolderPath('Startup')
+# --- 3) Arranque automático al iniciar sesión (TODOS los usuarios) ----------------
+Write-Host "==> [4/4] Creando acceso directo de arranque para todos los usuarios..." -ForegroundColor Cyan
+# CommonStartup = C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp
+# Así Swip arranca al iniciar sesión en TODAS las cuentas (empresa y personal).
+$startup  = [Environment]::GetFolderPath('CommonStartup')
 $shortcut = Join-Path $startup "Swip.lnk"
 $shell    = New-Object -ComObject WScript.Shell
 $lnk      = $shell.CreateShortcut($shortcut)
@@ -100,6 +102,9 @@ $lnk.TargetPath       = $appExe
 $lnk.WorkingDirectory = $appDir
 $lnk.Description       = "Swip - gatos de sesión"
 $lnk.Save()
+# Limpiar un posible acceso directo antiguo solo-para-mi-usuario.
+$oldUser = Join-Path ([Environment]::GetFolderPath('Startup')) "Swip.lnk"
+if (Test-Path $oldUser) { Remove-Item $oldUser -Force -ErrorAction SilentlyContinue }
 Write-Host "    Acceso directo creado en: $shortcut" -ForegroundColor Green
 
 # --- Lanzar ----------------------------------------------------------------------

@@ -50,7 +50,10 @@ public sealed class CatAgent : INotifyPropertyChanged
         set { _appsLoading = value; Raise(nameof(AppsLoading)); }
     }
 
-    public ObservableCollection<string> Apps { get; } = new();
+    public ObservableCollection<AppRow> Apps { get; } = new();
+
+    /// <summary>True mientras su menú está abierto: el gato se pone a "jugar".</summary>
+    public bool MenuOpen { get; set; }
 
     // --- Apariencia ------------------------------------------------------------
     public string Color { get; set; } = "orange";
@@ -81,7 +84,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// </summary>
     public CatAction Action =>
         Dragging ? CatAction.Carry
-        : IsPetting ? CatAction.Play
+        : (IsPetting || MenuOpen) ? CatAction.Play
         : IsCurrent ? CatAction.Walk
         : HasSession ? CatAction.Play
         : CatAction.Sleep;
@@ -170,4 +173,12 @@ public sealed class CatAgent : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void Raise(string n) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+}
+
+/// <summary>Una fila de la lista de apps: nombre, CPU% y RAM% (solo valores).</summary>
+public sealed class AppRow
+{
+    public string Name { get; init; } = string.Empty;
+    public string Cpu { get; init; } = string.Empty;
+    public string Ram { get; init; } = string.Empty;
 }

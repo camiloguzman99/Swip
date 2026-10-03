@@ -13,6 +13,10 @@ internal sealed class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _log.LogInformation("Servicio Swip iniciado.");
+        // Preparar %ProgramData%\Swip con escritura para usuarios (settings compartidos + intercambio).
+        SessionManager.GrantUsersModify(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip"));
+        SessionManager.Log("Servicio iniciado.");
         var sessions = new SessionManager(_log);
         var pipe = new PipeServer(sessions, _log);
         await pipe.RunAsync(stoppingToken);

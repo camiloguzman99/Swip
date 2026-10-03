@@ -228,10 +228,12 @@ internal sealed class SessionManager
         string outFile = Path.Combine(
             SharedExchangeDir(), $"swip-apps-{targetSessionId}-{Guid.NewGuid():N}.json");
 
+        Log($"GetWindowedApps sesión={targetSessionId} outFile={outFile}");
         try
         {
             if (!ProcessInterop.WTSQueryUserToken(targetSessionId, out userToken))
             {
+                Log($"  WTSQueryUserToken FALLÓ error={Marshal.GetLastWin32Error()}");
                 _log.LogWarning("WTSQueryUserToken falló para sesión {S} (error {E}).",
                     targetSessionId, Marshal.GetLastWin32Error());
                 return new();
@@ -241,6 +243,7 @@ internal sealed class SessionManager
                     ProcessInterop.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
                     ProcessInterop.TOKEN_TYPE.TokenPrimary, out dupToken))
             {
+                Log($"  DuplicateTokenEx FALLÓ error={Marshal.GetLastWin32Error()}");
                 return new();
             }
 
@@ -258,9 +261,11 @@ internal sealed class SessionManager
 
             uint flags = ProcessInterop.CREATE_UNICODE_ENVIRONMENT | ProcessInterop.CREATE_NO_WINDOW;
 
+            Log($"  lanzando: {cmdLine}");
             if (!ProcessInterop.CreateProcessAsUser(dupToken, null, cmdLine, IntPtr.Zero, IntPtr.Zero,
                     false, flags, envBlock, null, ref si, out var pi))
             {
+                Log($"  CreateProcessAsUser FALLÓ error={Marshal.GetLastWin32Error()}");
                 _log.LogWarning("CreateProcessAsUser falló para sesión {S} (error {E}).",
                     targetSessionId, Marshal.GetLastWin32Error());
                 return new();
@@ -269,15 +274,17 @@ internal sealed class SessionManager
             try
             {
                 using var helper = Process.GetProcessById(pi.dwProcessId);
-                if (!helper.WaitForExit(5000))
+                if (!helper.WaitForExit(6000))
                 {
+                    Log("  el ayudante no terminó en 6s; se cancela");
                     try { helper.Kill(); } catch { /* best effort */ }
                     return new();
                 }
+                Log($"  ayudante terminó, exit={helper.ExitCode}");
             }
-            catch
+            catch (Exception ex)
             {
-                // El proceso puede haber terminado antes de poder adjuntarlo; seguimos a leer el archivo.
+                Log($"  no se pudo esperar al ayudante: {ex.Message}");
             }
             finally
             {
@@ -286,13 +293,19 @@ internal sealed class SessionManager
             }
 
             if (!File.Exists(outFile))
+            {
+                Log("  el archivo de salida NO existe (el ayudante no pudo escribir)");
                 return new();
+            }
 
             string json = File.ReadAllText(outFile);
-            return JsonSerializer.Deserialize<List<AppInfo>>(json, IpcProtocol.Json) ?? new();
+            var apps = JsonSerializer.Deserialize<List<AppInfo>>(json, IpcProtocol.Json) ?? new();
+            Log($"  OK apps={apps.Count}");
+            return apps;
         }
         catch (Exception ex)
         {
+            Log($"  EXCEPCIÓN: {ex}");
             _log.LogWarning(ex, "No se pudieron leer las apps de la sesión {S}.", targetSessionId);
             return new();
         }
@@ -311,11 +324,20 @@ internal sealed class SessionManager
     /// </summary>
     private static string SharedExchangeDir()
     {
-        string dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip", "exchange");
-        Directory.CreateDirectory(dir);
+        string root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip");
+        string dir = Path.Combine(root, "exchange");
+        GrantUsersModify(root);     // para settings.json compartido
+        GrantUsersModify(dir);      // para el JSON del ayudante
+        return dir;
+    }
+
+    /// <summary>Crea la carpeta (si falta) y concede escritura a los usuarios locales.</summary>
+    internal static void GrantUsersModify(string dir)
+    {
         try
         {
+            Directory.CreateDirectory(dir);
             var di = new DirectoryInfo(dir);
             var sec = di.GetAccessControl();
             var users = new System.Security.Principal.SecurityIdentifier(
@@ -329,8 +351,21 @@ internal sealed class SessionManager
                 System.Security.AccessControl.AccessControlType.Allow));
             di.SetAccessControl(sec);
         }
-        catch { /* si no se puede fijar la ACL, seguimos; puede que ya tenga permisos */ }
-        return dir;
+        catch { /* si no se puede, seguimos */ }
+    }
+
+    /// <summary>Registro en %ProgramData%\Swip\service.log para diagnóstico.</summary>
+    internal static void Log(string message)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "service.log"),
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
+        }
+        catch { /* el log es best-effort */ }
     }
 
     private static string QueryString(int sessionId, WtsInterop.WTS_INFO_CLASS info)

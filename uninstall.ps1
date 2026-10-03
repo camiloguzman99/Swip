@@ -24,8 +24,11 @@ Write-Host "==> Cerrando el gato (si está abierto)..." -ForegroundColor Cyan
 Get-Process -Name "Swip" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 Write-Host "==> Quitando el arranque automático..." -ForegroundColor Cyan
-$shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) "Swip.lnk"
-if (Test-Path $shortcut) { Remove-Item $shortcut -Force }
+foreach ($sc in @(
+    (Join-Path ([Environment]::GetFolderPath('CommonStartup')) "Swip.lnk"),
+    (Join-Path ([Environment]::GetFolderPath('Startup')) "Swip.lnk"))) {
+    if (Test-Path $sc) { Remove-Item $sc -Force -ErrorAction SilentlyContinue }
+}
 
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc) {

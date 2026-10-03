@@ -67,7 +67,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += OnLoaded;
         Closing += OnClosing;
-        InfoPopup.Closed += (_, _) => _openAgent = null;
+        InfoPopup.Closed += (_, _) =>
+        {
+            if (_openAgent is not null) _openAgent.MenuOpen = false;
+            _openAgent = null;
+        };
         // Al cerrar la configuración, la caja se vuelve a cerrar.
         ConfigPopup.Closed += (_, _) => Box.Source = BoxSprites.Get(open: false);
     }
@@ -433,7 +437,9 @@ public partial class MainWindow : Window
 
     private void OpenInfo(CatSprite sprite)
     {
+        if (_openAgent is not null) _openAgent.MenuOpen = false;
         _openAgent = sprite.Agent;
+        _openAgent.MenuOpen = true; // el gato se pone a jugar mientras ves su menú
         InfoPopup.DataContext = sprite.Agent;
         InfoPopup.PlacementTarget = sprite;
         InfoPopup.HorizontalOffset = 0;
@@ -600,7 +606,7 @@ public partial class MainWindow : Window
         if (!agent.HasSession)
         {
             agent.Apps.Clear();
-            agent.Apps.Add("(sin sesión iniciada)");
+            agent.Apps.Add(new AppRow { Name = "(sin sesión iniciada)" });
             agent.AppsLoading = false;
             return;
         }
@@ -612,20 +618,23 @@ public partial class MainWindow : Window
             agent.Apps.Clear();
             if (apps.Count == 0)
             {
-                agent.Apps.Add("(sin apps con ventana)");
+                agent.Apps.Add(new AppRow { Name = "(sin apps con ventana)" });
             }
             else
             {
                 foreach (var a in apps)
-                    agent.Apps.Add("• " + (string.IsNullOrWhiteSpace(a.WindowTitle)
-                        ? a.ProcessName
-                        : $"{a.ProcessName} — {a.WindowTitle}"));
+                    agent.Apps.Add(new AppRow
+                    {
+                        Name = a.ProcessName,
+                        Cpu = $"{a.CpuPercent:0}%",
+                        Ram = $"{a.RamPercent:0}%",
+                    });
             }
         }
         catch (Exception ex)
         {
             agent.Apps.Clear();
-            agent.Apps.Add($"(no se pudieron leer: {ex.Message})");
+            agent.Apps.Add(new AppRow { Name = $"(error: {ex.Message})" });
         }
         finally
         {

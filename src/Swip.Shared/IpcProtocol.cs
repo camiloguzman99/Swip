@@ -137,4 +137,10 @@ public sealed class AppInfo
 
     /// <summary>Título de la ventana principal, cuando se pudo leer.</summary>
     public string? WindowTitle { get; set; }
+
+    /// <summary>Uso de CPU en porcentaje (0-100) del/los proceso(s) de esta app.</summary>
+    public double CpuPercent { get; set; }
+
+    /// <summary>Uso de RAM en porcentaje de la memoria física total.</summary>
+    public double RamPercent { get; set; }
 }
