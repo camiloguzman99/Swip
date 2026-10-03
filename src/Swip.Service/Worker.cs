@@ -18,6 +18,15 @@ internal sealed class Worker : BackgroundService
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip"));
         SessionManager.Log("Servicio iniciado.");
         var sessions = new SessionManager(_log);
+
+        // Al arrancar (incluye tras una actualización), relanzar el gato en todas las sesiones
+        // que no lo tengan, para que reaparezca también en la otra sesión.
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(3000, stoppingToken); sessions.RelaunchAppInAllSessions(); }
+            catch { }
+        }, stoppingToken);
+
         var pipe = new PipeServer(sessions, _log);
         await pipe.RunAsync(stoppingToken);
         _log.LogInformation("Servicio Swip detenido.");

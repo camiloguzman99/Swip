@@ -199,6 +199,85 @@ internal sealed class SessionManager
     }
 
     /// <summary>
+    /// Lanza el gato (Swip.exe) en todas las sesiones de usuario que no lo tengan ya en ejecución.
+    /// Se usa al arrancar el servicio (y tras una actualización) para que el gato reaparezca en
+    /// todas las sesiones, no solo en la que corrió el actualizador.
+    /// </summary>
+    public void RelaunchAppInAllSessions()
+    {
+        string? serviceExe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(serviceExe)) return;
+        string? installRoot = Directory.GetParent(Path.GetDirectoryName(serviceExe)!)?.FullName;
+        if (installRoot is null) return;
+        string appExe = Path.Combine(installRoot, "App", "Swip.exe");
+        if (!File.Exists(appExe)) { Log($"RelaunchApp: no existe {appExe}"); return; }
+
+        foreach (var raw in EnumerateRaw())
+        {
+            if (!IsUserSession(raw)) continue;
+            try
+            {
+                if (IsAppRunning(raw.SessionId, "Swip")) continue;
+                LaunchInSession(raw.SessionId, appExe);
+                Log($"RelaunchApp: lanzado en sesión {raw.SessionId}");
+            }
+            catch (Exception ex) { Log($"RelaunchApp sesión {raw.SessionId}: {ex.Message}"); }
+        }
+    }
+
+    private static bool IsAppRunning(int sessionId, string processNameNoExt)
+    {
+        if (!WtsInterop.WTSEnumerateProcesses(WtsInterop.WTS_CURRENT_SERVER_HANDLE, 0, 1,
+                out IntPtr buffer, out int count))
+            return false;
+        try
+        {
+            int size = Marshal.SizeOf<WtsInterop.WTS_PROCESS_INFO>();
+            IntPtr cur = buffer;
+            for (int i = 0; i < count; i++)
+            {
+                var pi = Marshal.PtrToStructure<WtsInterop.WTS_PROCESS_INFO>(cur);
+                cur += size;
+                if (pi.SessionId == sessionId &&
+                    string.Equals(pi.pProcessName, processNameNoExt + ".exe", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        finally { WtsInterop.WTSFreeMemory(buffer); }
+        return false;
+    }
+
+    private static void LaunchInSession(int sessionId, string exePath)
+    {
+        IntPtr userToken = IntPtr.Zero, dupToken = IntPtr.Zero, envBlock = IntPtr.Zero;
+        try
+        {
+            if (!ProcessInterop.WTSQueryUserToken(sessionId, out userToken)) return;
+            if (!ProcessInterop.DuplicateTokenEx(userToken, ProcessInterop.MAXIMUM_ALLOWED, IntPtr.Zero,
+                    ProcessInterop.SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation,
+                    ProcessInterop.TOKEN_TYPE.TokenPrimary, out dupToken)) return;
+            ProcessInterop.CreateEnvironmentBlock(out envBlock, dupToken, false);
+
+            var si = new ProcessInterop.STARTUPINFO();
+            si.cb = Marshal.SizeOf<ProcessInterop.STARTUPINFO>();
+            si.lpDesktop = @"winsta0\default";
+
+            string cmd = $"\"{exePath}\"";
+            ProcessInterop.CreateProcessAsUser(dupToken, null, cmd, IntPtr.Zero, IntPtr.Zero, false,
+                ProcessInterop.CREATE_UNICODE_ENVIRONMENT, envBlock,
+                Path.GetDirectoryName(exePath), ref si, out var pi);
+            if (pi.hProcess != IntPtr.Zero) ProcessInterop.CloseHandle(pi.hProcess);
+            if (pi.hThread != IntPtr.Zero) ProcessInterop.CloseHandle(pi.hThread);
+        }
+        finally
+        {
+            if (envBlock != IntPtr.Zero) ProcessInterop.DestroyEnvironmentBlock(envBlock);
+            if (dupToken != IntPtr.Zero) ProcessInterop.CloseHandle(dupToken);
+            if (userToken != IntPtr.Zero) ProcessInterop.CloseHandle(userToken);
+        }
+    }
+
+    /// <summary>
     /// Muestra la pantalla de inicio de sesión de Windows (desconecta la sesión de consola),
     /// para que el usuario pueda iniciar una cuenta que no tiene sesión abierta.
     /// </summary>
