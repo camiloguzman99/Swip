@@ -42,6 +42,8 @@ public partial class MainWindow : Window
     private double _boxStartLeft, _boxStartTop;
     private Point _boxGrab;
     private double _boxVy;
+    private bool _boxOpen;              // si la caja está abierta ahora mismo
+    private CatAgent? _catOnBox;        // gato sentado en la caja (como máximo uno)
 
     // Arrastre de un gato
     private CatSprite? _catDrag;
@@ -65,7 +67,7 @@ public partial class MainWindow : Window
             _openAgent = null;
         };
         // Al cerrar la configuración, la caja se vuelve a cerrar.
-        ConfigPopup.Closed += (_, _) => Box.Source = BoxSprites.Get(open: false);
+        ConfigPopup.Closed += (_, _) => SetBoxOpen(false);
 
         // Los menús se centran horizontalmente y aparecen ENCIMA del objetivo.
         InfoPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
@@ -98,7 +100,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
-        Box.Source = BoxSprites.Get(false);
+        SetBoxOpen(false);
         ApplyStripBounds();
 
         _loop.Interval = TimeSpan.FromMilliseconds(33); // ~30 fps
@@ -207,6 +209,7 @@ public partial class MainWindow : Window
             agent.Update(dt, Width, Height, CatPx);
             if (_sprites.TryGetValue(id, out var sprite))
             {
+                if (agent.OnBox) PlaceOnBox(agent, sprite);
                 Canvas.SetLeft(sprite, agent.X);
                 Canvas.SetTop(sprite, agent.Y);
                 sprite.Render();
@@ -291,6 +294,7 @@ public partial class MainWindow : Window
             // Quitar gatos de usuarios que ya no existen.
             foreach (string gone in _agents.Keys.Where(k => !liveKeys.Contains(k)).ToList())
             {
+                if (_catOnBox is not null && _catOnBox.Key == gone) _catOnBox = null;
                 if (_sprites.Remove(gone, out var sprite))
                     Yard.Children.Remove(sprite);
                 _agents.Remove(gone);
@@ -397,6 +401,7 @@ public partial class MainWindow : Window
         _catDrag = sprite;
         _catMoved = false;
         _dragging = true;
+        if (sprite.Agent.OnBox) DetachFromBox(sprite.Agent); // al cogerlo, se baja de la caja
         sprite.Agent.Dragging = true; // acción "cargado"
         _catGrab = e.GetPosition(sprite);
         sprite.CaptureMouse();
@@ -429,13 +434,21 @@ public partial class MainWindow : Window
 
         if (_catMoved)
         {
-            // Guardar la posición horizontal (cae por gravedad hasta abajo).
-            var pref = _settings.Cats.TryGetValue(sprite.Agent.Key, out var p) ? p : new CatPref();
-            pref.Color = sprite.Agent.Color;
-            pref.Fat = sprite.Agent.FatLevel;
-            pref.X = sprite.Agent.X;
-            _settings.Cats[sprite.Agent.Key] = pref;
-            _store.Save(_settings);
+            if (DroppedOnBox(sprite))
+            {
+                // Se soltó sobre la caja: se sienta en ella.
+                AttachToBox(sprite.Agent);
+            }
+            else
+            {
+                // Guardar la posición horizontal (cae por gravedad hasta abajo).
+                var pref = _settings.Cats.TryGetValue(sprite.Agent.Key, out var p) ? p : new CatPref();
+                pref.Color = sprite.Agent.Color;
+                pref.Fat = sprite.Agent.FatLevel;
+                pref.X = sprite.Agent.X;
+                _settings.Cats[sprite.Agent.Key] = pref;
+                _store.Save(_settings);
+            }
         }
         else
         {
@@ -469,10 +482,6 @@ public partial class MainWindow : Window
     private void InfoHeader_Down(object sender, MouseButtonEventArgs e) => MenuDragStart(InfoPopup, sender, e);
     private void InfoHeader_Move(object sender, MouseEventArgs e) => MenuDragMove(e);
     private void InfoHeader_Up(object sender, MouseButtonEventArgs e) => MenuDragEnd();
-
-    private void ConfigHeader_Down(object sender, MouseButtonEventArgs e) => MenuDragStart(ConfigPopup, sender, e);
-    private void ConfigHeader_Move(object sender, MouseEventArgs e) => MenuDragMove(e);
-    private void ConfigHeader_Up(object sender, MouseButtonEventArgs e) => MenuDragEnd();
 
     private void MenuDragStart(System.Windows.Controls.Primitives.Popup popup, object sender, MouseButtonEventArgs e)
     {
@@ -542,23 +551,96 @@ public partial class MainWindow : Window
         }
         else
         {
-            OpenConfig(); // fue un clic: abrir configuración
+            // Clic izquierdo (sin arrastrar): solo abrir/cerrar la caja, nada más.
+            SetBoxOpen(!_boxOpen);
         }
     }
 
     private void BoxRight_Click(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        OpenConfig();
+        OpenConfig(); // el menú se abre con el clic derecho
     }
 
     private void OpenConfig()
     {
         ShowStatus(null);
-        Box.Source = BoxSprites.Get(open: true); // la caja se abre
+        SetBoxOpen(true); // la caja se abre al mostrar el menú
         ConfigPopup.HorizontalOffset = 0;
         ConfigPopup.VerticalOffset = 0;
         ConfigPopup.IsOpen = true;
+    }
+
+    /// <summary>Abre o cierra la caja (sprite + estado), manteniéndolos sincronizados.</summary>
+    private void SetBoxOpen(bool open)
+    {
+        _boxOpen = open;
+        Box.Source = BoxSprites.Get(open);
+    }
+
+    // --- Colisión: sentar un gato en la caja ------------------------------------
+
+    /// <summary>
+    /// Fija la posición del gato que está sentado en la caja: encima de la caja cerrada, o dentro
+    /// de la caja abierta (detrás, con una base al 50% del alto para que asome por arriba).
+    /// </summary>
+    private void PlaceOnBox(CatAgent agent, CatSprite sprite)
+    {
+        double boxLeft = Canvas.GetLeft(Box);
+        double boxTop = Canvas.GetTop(Box);
+        if (double.IsNaN(boxLeft)) boxLeft = 0;
+        if (double.IsNaN(boxTop)) boxTop = Math.Max(0, Height - BoxH);
+
+        double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
+        agent.X = Math.Clamp(boxLeft + BoxW / 2 - catW / 2, 0, Math.Max(0, Width - catW));
+
+        if (_boxOpen)
+        {
+            // Dentro de la caja: base al 50% del alto y por detrás de la caja (asoma por arriba).
+            agent.Y = boxTop + BoxH * 0.5 - CatPx;
+            SetZ(sprite, -1);
+        }
+        else
+        {
+            // Encima de la caja cerrada, por delante.
+            agent.Y = boxTop - CatPx;
+            SetZ(sprite, 0);
+        }
+    }
+
+    private static void SetZ(UIElement el, int z)
+    {
+        if (Panel.GetZIndex(el) != z) Panel.SetZIndex(el, z);
+    }
+
+    /// <summary>¿El gato se soltó encima de la caja? (solapamiento de rectángulos).</summary>
+    private bool DroppedOnBox(CatSprite sprite)
+    {
+        double boxLeft = Canvas.GetLeft(Box);
+        double boxTop = Canvas.GetTop(Box);
+        if (double.IsNaN(boxLeft) || double.IsNaN(boxTop)) return false;
+
+        double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
+        double cx = sprite.Agent.X, cy = sprite.Agent.Y;
+        bool overlapX = cx + catW > boxLeft && cx < boxLeft + BoxW;
+        bool overlapY = cy + CatPx > boxTop - CatPx * 0.5 && cy < boxTop + BoxH;
+        return overlapX && overlapY;
+    }
+
+    /// <summary>Sienta al gato en la caja (solo uno a la vez: el anterior se baja).</summary>
+    private void AttachToBox(CatAgent agent)
+    {
+        if (_catOnBox is not null && _catOnBox != agent)
+            DetachFromBox(_catOnBox);
+        _catOnBox = agent;
+        agent.OnBox = true; // la posición se aplica en el siguiente tick (PlaceOnBox)
+    }
+
+    private void DetachFromBox(CatAgent agent)
+    {
+        agent.OnBox = false;
+        if (_catOnBox == agent) _catOnBox = null;
+        if (_sprites.TryGetValue(agent.Key, out var sprite)) SetZ(sprite, 0);
     }
 
     /// <summary>Aplica fondo negro translúcido con desenfoque (acrílico) al abrir un menú.</summary>

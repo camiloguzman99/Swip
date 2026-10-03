@@ -14,6 +14,9 @@ public partial class CatSprite : UserControl
 
     public CatAgent Agent { get; }
 
+    /// <summary>Ancho actual del sprite en pantalla (para centrarlo sobre la caja).</summary>
+    public double SpriteWidth => Img.Width;
+
     public CatSprite(CatAgent agent, double catSize)
     {
         InitializeComponent();

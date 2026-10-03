@@ -126,14 +126,6 @@
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>
                 <StackPanel>
-                    <Border x:Name="ConfigHeader" Style="{StaticResource ListCard}"
-                            Cursor="SizeAll"
-                            MouseLeftButtonDown="ConfigHeader_Down" MouseMove="ConfigHeader_Move"
-                            MouseLeftButtonUp="ConfigHeader_Up">
-                        <TextBlock Text="Configuración" Foreground="#FFFFFFFF"
-                                   FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
-                    </Border>
-
                     <Button Content="Etiquetas" Style="{StaticResource ListRow}" Click="ToggleLabels_Click" />
                     <Button Content="Actualizar" Style="{StaticResource ListRow}" Click="Update_Click" />
                     <Button Content="Salir" Style="{StaticResource ListRow}" Click="Exit_Click" />

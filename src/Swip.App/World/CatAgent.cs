@@ -70,6 +70,9 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// <summary>True mientras el usuario arrastra el gato (lo lleva el ratón; sin gravedad).</summary>
     public bool Dragging { get; set; }
 
+    /// <summary>True mientras el gato está sentado en la caja (su posición la fija la ventana).</summary>
+    public bool OnBox { get; set; }
+
     /// <summary>Caricia: muestra un corazón y pone al gato a "jugar" un momento.</summary>
     public void Pet() => _petTimer = 1.1;
     public bool IsPetting => _petTimer > 0;
@@ -113,6 +116,14 @@ public sealed class CatAgent : INotifyPropertyChanged
 
         if (Dragging)
             return; // la posición la fija el ratón
+
+        if (OnBox)
+        {
+            // Sentado en la caja: la ventana fija su posición; aquí no hay gravedad ni merodeo.
+            Vx = 0;
+            Vy = 0;
+            return;
+        }
 
         double floor = Math.Max(0, viewportHeight - catSize);
 
