@@ -123,10 +123,11 @@ powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 |------------------------------|----------------------------------------------------------------|
 | Clic izquierdo en un gato    | Interactúas con el gato (reacción feliz + saltito)             |
 | Clic derecho en un gato      | Menú de ese usuario: nombre, apps abiertas, color, engordar/adelgazar y, al final, cambiar |
-| Clic en la 🏠 (esquina)       | Abre la configuración de Swip                                   |
+| Clic en la 📦 (esquina)       | Abre la configuración de Swip                                   |
 
-La **casa** de la esquina abre la configuración (en formato lista con bordes redondeados):
-**Mover ventana** (arrastra la franja y pulsa la casa para terminar), **Hacer visible la
+La **caja de cartón** 📦 de la esquina (cerrada; se abre al pulsarla, porque a los gatos les
+gustan más las cajas que las casas) abre la configuración (en formato lista con bordes
+redondeados): **Mover ventana** (arrastra la franja y pulsa la caja para terminar), **Hacer visible la
 ventana** (fondo tenue para ubicarla), **tamaño de gatos** (+ / −), **alto de la franja**
 (+ / −), **etiquetas**, **recolocar sobre la barra**, **Actualizar Swip** y **salir**. Las
 preferencias se guardan en `%AppData%\Swip\settings.json`.

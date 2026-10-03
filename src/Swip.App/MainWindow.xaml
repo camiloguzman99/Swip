@@ -15,11 +15,11 @@
         <!-- Área transparente donde merodean los gatos y vive la casa. -->
         <Canvas x:Name="Yard" Background="{x:Null}">
             <!-- Casa de configuración (esquina). Posición fijada en código. -->
-            <Image x:Name="House" Cursor="Hand"
+            <Image x:Name="Box" Cursor="Hand"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"
                    RenderOptions.EdgeMode="Aliased"
-                   MouseLeftButtonDown="House_Click"
-                   MouseRightButtonUp="House_Click" />
+                   MouseLeftButtonDown="Box_Click"
+                   MouseRightButtonUp="Box_Click" />
         </Canvas>
 
         <!-- Menú de cada gato (clic derecho), en formato lista redondeada. -->
@@ -88,7 +88,7 @@
         </Popup>
 
         <!-- Menú de configuración (la casa), en formato lista redondeada. -->
-        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=House}" Placement="Top"
+        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Top"
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
             <Border Background="#FF202124" CornerRadius="12" Padding="10" MinWidth="230"
                     BorderBrush="#FFFFC400" BorderThickness="1.5">
@@ -140,7 +140,7 @@
                 HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
                 IsHitTestVisible="False" BorderBrush="#FFFFC400" BorderThickness="1.5">
             <TextBlock Foreground="#FFFFE08A" FontSize="12" FontFamily="Consolas" TextAlignment="Center"
-                       Text="Arrastra la franja a su sitio.&#x0a;Pulsa la casa 🏠 para terminar." />
+                       Text="Arrastra la franja a su sitio.&#x0a;Pulsa la caja 📦 para terminar." />
         </Border>
     </Grid>
 </Window>

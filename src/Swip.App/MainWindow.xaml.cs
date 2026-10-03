@@ -50,9 +50,11 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Closing += OnClosing;
         InfoPopup.Closed += (_, _) => _openAgent = null;
+        // Al cerrar la configuración, la caja se vuelve a cerrar.
+        ConfigPopup.Closed += (_, _) => Box.Source = PixelBox.Get(open: false);
     }
 
-    private double HouseSize => Math.Clamp(_settings.CatSize, 48, 96);
+    private double BoxSize => Math.Clamp(_settings.CatSize, 48, 96);
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -65,7 +67,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
-        House.Source = PixelHouse.Get();
+        Box.Source = PixelBox.Get(false);
         Yard.MouseLeftButtonDown += Yard_MouseLeftButtonDown;
         ApplyStripBounds();
         ApplyStripBackground();
@@ -130,11 +132,11 @@ public partial class MainWindow : Window
         foreach (var (_, sprite) in _sprites)
             sprite.SetCatSize(_settings.CatSize);
 
-        // La casa vive en la esquina inferior izquierda, sobre el suelo.
-        House.Width = HouseSize;
-        House.Height = HouseSize;
-        Canvas.SetLeft(House, 8);
-        Canvas.SetTop(House, Height - HouseSize);
+        // La caja vive en la esquina inferior izquierda, sobre el suelo.
+        Box.Width = BoxSize;
+        Box.Height = BoxSize;
+        Canvas.SetLeft(Box, 8);
+        Canvas.SetTop(Box, Height - BoxSize);
     }
 
     private void ApplyStripBackground()
@@ -193,7 +195,7 @@ public partial class MainWindow : Window
             return false;
 
         var dpi = VisualTreeHelper.GetDpi(this);
-        if (IsPointOver(House, p, dpi)) return true;
+        if (IsPointOver(Box, p, dpi)) return true;
         foreach (var sprite in _sprites.Values)
             if (IsPointOver(sprite, p, dpi)) return true;
         return false;
@@ -339,16 +341,17 @@ public partial class MainWindow : Window
 
     // --- Casa / configuración / mover -----------------------------------------
 
-    private void House_Click(object sender, MouseButtonEventArgs e)
+    private void Box_Click(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
         if (_moveMode)
         {
-            ExitMoveMode(); // en modo mover, pulsar la casa termina de mover
+            ExitMoveMode(); // en modo mover, pulsar la caja termina de mover
             return;
         }
         ShowStatus(null);
         UpdateConfigLabels();
+        Box.Source = PixelBox.Get(open: true); // la caja se abre al pulsarla
         ConfigPopup.IsOpen = true;
     }
 
