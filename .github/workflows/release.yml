@@ -41,8 +41,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          try { gh release delete latest --yes --cleanup-tag } catch { Write-Host "No había release previo." }
-          gh release create latest Swip-win-x64.zip `
-            --title "Swip (latest)" `
-            --notes "Compilación automática de ${{ github.sha }}" `
-            --target ${{ github.sha }}
+          # No borramos el release (evita ventanas de 404). Lo creamos si no existe
+          # y solo sobrescribimos el asset con --clobber.
+          gh release view latest *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create latest `
+              --title "Swip (latest)" `
+              --notes "Compilación automática (rolling)" `
+              --target ${{ github.sha }}
+          }
+          gh release upload latest Swip-win-x64.zip --clobber

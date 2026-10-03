@@ -87,9 +87,21 @@ try {
     Write-Host "==> Descargando la última versión..." -ForegroundColor Cyan
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
-    if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -lt 10000) {
-        throw "La descarga falló o el archivo está incompleto ($zipUrl)."
+
+    # Reintentos: tras publicar una versión puede haber un 404 transitorio de GitHub.
+    $downloaded = $false
+    for ($i = 1; $i -le 6; $i++) {
+        try {
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+            if ((Test-Path $zipPath) -and (Get-Item $zipPath).Length -ge 10000) { $downloaded = $true; break }
+        }
+        catch {
+            Write-Host "   (intento $i/6: $($_.Exception.Message))" -ForegroundColor DarkYellow
+        }
+        Start-Sleep -Seconds 5
+    }
+    if (-not $downloaded) {
+        throw "No se pudo descargar la última versión tras varios intentos ($zipUrl)."
     }
 
     Write-Host "==> Extrayendo..." -ForegroundColor Cyan
