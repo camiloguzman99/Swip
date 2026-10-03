@@ -5,6 +5,11 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+        <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />
+        <SolidColorBrush x:Key="AccentFgBrush" Color="#FF202124" />
+
         <!-- Fila de lista pulsable (bordes redondeados) -->
         <Style x:Key="ListRow" TargetType="Button">
             <Setter Property="Margin" Value="0,0,0,6" />
@@ -34,8 +39,8 @@
 
         <!-- Fila de lista destacada (acción principal: Cambiar) -->
         <Style x:Key="ListRowAccent" TargetType="Button" BasedOn="{StaticResource ListRow}">
-            <Setter Property="Background" Value="#FFFFC400" />
-            <Setter Property="Foreground" Value="#FF202124" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Template">
@@ -50,7 +55,40 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#FFFFD633" />
+                    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Fila de lista deshabilitada (p. ej. "Sesión activa") -->
+        <Style x:Key="ListRowDisabled" TargetType="Border">
+            <Setter Property="Background" Value="#FF2A2B2E" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+
+        <!-- Botón rueda de configuración (⚙) -->
+        <Style x:Key="GearBtn" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="#FFE8EAED" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="#33FFFFFF" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#55FFFFFF" />
                 </Trigger>
             </Style.Triggers>
         </Style>

@@ -35,6 +35,23 @@ public partial class MainWindow : Window
     private CatAgent? _openAgent;
     private bool _refreshing;
     private bool _moveMode;
+    private bool _dragging; // mientras se arrastra caja/gato/menú: fuerza captura del ratón
+
+    // Arrastre de la caja
+    private bool _boxMoved;
+    private double _boxStartLeft, _boxStartTop;
+    private Point _boxGrab;
+
+    // Arrastre de un gato
+    private CatSprite? _catDrag;
+    private bool _catMoved;
+    private Point _catGrab;
+
+    // Arrastre de un menú (popup)
+    private System.Windows.Controls.Primitives.Popup? _menuTarget;
+    private System.Windows.UIElement? _menuDragEl;
+    private InteropNative.POINT _menuStartCursor;
+    private double _menuStartH, _menuStartV;
 
     private static readonly Brush StripBrush = CreateStripBrush();
     private static Brush CreateStripBrush()
@@ -132,11 +149,20 @@ public partial class MainWindow : Window
         foreach (var (_, sprite) in _sprites)
             sprite.SetCatSize(_settings.CatSize);
 
-        // La caja vive en la esquina inferior izquierda, sobre el suelo.
+        RepositionBox();
+    }
+
+    /// <summary>Coloca la caja en su posición guardada, o por defecto en la esquina inferior izquierda.</summary>
+    private void RepositionBox()
+    {
         Box.Width = BoxSize;
         Box.Height = BoxSize;
-        Canvas.SetLeft(Box, 8);
-        Canvas.SetTop(Box, Height - BoxSize);
+        double left = _settings.BoxLeft ?? 8;
+        double top = _settings.BoxTop ?? (Height - BoxSize);
+        left = Math.Clamp(left, 0, Math.Max(0, Width - BoxSize));
+        top = Math.Clamp(top, 0, Math.Max(0, Height - BoxSize));
+        Canvas.SetLeft(Box, left);
+        Canvas.SetTop(Box, top);
     }
 
     private void ApplyStripBackground()
@@ -181,7 +207,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateClickThrough()
     {
-        bool wantThrough = !_moveMode && !CursorOverInteractive();
+        bool wantThrough = !_moveMode && !_dragging && !CursorOverInteractive();
         if (wantThrough != _clickThrough)
         {
             InteropNative.SetClickThrough(_hwnd, wantThrough);
@@ -263,11 +289,13 @@ public partial class MainWindow : Window
                     };
                     agent.Y = baseY;
 
-                    // Preferencias por gato: color (por defecto, distinto por gato) y gordura.
+                    // Preferencias por gato: color (por defecto, distinto por gato), gordura y posición.
                     _settings.Cats.TryGetValue(u.UserName, out var pref);
                     string defaultColor = PixelCat.Themes[_agents.Count % PixelCat.Themes.Length];
                     agent.Color = PixelCat.NormalizeTheme(pref?.Color ?? defaultColor);
                     agent.FatLevel = pref?.Fat ?? 0;
+                    if (pref?.X is double px) agent.X = Math.Clamp(px, 0, maxX);
+                    if (pref?.Y is double py) { agent.BaseY = Math.Clamp(py, 0, Math.Max(0, Height - _settings.CatSize)); agent.Y = agent.BaseY; }
 
                     _agents[u.UserName] = agent;
 
@@ -318,16 +346,68 @@ public partial class MainWindow : Window
 
     private void WireSprite(CatSprite sprite)
     {
-        sprite.MouseLeftButtonDown += (_, e) =>
+        sprite.MouseLeftButtonDown += Cat_Down;
+        sprite.MouseMove += Cat_Move;
+        sprite.MouseLeftButtonUp += Cat_Up;
+        sprite.MouseRightButtonUp += (s, e) =>
         {
-            sprite.Agent.Interact();
+            OpenInfo((CatSprite)s);
             e.Handled = true;
         };
-        sprite.MouseRightButtonUp += (_, e) =>
+    }
+
+    private void Cat_Down(object sender, MouseButtonEventArgs e)
+    {
+        var sprite = (CatSprite)sender;
+        _catDrag = sprite;
+        _catMoved = false;
+        _dragging = true;
+        sprite.Agent.Dragging = true;
+        _catGrab = e.GetPosition(sprite);
+        sprite.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void Cat_Move(object sender, MouseEventArgs e)
+    {
+        var sprite = (CatSprite)sender;
+        if (!sprite.IsMouseCaptured || _catDrag != sprite) return;
+
+        var p = e.GetPosition(Yard);
+        double x = Math.Clamp(p.X - _catGrab.X, 0, Math.Max(0, Width - _settings.CatSize));
+        double y = Math.Clamp(p.Y - _catGrab.Y, 0, Math.Max(0, Height - _settings.CatSize));
+        sprite.Agent.X = x;
+        sprite.Agent.Y = y;
+        sprite.Agent.BaseY = y;
+        Canvas.SetLeft(sprite, x);
+        Canvas.SetTop(sprite, y);
+        _catMoved = true;
+    }
+
+    private void Cat_Up(object sender, MouseButtonEventArgs e)
+    {
+        var sprite = (CatSprite)sender;
+        if (sprite.IsMouseCaptured) sprite.ReleaseMouseCapture();
+        sprite.Agent.Dragging = false;
+        _catDrag = null;
+        _dragging = false;
+
+        if (_catMoved)
         {
-            OpenInfo(sprite);
-            e.Handled = true;
-        };
+            // Guardar dónde quedó el gato (duerme/camina desde ahí).
+            var pref = _settings.Cats.TryGetValue(sprite.Agent.Key, out var p) ? p : new CatPref();
+            pref.Color = sprite.Agent.Color;
+            pref.Fat = sprite.Agent.FatLevel;
+            pref.X = sprite.Agent.X;
+            pref.Y = sprite.Agent.BaseY;
+            _settings.Cats[sprite.Agent.Key] = pref;
+            _store.Save(_settings);
+        }
+        else
+        {
+            sprite.Agent.Interact(); // fue un clic: interactuar
+        }
+        e.Handled = true;
     }
 
     private void OpenInfo(CatSprite sprite)
@@ -335,23 +415,114 @@ public partial class MainWindow : Window
         _openAgent = sprite.Agent;
         InfoPopup.DataContext = sprite.Agent;
         InfoPopup.PlacementTarget = sprite;
+        InfoPopup.HorizontalOffset = 0;
+        InfoPopup.VerticalOffset = 0;
+        if (CatSettingsPanel is not null) CatSettingsPanel.Visibility = Visibility.Collapsed;
         InfoPopup.IsOpen = true;
         _ = LoadAppsAsync(sprite.Agent);
     }
 
+    private void Gear_Click(object sender, RoutedEventArgs e)
+    {
+        CatSettingsPanel.Visibility = CatSettingsPanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // --- Arrastre de los menús (por el encabezado) ------------------------------
+
+    private void InfoHeader_Down(object sender, MouseButtonEventArgs e) => MenuDragStart(InfoPopup, sender, e);
+    private void InfoHeader_Move(object sender, MouseEventArgs e) => MenuDragMove(e);
+    private void InfoHeader_Up(object sender, MouseButtonEventArgs e) => MenuDragEnd();
+
+    private void ConfigHeader_Down(object sender, MouseButtonEventArgs e) => MenuDragStart(ConfigPopup, sender, e);
+    private void ConfigHeader_Move(object sender, MouseEventArgs e) => MenuDragMove(e);
+    private void ConfigHeader_Up(object sender, MouseButtonEventArgs e) => MenuDragEnd();
+
+    private void MenuDragStart(System.Windows.Controls.Primitives.Popup popup, object sender, MouseButtonEventArgs e)
+    {
+        _menuTarget = popup;
+        _menuDragEl = sender as UIElement;
+        _menuStartH = popup.HorizontalOffset;
+        _menuStartV = popup.VerticalOffset;
+        InteropNative.GetCursorPos(out _menuStartCursor);
+        _menuDragEl?.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void MenuDragMove(MouseEventArgs e)
+    {
+        if (_menuTarget is null || _menuDragEl is null || e.LeftButton != MouseButtonState.Pressed) return;
+        if (!InteropNative.GetCursorPos(out var cur)) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double dx = (cur.X - _menuStartCursor.X) / dpi.DpiScaleX;
+        double dy = (cur.Y - _menuStartCursor.Y) / dpi.DpiScaleY;
+        _menuTarget.HorizontalOffset = _menuStartH + dx;
+        _menuTarget.VerticalOffset = _menuStartV + dy;
+    }
+
+    private void MenuDragEnd()
+    {
+        _menuDragEl?.ReleaseMouseCapture();
+        _menuDragEl = null;
+        _menuTarget = null;
+    }
+
     // --- Casa / configuración / mover -----------------------------------------
 
-    private void Box_Click(object sender, MouseButtonEventArgs e)
+    private void Box_Down(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        if (_moveMode)
+        if (_moveMode) { ExitMoveMode(); return; } // en modo mover, pulsar la caja termina
+        _boxMoved = false;
+        _dragging = true;
+        _boxStartLeft = Canvas.GetLeft(Box);
+        _boxStartTop = Canvas.GetTop(Box);
+        _boxGrab = e.GetPosition(Box);
+        Box.CaptureMouse();
+    }
+
+    private void Box_Move(object sender, MouseEventArgs e)
+    {
+        if (!Box.IsMouseCaptured) return;
+        var p = e.GetPosition(Yard);
+        double left = Math.Clamp(p.X - _boxGrab.X, 0, Math.Max(0, Width - BoxSize));
+        double top = Math.Clamp(p.Y - _boxGrab.Y, 0, Math.Max(0, Height - BoxSize));
+        Canvas.SetLeft(Box, left);
+        Canvas.SetTop(Box, top);
+        if (Math.Abs(left - _boxStartLeft) > 3 || Math.Abs(top - _boxStartTop) > 3)
+            _boxMoved = true;
+    }
+
+    private void Box_Up(object sender, MouseButtonEventArgs e)
+    {
+        if (Box.IsMouseCaptured) Box.ReleaseMouseCapture();
+        _dragging = false;
+
+        if (_boxMoved)
         {
-            ExitMoveMode(); // en modo mover, pulsar la caja termina de mover
-            return;
+            _settings.BoxLeft = Canvas.GetLeft(Box);
+            _settings.BoxTop = Canvas.GetTop(Box);
+            _store.Save(_settings);
         }
+        else
+        {
+            OpenConfig(); // fue un clic: abrir configuración
+        }
+    }
+
+    private void BoxRight_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        OpenConfig();
+    }
+
+    private void OpenConfig()
+    {
         ShowStatus(null);
         UpdateConfigLabels();
-        Box.Source = PixelBox.Get(open: true); // la caja se abre al pulsarla
+        Box.Source = PixelBox.Get(open: true); // la caja se abre
+        ConfigPopup.HorizontalOffset = 0;
+        ConfigPopup.VerticalOffset = 0;
         ConfigPopup.IsOpen = true;
     }
 
@@ -517,6 +688,20 @@ public partial class MainWindow : Window
         _settings.Left = null;
         _settings.Top = null;
         _settings.StripWidth = null;
+        _settings.BoxLeft = null;
+        _settings.BoxTop = null;
+
+        // Devolver los gatos a una posición automática.
+        foreach (var pref in _settings.Cats.Values) { pref.X = null; pref.Y = null; }
+        double baseY = Height - _settings.CatSize;
+        double maxX = Math.Max(0, Width - _settings.CatSize);
+        foreach (var agent in _agents.Values)
+        {
+            agent.BaseY = baseY;
+            agent.X = _rng.NextDouble() * maxX;
+            agent.Y = baseY;
+        }
+
         _store.Save(_settings);
         ApplyStripBounds();
     }

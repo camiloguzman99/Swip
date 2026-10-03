@@ -33,7 +33,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     public int SessionId
     {
         get => _sessionId;
-        set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); }
+        set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
     }
 
     /// <summary>True si el usuario tiene una sesión abierta.</summary>
@@ -43,7 +43,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     public bool IsCurrent
     {
         get => _isCurrent;
-        set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); }
+        set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
     }
 
     /// <summary>Tema de color del gato (ver PixelCat.Themes).</summary>
@@ -54,6 +54,12 @@ public sealed class CatAgent : INotifyPropertyChanged
 
     /// <summary>Se puede cambiar: tiene sesión abierta y no es la que está en pantalla.</summary>
     public bool CanSwitch => HasSession && !IsCurrent;
+
+    /// <summary>Mostrar "sin sesión iniciada" (no tiene sesión y no es la actual).</summary>
+    public bool ShowNoSession => !HasSession && !IsCurrent;
+
+    /// <summary>True mientras el usuario arrastra el gato (el bucle no lo mueve).</summary>
+    public bool Dragging { get; set; }
 
     private string _stateText = string.Empty;
     public string StateText
@@ -104,6 +110,13 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// </summary>
     public void Update(double dt, double viewportWidth, double viewportHeight, double catSize)
     {
+        if (Dragging)
+        {
+            // Mientras se arrastra, el gato se queda donde lo lleva el ratón.
+            Frame = State == CatState.Sleeping ? CatFrame.SleepA : CatFrame.Happy;
+            return;
+        }
+
         _bobPhase += dt;
 
         if (_reactionTimer > 0)

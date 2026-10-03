@@ -33,6 +33,10 @@ public sealed class AppSettings
     /// <summary>Mostrar un fondo tenue en la franja para verla (útil al moverla).</summary>
     public bool ShowStripBackground { get; set; }
 
+    /// <summary>Posición de la caja dentro de la franja (null = esquina inferior izquierda).</summary>
+    public double? BoxLeft { get; set; }
+    public double? BoxTop { get; set; }
+
     /// <summary>Preferencias por gato (clave = nombre de usuario): color y gordura.</summary>
     public Dictionary<string, CatPref> Cats { get; set; } = new();
 }
@@ -45,4 +49,8 @@ public sealed class CatPref
 
     /// <summary>Nivel de gordura (0 = normal).</summary>
     public int Fat { get; set; }
+
+    /// <summary>Posición donde se dejó el gato (null = automática).</summary>
+    public double? X { get; set; }
+    public double? Y { get; set; }
 }

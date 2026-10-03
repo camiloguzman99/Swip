@@ -223,8 +223,10 @@ internal sealed class SessionManager
     public List<AppInfo> GetWindowedApps(int targetSessionId)
     {
         IntPtr userToken = IntPtr.Zero, dupToken = IntPtr.Zero, envBlock = IntPtr.Zero;
+        // IMPORTANTE: el ayudante corre como el USUARIO objetivo y escribe aquí; por eso debe
+        // ser una carpeta donde los usuarios puedan escribir (no C:\Windows\Temp, que es de SYSTEM).
         string outFile = Path.Combine(
-            Path.GetTempPath(), $"swip-apps-{targetSessionId}-{Guid.NewGuid():N}.json");
+            SharedExchangeDir(), $"swip-apps-{targetSessionId}-{Guid.NewGuid():N}.json");
 
         try
         {
@@ -301,6 +303,34 @@ internal sealed class SessionManager
             if (userToken != IntPtr.Zero) ProcessInterop.CloseHandle(userToken);
             try { if (File.Exists(outFile)) File.Delete(outFile); } catch { /* best effort */ }
         }
+    }
+
+    /// <summary>
+    /// Carpeta de intercambio bajo %ProgramData%\Swip, con permiso de escritura para los
+    /// usuarios, para que el ayudante (que corre como el usuario objetivo) pueda dejar su JSON.
+    /// </summary>
+    private static string SharedExchangeDir()
+    {
+        string dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip", "exchange");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var di = new DirectoryInfo(dir);
+            var sec = di.GetAccessControl();
+            var users = new System.Security.Principal.SecurityIdentifier(
+                System.Security.Principal.WellKnownSidType.BuiltinUsersSid, null);
+            sec.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                users,
+                System.Security.AccessControl.FileSystemRights.Modify,
+                System.Security.AccessControl.InheritanceFlags.ContainerInherit |
+                    System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+                System.Security.AccessControl.PropagationFlags.None,
+                System.Security.AccessControl.AccessControlType.Allow));
+            di.SetAccessControl(sec);
+        }
+        catch { /* si no se puede fijar la ACL, seguimos; puede que ya tenga permisos */ }
+        return dir;
     }
 
     private static string QueryString(int sessionId, WtsInterop.WTS_INFO_CLASS info)
