@@ -23,7 +23,7 @@
         </Canvas>
 
         <!-- Menú de cada gato (clic derecho), en 3 niveles. El encabezado se puede arrastrar. -->
-        <Popup x:Name="InfoPopup" Placement="Top" StaysOpen="False"
+        <Popup x:Name="InfoPopup" Placement="Custom" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
             <Border Background="Transparent" CornerRadius="12" Padding="10" MinWidth="260"
                     BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
@@ -72,9 +72,12 @@
                         </Grid>
                     </StackPanel>
 
+                    <!-- Separador 1px (encima de las apps) -->
+                    <Border Height="1" Background="#40FFFFFF" Margin="2,6,2,2" />
+
                     <!-- NIVEL 2: apps abiertas en la otra sesión -->
                     <TextBlock Text="Apps abiertas en la otra sesión" Foreground="#FF9AA0A6"
-                               FontSize="10" Margin="2,4,0,4" />
+                               FontSize="10" Margin="2,2,0,4" />
                     <ItemsControl ItemsSource="{Binding Apps}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -103,6 +106,9 @@
                         <TextBlock Text="Cargando apps…" Foreground="#FF808080" FontSize="11" />
                     </Border>
 
+                    <!-- Separador 1px (debajo de las apps) -->
+                    <Border Height="1" Background="#40FFFFFF" Margin="2,4,2,2" />
+
                     <!-- NIVEL 3: cambiar sesión / estado -->
                     <Button Content="Cambiar a esta sesión" Style="{StaticResource ListRowAccent}"
                             Margin="0,8,0,0" Tag="{Binding SessionId}" Click="Switch_Click"
@@ -120,7 +126,7 @@
         </Popup>
 
         <!-- Menú de configuración (la caja). El encabezado se puede arrastrar. -->
-        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Top"
+        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Custom"
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
             <Border Background="Transparent" CornerRadius="12" Padding="10" MinWidth="200"
                     BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">

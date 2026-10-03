@@ -65,6 +65,20 @@ public partial class MainWindow : Window
         };
         // Al cerrar la configuración, la caja se vuelve a cerrar.
         ConfigPopup.Closed += (_, _) => Box.Source = BoxSprites.Get(open: false);
+
+        // Los menús se centran horizontalmente y aparecen ENCIMA del objetivo.
+        InfoPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
+        ConfigPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
+    }
+
+    private static CustomPopupPlacement[] PlaceCenteredAbove(Size popupSize, Size targetSize, Point offset)
+    {
+        double x = (targetSize.Width - popupSize.Width) / 2;
+        return new[]
+        {
+            new CustomPopupPlacement(new Point(x, -popupSize.Height - 6), PopupPrimaryAxis.Horizontal), // encima
+            new CustomPopupPlacement(new Point(x, targetSize.Height + 6), PopupPrimaryAxis.Horizontal),  // debajo si no cabe
+        };
     }
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
@@ -272,7 +286,7 @@ public partial class MainWindow : Window
                     {
                         Key = u.UserName,
                         SessionId = u.SessionId,
-                        DisplayName = u.DisplayName,
+                        DisplayName = u.UserName, // solo el nombre de usuario (sin dominio)
                         IsCurrent = u.IsCurrent,
                         StateText = stateText,
                         Y = baseY,
