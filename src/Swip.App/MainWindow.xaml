@@ -23,16 +23,16 @@
         </Canvas>
 
         <!-- Menú de cada gato (clic derecho), en 3 niveles. El encabezado se puede arrastrar. -->
-        <Popup x:Name="InfoPopup" Placement="Center" StaysOpen="False"
+        <Popup x:Name="InfoPopup" Placement="Top" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
-            <Border Background="#80000000" CornerRadius="12" Padding="10" MinWidth="260"
-                    BorderBrush="#FF000000" BorderThickness="1.5">
+            <Border Background="Transparent" CornerRadius="12" Padding="10" MinWidth="260"
+                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>
                 <StackPanel>
                     <!-- NIVEL 1: nombre + rueda de configuración (arrastrable) -->
-                    <Border x:Name="CatHeader" Style="{StaticResource ListCard}" Background="#22FFFFFF"
+                    <Border x:Name="CatHeader" Style="{StaticResource ListCard}"
                             Cursor="SizeAll"
                             MouseLeftButtonDown="InfoHeader_Down" MouseMove="InfoHeader_Move"
                             MouseLeftButtonUp="InfoHeader_Up">
@@ -46,8 +46,10 @@
                                            FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
                                 <TextBlock Text="{Binding StateText}" Foreground="#FFB0B0B0" FontSize="11" />
                             </StackPanel>
-                            <Button Grid.Column="1" Style="{StaticResource GearBtn}" Content="&#x2699;"
-                                    VerticalAlignment="Center" Click="Gear_Click" ToolTip="Personalizar gato" />
+                            <Button Grid.Column="1" Style="{StaticResource GearBtn}"
+                                    VerticalAlignment="Center" Click="Gear_Click" ToolTip="Cambiar aspecto del gato">
+                                <Ellipse Width="10" Height="10" Fill="#FFFFFFFF" />
+                            </Button>
                         </Grid>
                     </Border>
 
@@ -110,25 +112,23 @@
                         <TextBlock Text="Sesión activa" Foreground="#FF808080"
                                    FontWeight="SemiBold" HorizontalAlignment="Center" />
                     </Border>
-                    <Border Style="{StaticResource ListRowDisabled}"
-                            Visibility="{Binding ShowNoSession, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Sin sesión iniciada" Foreground="#FF808080"
-                                   HorizontalAlignment="Center" />
-                    </Border>
+                    <Button Content="Iniciar sesión" Style="{StaticResource ListRowAccent}"
+                            Margin="0,8,0,0" Click="StartLogon_Click"
+                            Visibility="{Binding ShowNoSession, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
             </Border>
         </Popup>
 
         <!-- Menú de configuración (la caja). El encabezado se puede arrastrar. -->
-        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Center"
+        <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Top"
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
-            <Border Background="#80000000" CornerRadius="12" Padding="10" MinWidth="200"
-                    BorderBrush="#FF000000" BorderThickness="1.5">
+            <Border Background="Transparent" CornerRadius="12" Padding="10" MinWidth="200"
+                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>
                 <StackPanel>
-                    <Border x:Name="ConfigHeader" Style="{StaticResource ListCard}" Background="#22FFFFFF"
+                    <Border x:Name="ConfigHeader" Style="{StaticResource ListCard}"
                             Cursor="SizeAll"
                             MouseLeftButtonDown="ConfigHeader_Down" MouseMove="ConfigHeader_Move"
                             MouseLeftButtonUp="ConfigHeader_Up">

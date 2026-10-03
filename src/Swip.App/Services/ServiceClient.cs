@@ -30,6 +30,9 @@ public sealed class ServiceClient
         SendAsync(new IpcRequest { Kind = RequestKind.SwitchToSession, TargetSessionId = sessionId }, ct,
             _ => true);
 
+    public Task StartLogonAsync(CancellationToken ct = default) =>
+        SendAsync(new IpcRequest { Kind = RequestKind.StartLogon }, ct, _ => true);
+
     private async Task<T> SendAsync<T>(IpcRequest request, CancellationToken ct, Func<IpcResponse, T> select)
     {
         using var client = new NamedPipeClientStream(

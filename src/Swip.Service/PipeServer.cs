@@ -109,12 +109,20 @@ internal sealed class PipeServer
 
         RequestKind.SwitchToSession => SwitchResponse(request.TargetSessionId),
 
+        RequestKind.StartLogon => StartLogonResponse(),
+
         _ => new IpcResponse { Ok = false, Error = "Petición no reconocida." },
     };
 
     private IpcResponse SwitchResponse(int targetSessionId)
     {
         _sessions.SwitchToSession(targetSessionId);
+        return new IpcResponse { Ok = true };
+    }
+
+    private IpcResponse StartLogonResponse()
+    {
+        _sessions.StartLogon();
         return new IpcResponse { Ok = true };
     }
 }

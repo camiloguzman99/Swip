@@ -84,6 +84,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     /// </summary>
     public CatAction Action =>
         Dragging ? CatAction.Carry
+        : (!HasSession && !IsCurrent) ? CatAction.Sleep   // sesión cerrada: se mantiene dormido
         : (IsPetting || MenuOpen) ? CatAction.Play
         : IsCurrent ? CatAction.Walk
         : HasSession ? CatAction.Play

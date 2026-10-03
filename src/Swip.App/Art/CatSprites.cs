@@ -58,7 +58,7 @@ public static class CatSprites
 public static class BoxSprites
 {
     public const double AspectW = 394.0;
-    public const double AspectH = 284.0;
+    public const double AspectH = 282.0;
 
     private static BitmapImage? _closed;
     private static BitmapImage? _open;

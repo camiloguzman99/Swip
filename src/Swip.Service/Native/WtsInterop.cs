@@ -83,6 +83,9 @@ internal static class WtsInterop
         string pPassword,
         bool bWait);
 
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    public static extern bool WTSDisconnectSession(IntPtr hServer, int sessionId, bool bWait);
+
     [DllImport("wtsapi32.dll")]
     public static extern void WTSFreeMemory(IntPtr pMemory);
 

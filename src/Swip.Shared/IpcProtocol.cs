@@ -36,6 +36,9 @@ public enum RequestKind
 
     /// <summary>Conecta (cambia) a la sesión indicada. Requiere el servicio como SYSTEM.</summary>
     SwitchToSession,
+
+    /// <summary>Muestra la pantalla de inicio de sesión para iniciar una cuenta sin sesión.</summary>
+    StartLogon,
 }
 
 /// <summary>Petición del gato hacia el servicio.</summary>

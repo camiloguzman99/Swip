@@ -199,6 +199,20 @@ internal sealed class SessionManager
     }
 
     /// <summary>
+    /// Muestra la pantalla de inicio de sesión de Windows (desconecta la sesión de consola),
+    /// para que el usuario pueda iniciar una cuenta que no tiene sesión abierta.
+    /// </summary>
+    public void StartLogon()
+    {
+        int console = WtsInterop.WTSGetActiveConsoleSessionId();
+        if (!WtsInterop.WTSDisconnectSession(WtsInterop.WTS_CURRENT_SERVER_HANDLE, console, true))
+        {
+            throw new InvalidOperationException(
+                $"WTSDisconnectSession falló (error {Marshal.GetLastWin32Error()}).");
+        }
+    }
+
+    /// <summary>
     /// Cambia a la sesión indicada conectándola a la consola física. Como el servicio corre como
     /// SYSTEM, Windows realiza el cambio sin pedir la contraseña.
     /// </summary>

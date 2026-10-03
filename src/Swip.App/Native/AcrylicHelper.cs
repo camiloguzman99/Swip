@@ -45,7 +45,7 @@ internal static class AcrylicHelper
             {
                 AccentState = (int)AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
                 AccentFlags = 2,
-                GradientColor = 0x80000000, // negro, alpha 0x80 (~50%)
+                GradientColor = 0x2E000000, // negro muy tenue: casi solo desenfoque
                 AnimationId = 0,
             };
 

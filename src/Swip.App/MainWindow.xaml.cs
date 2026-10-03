@@ -538,7 +538,10 @@ public partial class MainWindow : Window
         agent.AppsLoading = true;
         try
         {
-            IReadOnlyList<AppInfo> apps = await _client.GetWindowedAppsAsync(agent.SessionId);
+            // La sesión actual se enumera EN PROCESO (fiable); las otras, vía el servicio.
+            IReadOnlyList<AppInfo> apps = agent.IsCurrent
+                ? await Task.Run(() => (IReadOnlyList<AppInfo>)LocalApps.Enumerate())
+                : await _client.GetWindowedAppsAsync(agent.SessionId);
             agent.Apps.Clear();
             if (apps.Count == 0)
             {
@@ -567,6 +570,24 @@ public partial class MainWindow : Window
     }
 
     // --- Cambio de sesión -------------------------------------------------------
+
+    private async void StartLogon_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            "Se mostrará la pantalla de inicio de sesión de Windows para que inicies esta cuenta. " +
+            "Tu sesión actual quedará abierta en segundo plano. ¿Continuar?",
+            "Swip", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+        try
+        {
+            InfoPopup.IsOpen = false;
+            await _client.StartLogonAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Swip", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private async void Switch_Click(object sender, RoutedEventArgs e)
     {
