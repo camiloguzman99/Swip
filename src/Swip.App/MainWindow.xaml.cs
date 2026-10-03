@@ -130,13 +130,18 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task PublishOwnAppsAsync()
     {
+        int ownSession = Process.GetCurrentProcess().SessionId;
         try
         {
-            int ownSession = Process.GetCurrentProcess().SessionId;
             var apps = await Task.Run(() => LocalApps.Enumerate());
+            AppLog.Write($"Publicando {apps.Count} apps de la sesión {ownSession}: " +
+                string.Join(", ", apps.Select(a => a.ProcessName)));
             await _client.PublishAppsAsync(ownSession, apps);
         }
-        catch { /* best effort: si el servicio no está, reintentamos en el próximo tick */ }
+        catch (Exception ex)
+        {
+            AppLog.Write($"Error publicando apps de la sesión {ownSession}: {ex.Message}");
+        }
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -579,6 +584,9 @@ public partial class MainWindow : Window
             IReadOnlyList<AppInfo> apps = agent.IsCurrent
                 ? await Task.Run(() => (IReadOnlyList<AppInfo>)LocalApps.Enumerate())
                 : await _client.GetWindowedAppsAsync(agent.SessionId);
+            AppLog.Write($"LoadApps agente={agent.DisplayName} sesión={agent.SessionId} " +
+                $"current={agent.IsCurrent} → {apps.Count} apps " +
+                $"({(agent.IsCurrent ? "en proceso" : "del servicio")})");
             agent.Apps.Clear();
             if (apps.Count == 0)
             {
