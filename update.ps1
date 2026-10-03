@@ -120,6 +120,22 @@ try {
     $zipUpdate = Join-Path $tmp "update.ps1"
     if (Test-Path $zipUpdate) { Copy-Item $zipUpdate (Join-Path $InstallRoot "update.ps1") -Force }
 
+    # Asegurar el arranque automático para TODOS los usuarios (acceso directo común).
+    Write-Host "==> Asegurando el arranque automático..." -ForegroundColor Cyan
+    try {
+        $appExe   = Join-Path $InstallRoot "App\Swip.exe"
+        $common   = [Environment]::GetFolderPath('CommonStartup')
+        $shortcut = Join-Path $common "Swip.lnk"
+        $wsh = New-Object -ComObject WScript.Shell
+        $lnk = $wsh.CreateShortcut($shortcut)
+        $lnk.TargetPath = $appExe
+        $lnk.WorkingDirectory = (Join-Path $InstallRoot "App")
+        $lnk.Description = "Swip - gatos de sesión"
+        $lnk.Save()
+        $oldUser = Join-Path ([Environment]::GetFolderPath('Startup')) "Swip.lnk"
+        if (Test-Path $oldUser) { Remove-Item $oldUser -Force -ErrorAction SilentlyContinue }
+    } catch { Write-Host "   (no se pudo crear el acceso directo: $($_.Exception.Message))" -ForegroundColor DarkYellow }
+
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 
