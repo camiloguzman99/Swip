@@ -54,6 +54,14 @@ public sealed class IpcRequest
 
     /// <summary>Apps publicadas por el gato (solo para PublishApps).</summary>
     public List<AppInfo> Apps { get; set; } = new();
+
+    /// <summary>
+    /// Solo para PublishApps: true si el gato que publica es la sesión que está ahora mismo en
+    /// pantalla (consola activa). Una sesión activa SÍ puede enumerar sus ventanas, así que una
+    /// lista vacía suya es real; una sesión en segundo plano no puede verlas, así que su lista
+    /// vacía no debe pisar la última conocida.
+    /// </summary>
+    public bool ActiveConsole { get; set; }
 }
 
 /// <summary>Respuesta del servicio hacia el gato.</summary>

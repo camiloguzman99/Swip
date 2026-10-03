@@ -118,7 +118,7 @@ internal sealed class PipeServer
 
     private IpcResponse PublishResponse(IpcRequest request)
     {
-        _sessions.PublishApps(request.TargetSessionId, request.Apps);
+        _sessions.PublishApps(request.TargetSessionId, request.Apps, request.ActiveConsole);
         return new IpcResponse { Ok = true };
     }
 

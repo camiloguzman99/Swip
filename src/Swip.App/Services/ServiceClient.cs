@@ -26,12 +26,14 @@ public sealed class ServiceClient
         SendAsync(new IpcRequest { Kind = RequestKind.ListWindowedApps, TargetSessionId = sessionId }, ct,
             r => (IReadOnlyList<AppInfo>)r.Apps);
 
-    public Task PublishAppsAsync(int sessionId, IReadOnlyList<AppInfo> apps, CancellationToken ct = default) =>
+    public Task PublishAppsAsync(int sessionId, IReadOnlyList<AppInfo> apps, bool activeConsole,
+        CancellationToken ct = default) =>
         SendAsync(new IpcRequest
         {
             Kind = RequestKind.PublishApps,
             TargetSessionId = sessionId,
             Apps = apps as List<AppInfo> ?? new List<AppInfo>(apps),
+            ActiveConsole = activeConsole,
         }, ct, _ => true);
 
     public Task SwitchToSessionAsync(int sessionId, CancellationToken ct = default) =>

@@ -318,16 +318,34 @@ internal sealed class SessionManager
     /// </summary>
     private static readonly ConcurrentDictionary<int, (DateTime When, List<AppInfo> Apps)> PublishedApps = new();
 
-    /// <summary>Tiempo máximo que se considera "fresca" una publicación de apps.</summary>
-    private static readonly TimeSpan AppsFreshness = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// Tiempo máximo que se considera "fresca" una publicación de apps. Un gato en segundo plano
+    /// sigue publicando (aunque no pueda ver sus ventanas) cada ~8 s refrescando la marca de
+    /// tiempo de la última lista conocida, así que basta una ventana corta.
+    /// </summary>
+    private static readonly TimeSpan AppsFreshness = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// El gato de una sesión publica aquí las apps que ha enumerado en su propio escritorio.
+    /// Una sesión en segundo plano (desconectada) no puede enumerar sus ventanas y publica una
+    /// lista vacía; en ese caso conservamos la última lista conocida (lo que tenía abierto cuando
+    /// estaba en pantalla) y solo refrescamos la marca de tiempo, para que siga visible mientras
+    /// su gato siga vivo. Una sesión activa sí ve sus ventanas, así que su lista vacía es real.
     /// </summary>
-    public void PublishApps(int sessionId, List<AppInfo> apps)
+    public void PublishApps(int sessionId, List<AppInfo> apps, bool activeConsole)
     {
-        PublishedApps[sessionId] = (DateTime.UtcNow, apps ?? new());
-        Log($"PublishApps sesión={sessionId} apps={apps?.Count ?? 0}");
+        apps ??= new();
+        if (apps.Count == 0 && !activeConsole
+            && PublishedApps.TryGetValue(sessionId, out var prev) && prev.Apps.Count > 0)
+        {
+            // Segundo plano sin poder ver: mantener la última lista conocida, refrescar el tiempo.
+            PublishedApps[sessionId] = (DateTime.UtcNow, prev.Apps);
+            Log($"PublishApps sesión={sessionId} vacía en 2º plano → se mantienen {prev.Apps.Count} apps conocidas");
+            return;
+        }
+
+        PublishedApps[sessionId] = (DateTime.UtcNow, apps);
+        Log($"PublishApps sesión={sessionId} apps={apps.Count} activa={activeConsole}");
     }
 
     /// <summary>

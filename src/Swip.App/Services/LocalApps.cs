@@ -34,6 +34,15 @@ public static class LocalApps
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX b);
 
+    [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
+
+    /// <summary>True si esta sesión es la que está ahora mismo en pantalla (consola activa).</summary>
+    public static bool IsActiveConsoleSession()
+    {
+        try { return (uint)Process.GetCurrentProcess().SessionId == WTSGetActiveConsoleSessionId(); }
+        catch { return false; }
+    }
+
     public static List<AppInfo> Enumerate() => AppUsage.Collect(WindowedNames);
 
     /// <summary>Nombres de proceso con ventana visible en la sesión actual, con un título por nombre.</summary>

@@ -133,10 +133,11 @@ public partial class MainWindow : Window
         int ownSession = Process.GetCurrentProcess().SessionId;
         try
         {
+            bool active = LocalApps.IsActiveConsoleSession();
             var apps = await Task.Run(() => LocalApps.Enumerate());
-            AppLog.Write($"Publicando {apps.Count} apps de la sesión {ownSession}: " +
+            AppLog.Write($"Publicando {apps.Count} apps de la sesión {ownSession} (activa={active}): " +
                 string.Join(", ", apps.Select(a => a.ProcessName)));
-            await _client.PublishAppsAsync(ownSession, apps);
+            await _client.PublishAppsAsync(ownSession, apps, active);
         }
         catch (Exception ex)
         {
