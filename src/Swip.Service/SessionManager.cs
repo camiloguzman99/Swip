@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Swip.Service.Native;
 using Swip.Shared;
@@ -233,6 +231,7 @@ internal sealed class SessionManager
         var liveIds = rawSessions.Select(r => r.SessionId).ToHashSet();
         foreach (int id in QuitSessions.Keys.Where(id => !liveIds.Contains(id)).ToList())
             QuitSessions.TryRemove(id, out _);
+        Cache.Prune(liveIds);
 
         foreach (var raw in rawSessions)
         {
@@ -333,63 +332,36 @@ internal sealed class SessionManager
     }
 
     /// <summary>
-    /// Caché de apps publicadas por cada gato, indexada por id de sesión. Cada gato enumera las
-    /// apps de SU propia sesión (puede hacerlo en proceso, sin privilegios) y las publica aquí
-    /// periódicamente. Así otra sesión puede leerlas sin que el servicio (sesión 0) tenga que
-    /// enumerar ventanas de un escritorio ajeno, cosa que Windows no permite de forma fiable.
+    /// Apps publicadas por el gato de cada sesión. Cada gato enumera en proceso las apps de SU
+    /// sesión y las publica aquí; así otra sesión puede leerlas sin que el servicio (sesión 0)
+    /// tenga que enumerar ventanas de un escritorio ajeno, cosa que Windows no permite.
     /// </summary>
-    private static readonly ConcurrentDictionary<int, (DateTime When, List<AppInfo> Apps)> PublishedApps = new();
+    private static readonly AppsCache Cache = new();
 
     /// <summary>
-    /// Tiempo máximo que se considera "fresca" una publicación de apps. Un gato en segundo plano
-    /// sigue publicando (aunque no pueda ver sus ventanas) cada ~8 s refrescando la marca de
-    /// tiempo de la última lista conocida, así que basta una ventana corta.
+    /// Publicación del gato de <paramref name="sessionId"/> (la sesión REAL del cliente del pipe).
+    /// La sesión en pantalla se decide aquí, no la declara el cliente.
     /// </summary>
-    private static readonly TimeSpan AppsFreshness = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    /// El gato de una sesión publica aquí las apps que ha enumerado en su propio escritorio.
-    /// Una sesión en segundo plano (desconectada) no puede enumerar sus ventanas y publica una
-    /// lista vacía; en ese caso conservamos la última lista conocida (lo que tenía abierto cuando
-    /// estaba en pantalla) y solo refrescamos la marca de tiempo, para que siga visible mientras
-    /// su gato siga vivo. Una sesión activa sí ve sus ventanas, así que su lista vacía es real.
-    /// </summary>
-    public void PublishApps(int sessionId, List<AppInfo> apps, bool activeConsole)
+    public void PublishApps(int sessionId, List<AppInfo> apps)
     {
-        apps ??= new();
-        if (apps.Count == 0 && !activeConsole
-            && PublishedApps.TryGetValue(sessionId, out var prev) && prev.Apps.Count > 0)
-        {
-            // Segundo plano sin poder ver: mantener la última lista conocida, refrescar el tiempo.
-            PublishedApps[sessionId] = (DateTime.UtcNow, prev.Apps);
-            Log($"PublishApps sesión={sessionId} vacía en 2º plano → se mantienen {prev.Apps.Count} apps conocidas");
-            return;
-        }
-
-        PublishedApps[sessionId] = (DateTime.UtcNow, apps);
-        Log($"PublishApps sesión={sessionId} apps={apps.Count} activa={activeConsole}");
+        bool active = sessionId == WtsInterop.WTSGetActiveConsoleSessionId();
+        bool kept = Cache.Publish(sessionId, apps, active);
+        LogOnChange($"publish-{sessionId}", kept
+            ? $"PublishApps sesión={sessionId} en 2º plano sin ver ventanas → se mantiene la última lista"
+            : $"PublishApps sesión={sessionId} activa={active} apps={apps.Count}");
     }
 
     /// <summary>
-    /// Devuelve las apps con ventana visible de la sesión indicada, leídas de la caché que
-    /// publica el gato de esa sesión. Si no hay publicación reciente devuelve una lista vacía.
+    /// Apps con ventana de la sesión indicada, leídas de lo que publicó su gato. Si no hay datos
+    /// válidos devuelve una lista vacía en vez de lanzar excepción.
     /// </summary>
     public List<AppInfo> GetWindowedApps(int targetSessionId)
     {
-        if (PublishedApps.TryGetValue(targetSessionId, out var entry))
-        {
-            var age = DateTime.UtcNow - entry.When;
-            if (age <= AppsFreshness)
-            {
-                Log($"GetWindowedApps sesión={targetSessionId} OK apps={entry.Apps.Count} (edad={age.TotalSeconds:F0}s)");
-                return entry.Apps;
-            }
-            Log($"GetWindowedApps sesión={targetSessionId} caché vieja (edad={age.TotalSeconds:F0}s)");
-            return new();
-        }
-
-        Log($"GetWindowedApps sesión={targetSessionId} sin publicación del gato");
-        return new();
+        bool active = targetSessionId == WtsInterop.WTSGetActiveConsoleSessionId();
+        var status = Cache.TryGet(targetSessionId, active, out var apps);
+        LogOnChange($"get-{targetSessionId}",
+            $"GetWindowedApps sesión={targetSessionId} activa={active} → {status} ({apps.Count} apps)");
+        return apps.ToList();
     }
 
     /// <summary>Crea la carpeta (si falta) y concede escritura a los usuarios locales.</summary>
@@ -414,19 +386,14 @@ internal sealed class SessionManager
         catch { /* si no se puede, seguimos */ }
     }
 
-    /// <summary>Registro en %ProgramData%\Swip\service.log para diagnóstico.</summary>
-    internal static void Log(string message)
-    {
-        try
-        {
-            string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip");
-            Directory.CreateDirectory(dir);
-            File.AppendAllText(Path.Combine(dir, "service.log"),
-                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
-        }
-        catch { /* el log es best-effort */ }
-    }
+    /// <summary>Log en %ProgramData%\Swip\service.log (rotativo: nunca pasa de ~512 KB).</summary>
+    private static readonly SwipLog Logger = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip", "service.log"));
+
+    internal static void Log(string message) => Logger.Write(message);
+
+    /// <summary>Como <see cref="Log"/> pero omite el mensaje si es idéntico al anterior con la misma clave.</summary>
+    internal static void LogOnChange(string key, string message) => Logger.WriteOnChange(key, message);
 
     private static string QueryString(int sessionId, WtsInterop.WTS_INFO_CLASS info)
     {

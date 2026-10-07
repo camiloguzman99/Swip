@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Swip.App.Art;
-using Swip.Shared;
 
 namespace Swip.App.World;
 
@@ -35,13 +34,6 @@ public sealed class CatAgent : INotifyPropertyChanged
 
     public bool CanSwitch => HasSession && !IsCurrent;
     public bool ShowNoSession => !HasSession && !IsCurrent;
-
-    private string _stateText = string.Empty;
-    public string StateText
-    {
-        get => _stateText;
-        set { _stateText = value; Raise(nameof(StateText)); }
-    }
 
     private bool _appsLoading;
     public bool AppsLoading
@@ -167,20 +159,6 @@ public sealed class CatAgent : INotifyPropertyChanged
         {
             Vx = 0;
         }
-    }
-
-    public static string DescribeState(UserInfo u)
-    {
-        if (!u.HasSession) return "Sesión cerrada (durmiendo)";
-        if (u.IsCurrent) return "Sesión activa (en pantalla)";
-        return u.State switch
-        {
-            SessionConnectionState.Active => "Activa",
-            SessionConnectionState.Connected => "Conectada",
-            SessionConnectionState.Disconnected => "En espera (en el otro escritorio)",
-            SessionConnectionState.Idle => "Inactiva",
-            _ => u.State.ToString(),
-        };
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

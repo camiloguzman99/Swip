@@ -3,9 +3,8 @@ using System.Runtime.InteropServices;
 namespace Swip.Service.Native;
 
 /// <summary>
-/// P/Invoke para obtener el token de un usuario conectado y lanzar un proceso en su sesión/escritorio.
-/// Un servicio en sesión 0 no puede enumerar ventanas de otra sesión interactiva; por eso lanzamos
-/// un ayudante dentro de la sesión objetivo con CreateProcessAsUser para que las enumere ahí.
+/// P/Invoke para obtener el token de un usuario conectado y lanzar un proceso en su sesión/escritorio
+/// (CreateProcessAsUser). El servicio lo usa para relanzar el gato en las sesiones donde falte.
 /// </summary>
 internal static class ProcessInterop
 {

@@ -34,12 +34,12 @@ public enum RequestKind
     /// <summary>Devuelve las apps con ventana visible de la sesión indicada (desde la caché publicada).</summary>
     ListWindowedApps,
 
-    /// <summary>El gato publica las apps de SU sesión para que otras sesiones las consulten.</summary>
+    /// <summary>El gato publica las apps de SU sesión (la del cliente) para que otras las consulten.</summary>
     PublishApps,
 
     /// <summary>
-    /// El usuario pulsó "Salir" en la sesión indicada (TargetSessionId): el vigilante del servicio
-    /// no debe relanzarle el gato hasta que esa sesión cierre o el servicio se reinicie.
+    /// El usuario pulsó "Salir" en la sesión del cliente: el vigilante del servicio no debe
+    /// relanzarle el gato hasta que esa sesión cierre o el servicio se reinicie.
     /// </summary>
     QuitSession,
 
@@ -55,19 +55,14 @@ public sealed class IpcRequest
 {
     public RequestKind Kind { get; set; }
 
-    /// <summary>Id de sesión objetivo para ListWindowedApps y SwitchToSession; y la sesión origen para PublishApps.</summary>
+    /// <summary>
+    /// Id de sesión objetivo para ListWindowedApps y SwitchToSession. En PublishApps y QuitSession
+    /// se IGNORA: el servicio usa la sesión real del cliente (la que Windows reporta del pipe).
+    /// </summary>
     public int TargetSessionId { get; set; }
 
     /// <summary>Apps publicadas por el gato (solo para PublishApps).</summary>
     public List<AppInfo> Apps { get; set; } = new();
-
-    /// <summary>
-    /// Solo para PublishApps: true si el gato que publica es la sesión que está ahora mismo en
-    /// pantalla (consola activa). Una sesión activa SÍ puede enumerar sus ventanas, así que una
-    /// lista vacía suya es real; una sesión en segundo plano no puede verlas, así que su lista
-    /// vacía no debe pisar la última conocida.
-    /// </summary>
-    public bool ActiveConsole { get; set; }
 }
 
 /// <summary>Respuesta del servicio hacia el gato.</summary>

@@ -1,188 +1,200 @@
 # Swip 🐱
 
-Un gato amarillo animado que vive sobre la barra de tareas de Windows 11 y te deja
-**cambiar rápido entre tus dos sesiones de usuario** (por ejemplo, empresa y personal)
-y **ver qué aplicaciones con ventana tiene abiertas la otra sesión**, sin tener que
-escribir la contraseña.
-
-> Estado: **Fase 1 (MVP)**. El servicio compila y está probado de compilación; la app
-> del gato (WPF) se compila en Windows (no en Linux/CI por ser WPF).
+Un gato pixel art por cada cuenta de usuario de tu equipo, viviendo sobre la barra de tareas de
+Windows 11. Te deja **cambiar rápido entre sesiones** (por ejemplo, empresa y personal) **sin
+escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesión.
 
 ---
 
 ## Qué hace
 
-- 🐱 **Un gato por cuenta de usuario del equipo** (si hay 5 usuarios, 5 gatos) merodeando
-  en una franja transparente sobre la barra de tareas. Diseño **pixel art**. Cada gato
-  apunta a su usuario, tenga o no una sesión abierta.
-- 😺 **Dos estados**: usuario con sesión activa/en pantalla → el gato se **mueve**;
-  usuario en segundo plano o **sin sesión iniciada** → el gato **duerme** con sus "z z"
-  animados (flotan y se desvanecen).
-- 🎨 **Personalizable por gato**: 6 colores (amarillo, naranja, gris, negro, blanco, marrón)
-  y nivel de **gordura** (engordar/adelgazar). Se guarda por usuario.
-- 🖱️ **Clic izquierdo** → interactúas con el gato (se pone feliz y da un saltito).
-- 🖱️ **Clic derecho** → menú con las **apps activas** de esa sesión y el botón de
-  **cambiar de sesión** (sin contraseña).
-- 👀 **Apps**: solo las que tienen ventana visible (primer plano), nunca procesos en
-  segundo plano.
-- 🫥 **Click-through**: el espacio vacío de la franja deja pasar los clics al escritorio
-  y a la barra; solo los gatos capturan el ratón.
+- 🐱 **Un gato por cuenta de usuario** (si hay 5 usuarios, 5 gatos), tenga o no la sesión abierta.
+  Dos colores (naranja, gris) elegibles por gato.
+- 😺 **Cuatro acciones**, según el estado de la cuenta:
+
+  | Estado                                  | Acción del gato      |
+  |-----------------------------------------|----------------------|
+  | Sesión cerrada (sin sesión iniciada)    | Durmiendo            |
+  | Sesión activa (en pantalla ahora)       | Caminando (merodea)  |
+  | Iniciada pero en el otro escritorio     | Jugando              |
+  | Mientras lo arrastras                   | Cargado              |
+
+- 📦 **Una caja de cartón** en la esquina: con clic derecho abre el menú de Swip. A los gatos les
+  gustan más las cajas que las casas.
+- 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
+  dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
+- 🎨 **Mismo aspecto en todas las sesiones**: color, posición de los gatos y de la caja, y
+  etiquetas se comparten y se reflejan al instante entre sesiones.
+
+### Controles
+
+| Acción                               | Resultado                                                           |
+|--------------------------------------|---------------------------------------------------------------------|
+| Clic izquierdo en un gato            | Lo acaricias (aparece un corazón)                                   |
+| Clic izquierdo MANTENIDO en un gato  | Lo cargas y arrastras; al soltar cae por gravedad                   |
+| Clic derecho en un gato              | Menú de ese usuario (ver abajo)                                     |
+| Clic izquierdo en la caja            | Se abre / se cierra, nada más                                       |
+| Clic derecho en la caja              | Menú de Swip: **Etiquetas**, **Actualizar**, **Salir**              |
+| Arrastrar la caja                    | La mueves; también cae por gravedad                                 |
+| Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
+
+**Menú de un gato** (3 niveles, arrastrable por el encabezado):
+1. Nombre de usuario y un botón blanco que despliega color y gordura.
+2. Apps con ventana de esa sesión, con **CPU %** y **RAM %** (agregados entre todos los procesos
+   de cada app, como el Administrador de tareas).
+3. **Cambiar a esta sesión** (sin confirmación) o, si la cuenta no tiene sesión, **Iniciar sesión**.
 
 ---
 
 ## Por qué hacen falta dos piezas
 
-Windows aísla las sesiones a propósito. Dos operaciones que Swip necesita solo son
-posibles desde un proceso con privilegios de **SYSTEM**:
-
-1. **Cambiar de sesión sin contraseña** → `WTSConnectSession`. Desde SYSTEM, Windows
-   realiza el cambio sin pedir credenciales, así que **Swip no guarda ninguna contraseña**.
-2. **Leer las ventanas de otra sesión** → un servicio en la sesión 0 no puede enumerar
-   las ventanas de otra sesión interactiva, así que lanza un pequeño ayudante dentro de
-   esa sesión (`CreateProcessAsUser`) que las enumera y las reporta.
-
-Por eso el proyecto tiene dos ejecutables:
+Windows aísla las sesiones a propósito. **Cambiar de sesión sin contraseña** solo es posible desde
+un proceso con privilegios de **SYSTEM** (`WTSConnectSession`): Swip no guarda ninguna contraseña.
 
 ```
-┌─────────────────────────────┐   named pipe    ┌──────────────────────────────┐
-│  Swip.App  (tu sesión)      │ ◄────────────►  │  Swip.Service (como SYSTEM)  │
-│  - gato / ventana           │  Global\        │  - WTSEnumerateSessions      │
-│    transparente             │  SwipServicePipe│  - WTSConnectSession (cambio)│
-│  - menú y animación         │                 │  - ayudante por sesión que   │
-│  asInvoker (sin privilegios)│                 │    enumera ventanas          │
-└─────────────────────────────┘                 └──────────────────────────────┘
+┌─────────────────────────────┐   named pipe    ┌───────────────────────────────┐
+│  Swip.App  (una por sesión) │ ◄────────────►  │  Swip.Service (como SYSTEM)   │
+│  - gato / ventana           │  Global\        │  - WTSEnumerateSessions       │
+│    transparente             │  SwipServicePipe│  - WTSConnectSession (cambio) │
+│  - enumera SUS ventanas     │                 │  - caché de apps por sesión   │
+│  - publica sus apps         │                 │  - vigilante: relanza el gato │
+│  asInvoker (sin privilegios)│                 │                               │
+└─────────────────────────────┘                 └───────────────────────────────┘
 ```
 
-## Estructura
+| Proyecto        | Qué es                                                                       |
+|-----------------|------------------------------------------------------------------------------|
+| `Swip.Shared`   | Contratos de IPC, ajustes compartidos, caché de apps, log rotativo.          |
+| `Swip.Service`  | Servicio de Windows (SYSTEM): sesiones, cambio de sesión, caché, vigilante.  |
+| `Swip.App`      | Los gatos (WPF): ventana transparente, pixel art, animación, menús.          |
+| `Swip.Tests`    | Pruebas automáticas de la lógica compartida (se ejecutan en el CI).          |
 
-| Proyecto        | Qué es                                                              |
-|-----------------|--------------------------------------------------------------------|
-| `Swip.Shared`   | Contratos de IPC compartidos (peticiones/respuestas, DTOs).        |
-| `Swip.Service`  | Servicio de Windows (SYSTEM): sesiones, cambio, enumeración.       |
-| `Swip.App`      | Los gatos (WPF): franja transparente, pixel art, animación, menú.  |
+### Cómo se ven las apps de otra sesión
+
+Un servicio en la sesión 0 **no puede enumerar las ventanas de otro escritorio**. Por eso cada
+gato enumera, en su propio proceso, las apps con ventana de **su** sesión y las **publica** al
+servicio cada ~8 s; el gato de otra sesión las lee de esa caché.
+
+Limitación de Windows a tener presente: **una sesión que no está en pantalla no puede ver sus
+propias ventanas**. Por eso Swip muestra de una sesión en segundo plano **lo último que tenía
+abierto cuando estuvo en pantalla**. Una app que abras o cierres en esa sesión mientras está en
+segundo plano no se refleja hasta que vuelvas a entrar en ella.
+
+### Qué hace Swip cuando la sesión no está en pantalla
+
+Si cambias de usuario o bloqueas, el gato de esa sesión **deja de animarse, refrescar y publicar**
+(nadie lo ve). Al volver a pantalla **relee la ubicación y el estado**: ajustes compartidos
+(lo que la otra sesión haya movido), tamaño del área de trabajo (monitor, resolución, barra de
+tareas) y estado de todas las sesiones.
+
+---
 
 ## Requisitos
 
 - Windows 11
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
 - Permisos de administrador **solo para instalar el servicio** (una vez).
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) solo si instalas compilando desde el código.
 
-## Instalación y uso
+## Instalación y actualización
 
-### Instalación de un paso (recomendada)
+**Desde el paquete ya compilado (recomendado).** Descarga `Swip-win-x64.zip` del release
+`latest`, extráelo y, en PowerShell:
 
-Desde la raíz del repositorio, en PowerShell. El instalador se auto-eleva a administrador,
-compila e instala el servicio, publica el gato, crea el arranque automático y lo lanza:
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+`setup.ps1` se auto-eleva, **recrea el servicio desde cero** (resuelve el caso de una versión
+vieja que quedó corriendo con el `.exe` en uso), copia los binarios y deja el arranque
+automático para **todos** los usuarios.
+
+**Compilando desde el repositorio** (necesita el SDK de .NET 8):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ExecutionPolicy Bypass -File uninstall.ps1   # para quitarlo todo
 ```
 
-Para desinstalar todo (servicio, arranque y archivos):
+**Actualizar.** Clic derecho en la caja → **Actualizar**, o `update.ps1`. Detiene el servicio y
+el gato, descarga el release `latest`, **verifica su SHA-256** y reemplaza los archivos.
+
+### Arranque y cierre
+
+- Swip arranca en cada sesión mediante un acceso directo en el inicio común (todos los usuarios).
+- Además el servicio **comprueba cada 30 s** que haya un gato en cada sesión de usuario y lo
+  relanza si falta (por ejemplo en la otra sesión tras una actualización).
+- Hay **una sola instancia por sesión**.
+- **Salir** cierra el gato de esa sesión y el servicio **no lo relanza** hasta que esa sesión
+  se cierre o el servicio se reinicie (p. ej. al actualizar).
+
+### Registros y diagnóstico
+
+Todos en `C:\ProgramData\Swip\`, con tamaño acotado (rotan a `.1` al pasar de 256 KB):
+
+| Archivo           | Contenido                                                         |
+|-------------------|-------------------------------------------------------------------|
+| `service.log`     | Servicio: arranque, relanzamientos, publicaciones y lecturas.     |
+| `app-s{N}.log`    | El gato de la sesión `N`: pausas/reanudaciones y apps publicadas. |
+
+Para ver todas las sesiones que Windows reporta y cuáles cuenta Swip como usuario (consola de
+**administrador**):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File uninstall.ps1
+& "$env:ProgramFiles\Swip\Service\Swip.Service.exe" --diagnose
 ```
 
-### Actualizar sin descargar el repo
+Si no aparece el gato de otra cuenta: comprueba con `qwinsta` que tiene sesión (`Disc` = en
+segundo plano). Una cuenta sin sesión iniciada aparece dormida, sin opción de cambio, con el
+botón **Iniciar sesión**.
 
-Cada push a la rama compila la app en GitHub Actions y publica un release **`latest`**.
-Para actualizar, clic derecho en cualquier gato → **Opciones → Actualizar** (se auto-eleva,
-descarga, reemplaza y relanza). O manualmente:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File update.ps1
-```
-
-### Solución de problemas: no aparece la otra sesión
-
-Swip crea un gato por cada **sesión de usuario conectada**. Si solo ves un gato:
-
-1. Confirma que Windows ve dos sesiones. En una consola escribe `qwinsta` (o `query session`):
-   deberías ver tu usuario y el otro (normalmente en estado `Disc` = desconectado).
-   Si solo aparece el tuyo, el otro usuario **no tiene sesión iniciada**: entra a esa cuenta
-   con *Cambio rápido de usuario* (sin cerrar sesión) y volverá a quedar en segundo plano.
-2. Diagnóstico de Swip (consola de **administrador**):
-   ```powershell
-   & "$env:ProgramFiles\Swip\Service\Swip.Service.exe" --diagnose
-   ```
-   Muestra todas las sesiones que Windows reporta y cuáles cuenta Swip como usuario.
-
-### Manual (para desarrollo)
-
-```powershell
-# 1) Instalar solo el servicio (como administrador)
-powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1
-# 2) Ejecutar el gato desde el código
-powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
-```
-
-### Controles
-
-| Acción                       | Resultado                                                      |
-|------------------------------|----------------------------------------------------------------|
-| Clic en un gato (izq. o der.)| Abre el menú de ese usuario (3 niveles)                        |
-| Clic derecho MANTENIDO        | Arrastra el gato ("cargado"); al soltar cae por gravedad      |
-| Clic en la 📦 (esquina)       | Abre la configuración de Swip                                   |
-
-La **caja de cartón** 📦 de la esquina (cerrada; se abre al pulsarla, porque a los gatos les
-gustan más las cajas que las casas) abre la configuración (en formato lista con bordes
-redondeados): **Mover ventana** (arrastra la franja y pulsa la caja para terminar), **Hacer visible la
-ventana** (fondo tenue para ubicarla), **tamaño de gatos** (+ / −), **alto de la franja**
-(+ / −), **etiquetas**, **recolocar sobre la barra**, **Actualizar Swip** y **salir**. Las
-preferencias se guardan en `%AppData%\Swip\settings.json`.
-
-### Estados del gato
-
-| Estado del usuario                      | Acción del gato      |
-|-----------------------------------------|----------------------|
-| Sesión cerrada (sin sesión iniciada)    | Durmiendo            |
-| Sesión activa (en pantalla ahora)       | Caminando (merodea)  |
-| Iniciada pero en el otro escritorio     | Jugando              |
-| Mientras lo arrastras                   | Cargado              |
-
-Cada acción tiene 2 frames de animación y dos colores (naranja, gris), elegibles por gato.
-
-Swip enumera las **cuentas de usuario del equipo** (locales habilitadas, más cualquier
-usuario con sesión abierta que sea de dominio/Microsoft/AzureAD) y crea **un gato por
-cuenta**, no por sesión. Un usuario con la sesión abierta en segundo plano se puede cambiar
-sin contraseña; uno sin sesión iniciada aparece dormido y sin opción de cambio.
+---
 
 ## Seguridad
 
-- El servicio corre como SYSTEM pero **no almacena contraseñas**: el cambio de sesión
-  se apoya en que SYSTEM puede conectar sesiones directamente.
-- El named pipe tiene una ACL que permite acceso a **SYSTEM** y a los **usuarios
-  interactivos** de la máquina. Como tú eres el único con acceso a ambas sesiones, esto
-  encaja con tu caso, pero cualquier usuario interactivo de ESTE equipo podría pedir el
-  cambio. Si en el futuro quieres restringirlo a un único SID, es un cambio pequeño en
-  `PipeServer.CreatePipe`.
-- El ayudante de enumeración solo lee **títulos de ventana y nombres de proceso**; no
-  lee contenido de las ventanas.
+- El servicio corre como SYSTEM pero **no almacena contraseñas**; el cambio de sesión se apoya en
+  que SYSTEM puede conectar sesiones directamente. **Consecuencia deliberada:** cualquier usuario
+  interactivo de ESTE equipo puede pedir el cambio a cualquier sesión abierta, sin contraseña. Encaja
+  con un equipo cuyas cuentas son todas tuyas; no lo instales donde haya cuentas de otras personas.
+- El pipe permite acceso solo a **SYSTEM** y a los **usuarios interactivos**.
+- **Cada cliente solo puede publicar su propia lista y salir de su propia sesión**: el servicio usa
+  la sesión que Windows reporta del pipe (`GetNamedPipeClientSessionId`), no la que declare el cliente.
+- El servidor atiende cada conexión por separado con un **timeout de 15 s**, un **máximo de 16
+  a la vez** y una **línea de petición acotada**: un cliente colgado o malicioso no bloquea el
+  cambio de sesión ni agota la memoria.
+- Swip solo lee **títulos de ventana y nombres de proceso**, nunca el contenido de las ventanas.
+- **Integridad de la actualización:** el release publica `Swip-win-x64.zip.sha256` y `update.ps1`
+  se niega a instalar un zip que no coincida. Esto protege de descargas corruptas, incompletas o
+  de un zip sustituido sin su hash. **No** protege de quien pueda escribir en el release de
+  GitHub (podría cambiar zip y hash a la vez): para eso haría falta firmar con una clave que no
+  viva en GitHub. Además el release se compila desde la rama de desarrollo en cada push, y lo que
+  instala corre como SYSTEM: confía en quien tenga acceso de escritura a este repositorio.
 
 ## Alcance y limitaciones
 
-**Incluido (Fase 1 + Fase 2):**
-- Un gato pixel art por sesión, en una franja transparente sobre la barra.
-- Estados activo (merodeando) y durmiendo (sesión en segundo plano).
-- Clic izquierdo = interactuar; clic derecho = menú de apps + cambio de sesión.
-- Click-through del espacio vacío. Cambio de sesión sin contraseña.
-
-**Fuera de alcance (por decisión):**
-- Compartir portapapeles o archivos entre sesiones.
-- Ver las dos sesiones a la vez en pantalla (Windows de escritorio solo muestra una).
+**Fuera de alcance (por decisión):** compartir portapapeles o archivos entre sesiones; ver las
+dos sesiones a la vez en pantalla (Windows de escritorio solo muestra una).
 
 **Limitaciones conocidas:**
-- WPF compila solo en Windows.
-- El cambio de sesión hereda el comportamiento de "Cambio rápido de usuario" de Windows:
-  la sesión anterior queda abierta en segundo plano.
-- La lista de apps se toma en el momento de abrir el menú (se refresca cada ~10 s mientras
-  el menú está abierto).
+- La ventana es transparente a pantalla completa del área de trabajo; WPF dibuja las ventanas
+  transparentes por software. No se ha medido su coste en CPU.
+- El cambio de sesión hereda el comportamiento de "Cambio rápido de usuario": la sesión anterior
+  queda abierta en segundo plano.
+- Lo que muestra una sesión en segundo plano es lo último que vio (ver arriba). Tras reiniciar o
+  actualizar el servicio la caché está vacía hasta que visites esa sesión.
+- El gato sentado en la caja no se recuerda al reiniciar.
+- WPF solo compila en Windows; el CI (`windows-latest`) compila y ejecuta las pruebas.
 
-## Posibles mejoras (Fase 3+)
+## Desarrollo
 
-- Más frames de caminar (ciclo de patas) y sprites por raza/color de gato por sesión.
-- Atajo de teclado global para cambiar sin abrir el menú.
-- Restringir la ACL del pipe a tu SID.
-- Arranque automático del gato al iniciar sesión (acceso directo en `shell:startup`).
-- Notificación visual cuando una sesión dormida tiene actividad nueva.
+```powershell
+dotnet test tests\Swip.Tests\Swip.Tests.csproj    # pruebas (también funcionan en Linux)
+```
+
+Cubren la lógica donde un fallo pierde datos o congela cosas: escrituras concurrentes de los
+ajustes entre procesos, diferencias entre ajustes, política de la caché de apps, rotación del log
+y el lector de líneas con tope.
+
+## Próxima fase
+
+Gatos de **forma fija** (sin engordar/adelgazar) renderizados **en tiempo real a partir de un
+modelo 3D con estilo pixel art**, con muchas más interacciones que los PNG actuales.

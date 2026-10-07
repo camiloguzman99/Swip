@@ -9,11 +9,12 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Swip.App.Art;
 using Swip.App.Controls;
-using Swip.App.Models;
 using Swip.App.Native;
 using Swip.App.Services;
 using Swip.App.World;
 using Swip.Shared;
+using Swip.Shared.Settings;
+using Microsoft.Win32;
 
 namespace Swip.App;
 
@@ -26,6 +27,9 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _loop = new(DispatcherPriority.Render);
     private readonly DispatcherTimer _refresh = new();
     private readonly DispatcherTimer _publish = new();
+    private readonly DispatcherTimer _activity = new();          // vigila si esta sesión está en pantalla
+    private readonly DispatcherTimer _settingsDebounce = new();  // agrupa avisos de cambios en settings.json
+    private readonly DispatcherTimer _boundsDebounce = new();    // agrupa cambios de pantalla / barra de tareas
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly Random _rng = new();
 
@@ -36,6 +40,11 @@ public partial class MainWindow : Window
     private CatAgent? _openAgent;
     private bool _refreshing;
     private bool _dragging; // mientras se arrastra caja/gato/menú: fuerza captura del ratón
+
+    // Actividad de la sesión: solo se anima, refresca y publica mientras está en pantalla y sin bloquear.
+    private bool _active;
+    private bool _locked;
+    private FileSystemWatcher? _settingsWatcher;
 
     // Arrastre de la caja
     private bool _boxMoved;
@@ -69,6 +78,11 @@ public partial class MainWindow : Window
         // Al cerrar la configuración, la caja se vuelve a cerrar.
         ConfigPopup.Closed += (_, _) => SetBoxOpen(false);
 
+        _settingsDebounce.Interval = TimeSpan.FromMilliseconds(300);
+        _settingsDebounce.Tick += (_, _) => { _settingsDebounce.Stop(); ApplySettingsFromDisk(); };
+        _boundsDebounce.Interval = TimeSpan.FromMilliseconds(400);
+        _boundsDebounce.Tick += (_, _) => { _boundsDebounce.Stop(); if (_active) ApplyStripBounds(); };
+
         // Los menús se centran horizontalmente y aparecen ENCIMA del objetivo.
         InfoPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
         ConfigPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
@@ -97,7 +111,7 @@ public partial class MainWindow : Window
         InteropNative.SetClickThrough(_hwnd, true); // empieza dejando pasar los clics
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
         SetBoxOpen(false);
@@ -105,8 +119,6 @@ public partial class MainWindow : Window
 
         _loop.Interval = TimeSpan.FromMilliseconds(33); // ~30 fps
         _loop.Tick += Loop_Tick;
-        _lastTicks = _clock.ElapsedTicks;
-        _loop.Start();
 
         _refresh.Interval = TimeSpan.FromSeconds(Math.Max(3, _settings.RefreshSeconds));
         _refresh.Tick += async (_, _) =>
@@ -114,42 +126,249 @@ public partial class MainWindow : Window
             await RefreshUsersAsync();
             if (_openAgent is not null) await LoadAppsAsync(_openAgent);
         };
-        _refresh.Start();
 
         // Publicar al servicio las apps de NUESTRA propia sesión, para que el gato de la otra
         // sesión pueda mostrarlas (el servicio en sesión 0 no puede enumerarlas por sí mismo).
         _publish.Interval = TimeSpan.FromSeconds(8);
         _publish.Tick += async (_, _) => await PublishOwnAppsAsync();
-        _publish.Start();
-        _ = PublishOwnAppsAsync();
 
-        await RefreshUsersAsync();
+        // Solo el "vigilante de actividad" corre siempre: cada 5 s comprueba si esta sesión está en
+        // pantalla (red de seguridad por si se pierde algún aviso de cambio de sesión).
+        _activity.Interval = TimeSpan.FromSeconds(5);
+        _activity.Tick += (_, _) => EvaluateActivity();
+
+        StartSettingsWatcher();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        SystemParameters.StaticPropertyChanged += OnSystemParameterChanged;
+
+        _activity.Start();
+        EvaluateActivity(); // arranca animación, refresco y publicación solo si está en pantalla
     }
 
+    // --- Actividad: solo trabajar mientras la sesión está en pantalla --------------
+
     /// <summary>
-    /// Enumera en proceso las apps de la sesión actual y las publica en el servicio. Así el gato
-    /// de la otra sesión las puede leer sin que el servicio tenga que enumerar un escritorio ajeno.
+    /// Una sesión que no está en pantalla (cambiaste de usuario o bloqueaste) no se anima, no
+    /// refresca ni publica: nadie la ve y Windows ni siquiera le deja leer sus ventanas. Al volver
+    /// a pantalla relee la ubicación y el estado actuales (otra sesión pudo mover cosas).
     /// </summary>
-    private async Task PublishOwnAppsAsync()
+    private void EvaluateActivity()
     {
-        int ownSession = Process.GetCurrentProcess().SessionId;
+        bool shouldBeActive = !_locked && LocalApps.IsActiveConsoleSession();
+        if (shouldBeActive == _active) return;
+        _active = shouldBeActive;
+
+        if (_active) _ = ActivateAsync();
+        else Deactivate();
+    }
+
+    private async Task ActivateAsync()
+    {
         try
         {
-            bool active = LocalApps.IsActiveConsoleSession();
-            var apps = await Task.Run(() => LocalApps.Enumerate());
-            AppLog.Write($"Publicando {apps.Count} apps de la sesión {ownSession} (activa={active}): " +
-                string.Join(", ", apps.Select(a => a.ProcessName)));
-            await _client.PublishAppsAsync(ownSession, apps, active);
+            AppLog.Write("Sesión en pantalla: se reanuda y se relee ubicación y estado.");
+            ApplyStripBounds();        // el área de trabajo pudo cambiar (monitor, resolución, barra)
+            ApplySettingsFromDisk();   // aspecto y posiciones que dejó la otra sesión
+            if (_settingsWatcher is not null) _settingsWatcher.EnableRaisingEvents = true;
+
+            _lastTicks = _clock.ElapsedTicks; // sin esto el primer tick vería un salto de tiempo enorme
+            _loop.Start();
+            _refresh.Start();
+            _publish.Start();
+
+            await RefreshUsersAsync();  // quién tiene sesión y en qué estado
+            await PublishOwnAppsAsync();
         }
         catch (Exception ex)
         {
-            AppLog.Write($"Error publicando apps de la sesión {ownSession}: {ex.Message}");
+            AppLog.Write($"Error al reanudar la sesión: {ex.Message}");
+        }
+    }
+
+    private void Deactivate()
+    {
+        AppLog.Write("Sesión fuera de pantalla (en segundo plano o bloqueada): se detiene el render.");
+        _loop.Stop();
+        _refresh.Stop();
+        _publish.Stop();
+        _settingsDebounce.Stop();
+        _boundsDebounce.Stop();
+        if (_settingsWatcher is not null) _settingsWatcher.EnableRaisingEvents = false;
+
+        InfoPopup.IsOpen = false;
+        ConfigPopup.IsOpen = false;
+        if (!_clickThrough)
+        {
+            InteropNative.SetClickThrough(_hwnd, true);
+            _clickThrough = true;
+        }
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        // SystemEvents avisa desde otro hilo.
+        Dispatcher.InvokeAsync(() =>
+        {
+            switch (e.Reason)
+            {
+                case SessionSwitchReason.SessionLock:
+                    _locked = true;
+                    break;
+                // Al conectar una sesión o desbloquearla se asume desbloqueada (si estuviera
+                // bloqueada llegaría un SessionLock); equivocarse hacia "activa" solo cuesta un poco de CPU.
+                case SessionSwitchReason.SessionUnlock:
+                case SessionSwitchReason.ConsoleConnect:
+                case SessionSwitchReason.RemoteConnect:
+                case SessionSwitchReason.SessionLogon:
+                    _locked = false;
+                    break;
+            }
+            EvaluateActivity();
+        });
+    }
+
+    // --- Cambios de pantalla / barra de tareas -------------------------------------
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) =>
+        Dispatcher.InvokeAsync(RequestBoundsRefresh);
+
+    private void OnSystemParameterChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "WorkArea")
+            Dispatcher.InvokeAsync(RequestBoundsRefresh);
+    }
+
+    /// <summary>
+    /// Reajusta la franja al área de trabajo nueva. Fuera de pantalla no se hace nada: al volver,
+    /// <see cref="ActivateAsync"/> la recalcula igualmente.
+    /// </summary>
+    private void RequestBoundsRefresh()
+    {
+        if (!_active) return;
+        _boundsDebounce.Stop();
+        _boundsDebounce.Start();
+    }
+
+    // --- Ajustes compartidos entre sesiones ----------------------------------------
+
+    /// <summary>Vigila settings.json para reflejar al instante lo que otra sesión cambie.</summary>
+    private void StartSettingsWatcher()
+    {
+        try
+        {
+            _settingsWatcher = new FileSystemWatcher(_store.SharedDirectory, SettingsStore.SharedFileName)
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName
+                               | NotifyFilters.Size | NotifyFilters.CreationTime,
+                EnableRaisingEvents = false, // se activa al ponerse en pantalla
+            };
+            _settingsWatcher.Changed += (_, _) => QueueSettingsReload();
+            _settingsWatcher.Created += (_, _) => QueueSettingsReload();
+            _settingsWatcher.Renamed += (_, _) => QueueSettingsReload();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write($"No se pudo vigilar settings.json (se releerá al volver a pantalla): {ex.Message}");
+            _settingsWatcher = null;
+        }
+    }
+
+    /// <summary>Agrupa ráfagas de avisos (una escritura genera varios) en una sola recarga.</summary>
+    private void QueueSettingsReload() =>
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (!_active) return;
+            _settingsDebounce.Stop();
+            _settingsDebounce.Start();
+        });
+
+    /// <summary>Relee settings.json y aplica a la pantalla SOLO lo que cambió.</summary>
+    private void ApplySettingsFromDisk()
+    {
+        var latest = _store.Load();
+        var delta = SettingsDelta.Between(_settings, latest);
+        _settings = latest;
+        ApplyDelta(delta);
+    }
+
+    /// <summary>
+    /// Cambia un ajuste sobre lo MÁS RECIENTE del disco (no pisa lo que otra sesión haya cambiado
+    /// entre medias) y aplica a la pantalla lo que esa fusión trajo de nuevo.
+    /// </summary>
+    private void UpdateSettings(Action<AppSettings> mutate)
+    {
+        var before = _settings;
+        _settings = _store.Update(mutate);
+        ApplyDelta(SettingsDelta.Between(before, _settings));
+    }
+
+    private void ApplyDelta(SettingsDelta delta)
+    {
+        if (!delta.Any) return;
+
+        if (delta.ShowLabels)
+            foreach (var sprite in _sprites.Values)
+                sprite.ShowLabel(_settings.ShowLabels);
+
+        if (delta.Box && !Box.IsMouseCaptured)
+            RepositionBox();
+
+        foreach (string key in delta.Cats)
+        {
+            if (!_settings.Cats.TryGetValue(key, out var pref) || !_agents.TryGetValue(key, out var agent))
+                continue; // gato aún no creado: al crearse leerá _settings
+
+            agent.Color = CatSprites.Normalize(pref.Color ?? agent.Color);
+            agent.FatLevel = pref.Fat;
+            if (_sprites.TryGetValue(key, out var sprite))
+            {
+                sprite.ApplyFat();
+                sprite.Render();
+            }
+
+            // La posición solo se aplica si no lo estamos sujetando ni está sentado en la caja.
+            if (pref.X is double px && !agent.Dragging && !agent.OnBox)
+                agent.X = Math.Clamp(px, 0, Math.Max(0, Width - CatPx));
+        }
+    }
+
+    /// <summary>
+    /// Enumera en proceso las apps de la sesión actual y las publica en el servicio. Solo con la
+    /// sesión en pantalla: en segundo plano Windows no deja ver las ventanas, y el servicio conserva
+    /// la última lista conocida de esa sesión.
+    /// </summary>
+    private async Task PublishOwnAppsAsync()
+    {
+        if (!_active) return;
+        try
+        {
+            var apps = await Task.Run(() => LocalApps.Enumerate());
+            AppLog.WriteOnChange("publish",
+                $"Publicando {apps.Count} apps: {string.Join(", ", apps.Select(a => a.ProcessName))}");
+            await _client.PublishAppsAsync(apps);
+        }
+        catch (Exception ex)
+        {
+            AppLog.WriteOnChange("publish-error", $"Error publicando apps: {ex.Message}");
         }
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        _store.Save(_settings);
+        // Eventos estáticos: hay que soltarlos o la ventana quedaría viva en memoria.
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        SystemParameters.StaticPropertyChanged -= OnSystemParameterChanged;
+
+        _loop.Stop();
+        _refresh.Stop();
+        _publish.Stop();
+        _activity.Stop();
+        _settingsDebounce.Stop();
+        _boundsDebounce.Stop();
+        _settingsWatcher?.Dispose();
+        // Cada cambio ya se guardó al hacerlo (UpdateSettings), no hay nada pendiente.
     }
 
     // --- Tamaño de la ventana (toda la pantalla, fija) --------------------------
@@ -262,20 +481,29 @@ public partial class MainWindow : Window
             return false;
 
         var dpi = VisualTreeHelper.GetDpi(this);
-        if (IsPointOver(Box, p, dpi)) return true;
+
+        // La caja: solo su figura visible (el PNG cerrado tiene ~16% de margen transparente arriba).
+        var area = SpriteBounds.Opaque(Box.Source);
+        var boxRect = new Rect(
+            area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
+            area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
+        if (IsPointOver(Box, boxRect, p, dpi)) return true;
+
+        // Cada gato: la caja de sus píxeles visibles, según su pose y hacia dónde mira.
         foreach (var sprite in _sprites.Values)
-            if (IsPointOver(sprite, p, dpi)) return true;
+            if (IsPointOver(sprite, sprite.GetHitRect(), p, dpi)) return true;
         return false;
     }
 
-    private static bool IsPointOver(FrameworkElement el, InteropNative.POINT p, DpiScale dpi)
+    /// <summary>¿Está el cursor (en píxeles de pantalla) dentro de <paramref name="local"/>, rectángulo en coordenadas del elemento?</summary>
+    private static bool IsPointOver(FrameworkElement el, Rect local, InteropNative.POINT p, DpiScale dpi)
     {
-        if (el.ActualWidth <= 0 || !el.IsVisible) return false;
+        if (local.Width <= 0 || local.Height <= 0 || !el.IsVisible) return false;
         Point tl;
-        try { tl = el.PointToScreen(new Point(0, 0)); }
+        try { tl = el.PointToScreen(local.TopLeft); }
         catch { return false; }
-        double w = el.ActualWidth * dpi.DpiScaleX;
-        double h = el.ActualHeight * dpi.DpiScaleY;
+        double w = local.Width * dpi.DpiScaleX;
+        double h = local.Height * dpi.DpiScaleY;
         return p.X >= tl.X && p.X <= tl.X + w && p.Y >= tl.Y && p.Y <= tl.Y + h;
     }
 
@@ -305,11 +533,8 @@ public partial class MainWindow : Window
 
             foreach (var u in users)
             {
-                string stateText = CatAgent.DescribeState(u);
-
                 if (_agents.TryGetValue(u.UserName, out var agent))
                 {
-                    agent.StateText = stateText;
                     agent.IsCurrent = u.IsCurrent;
                     agent.SessionId = u.SessionId;
                 }
@@ -321,7 +546,6 @@ public partial class MainWindow : Window
                         SessionId = u.SessionId,
                         DisplayName = u.UserName, // solo el nombre de usuario (sin dominio)
                         IsCurrent = u.IsCurrent,
-                        StateText = stateText,
                         Y = baseY,
                         X = _rng.NextDouble() * maxX,
                         FacingRight = _rng.NextDouble() < 0.5,
@@ -441,13 +665,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                // Guardar la posición horizontal (cae por gravedad hasta abajo).
-                var pref = _settings.Cats.TryGetValue(sprite.Agent.Key, out var p) ? p : new CatPref();
-                pref.Color = sprite.Agent.Color;
-                pref.Fat = sprite.Agent.FatLevel;
-                pref.X = sprite.Agent.X;
-                _settings.Cats[sprite.Agent.Key] = pref;
-                _store.Save(_settings);
+                // Guardar solo la posición horizontal (cae por gravedad hasta abajo).
+                var agent = sprite.Agent;
+                double x = agent.X;
+                UpdateSettings(s => GetOrAddCat(s, agent).X = x);
             }
         }
         else
@@ -545,9 +766,8 @@ public partial class MainWindow : Window
         if (_boxMoved)
         {
             // Solo guardamos la X; la caja cae por gravedad hasta el fondo.
-            _settings.BoxLeft = Canvas.GetLeft(Box);
-            _settings.BoxTop = null;
-            _store.Save(_settings);
+            double left = Canvas.GetLeft(Box);
+            UpdateSettings(s => { s.BoxLeft = left; s.BoxTop = null; });
         }
         else
         {
@@ -591,7 +811,9 @@ public partial class MainWindow : Window
         if (double.IsNaN(boxLeft)) boxLeft = 0;
         if (double.IsNaN(boxTop)) boxTop = Math.Max(0, Height - BoxH);
 
-        double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
+        // Se centra con el ancho REAL del control (la etiqueta puede hacerlo más ancho que la imagen,
+        // que va centrada dentro), no con el ancho de la imagen.
+        double catW = sprite.ActualWidth > 0 ? sprite.ActualWidth : CatPx;
         agent.X = Math.Clamp(boxLeft + BoxW / 2 - catW / 2, 0, Math.Max(0, Width - catW));
 
         // Borde superior VISIBLE de la caja en su estado actual (los PNG tienen distinto margen).
@@ -624,10 +846,10 @@ public partial class MainWindow : Window
         double boxTop = Canvas.GetTop(Box);
         if (double.IsNaN(boxLeft) || double.IsNaN(boxTop)) return false;
 
-        double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
-        double cx = sprite.Agent.X, cy = sprite.Agent.Y;
+        double catW = sprite.ActualWidth > 0 ? sprite.ActualWidth : CatPx;
+        double cx = sprite.Agent.X + catW / 2, cy = sprite.Agent.Y; // cx = centro del gato
         double visibleTop = boxTop + BoxH * BoxSprites.TopInset(_boxOpen);
-        bool overlapX = cx + catW > boxLeft && cx < boxLeft + BoxW;
+        bool overlapX = cx > boxLeft && cx < boxLeft + BoxW;
         bool overlapY = cy + CatPx > visibleTop - CatPx * 0.5 && cy < boxTop + BoxH;
         return overlapX && overlapY;
     }
@@ -758,20 +980,36 @@ public partial class MainWindow : Window
         SaveCatPref(_openAgent);
     }
 
+    /// <summary>Guarda color y gordura del gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
     private void SaveCatPref(CatAgent agent)
     {
-        _settings.Cats[agent.Key] = new CatPref { Color = agent.Color, Fat = agent.FatLevel };
-        _store.Save(_settings);
+        string color = agent.Color;
+        int fat = agent.FatLevel;
+        UpdateSettings(s =>
+        {
+            var pref = GetOrAddCat(s, agent);
+            pref.Color = color;
+            pref.Fat = fat;
+        });
+    }
+
+    /// <summary>Preferencias del gato; si no existen aún, se crean con su aspecto actual.</summary>
+    private static CatPref GetOrAddCat(AppSettings settings, CatAgent agent)
+    {
+        if (!settings.Cats.TryGetValue(agent.Key, out var pref))
+        {
+            pref = new CatPref { Color = agent.Color, Fat = agent.FatLevel };
+            settings.Cats[agent.Key] = pref;
+        }
+        return pref;
     }
 
     // --- Opciones ---------------------------------------------------------------
 
     private void ToggleLabels_Click(object sender, RoutedEventArgs e)
     {
-        _settings.ShowLabels = !_settings.ShowLabels;
-        foreach (var sprite in _sprites.Values)
-            sprite.ShowLabel(_settings.ShowLabels);
-        _store.Save(_settings);
+        bool show = !_settings.ShowLabels;
+        UpdateSettings(s => s.ShowLabels = show); // ApplyDelta actualiza las etiquetas en pantalla
     }
 
     private void Update_Click(object sender, RoutedEventArgs e)
@@ -813,7 +1051,7 @@ public partial class MainWindow : Window
     {
         // Avisar al servicio ANTES de cerrar: si no, su vigilante relanzaría el gato en ~30 s.
         // Si el servicio no responde, cerramos igualmente (el timeout del cliente es de 2 s).
-        try { await _client.QuitSessionAsync(Process.GetCurrentProcess().SessionId); }
+        try { await _client.QuitSessionAsync(); }
         catch { /* sin servicio no hay vigilante que relance */ }
         Close();
     }

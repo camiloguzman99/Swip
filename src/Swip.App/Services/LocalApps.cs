@@ -172,18 +172,27 @@ internal static class AppUsage
         }
     }
 
+    // Resolver el nombre amigable abre el módulo principal y lee la versión del .exe: es lo más caro
+    // de cada ronda. El nombre de una app no cambia mientras corre, así que se recuerda por proceso.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> FriendlyCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private static string FriendlyName(List<Process> procs, string fallback)
     {
+        if (FriendlyCache.TryGetValue(fallback, out var cached)) return cached;
+
         foreach (var p in procs)
         {
             try
             {
                 string? d = p.MainModule?.FileVersionInfo.FileDescription;
-                if (!string.IsNullOrWhiteSpace(d)) return d.Trim();
+                if (!string.IsNullOrWhiteSpace(d))
+                    return FriendlyCache[fallback] = d.Trim();
             }
             catch { }
         }
-        // Sin descripción: nombre capitalizado.
+        // Sin descripción (o sin permiso para leerla): nombre capitalizado. No se cachea, así que
+        // se reintenta en la siguiente ronda por si el módulo ya es accesible.
         return fallback.Length > 0 ? char.ToUpper(fallback[0]) + fallback[1..] : fallback;
     }
 }

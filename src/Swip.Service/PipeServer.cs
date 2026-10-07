@@ -4,16 +4,31 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Swip.Service.Native;
 using Swip.Shared;
 
 namespace Swip.Service;
 
 /// <summary>
-/// Servidor de named pipe del servicio. Atiende una petición por conexión (modelo simple
-/// petición/respuesta) y delega en <see cref="SessionManager"/>.
+/// Servidor de named pipe del servicio. Una petición por conexión (modelo simple petición/respuesta)
+/// que delega en <see cref="SessionManager"/>. Cada conexión se atiende en su propia tarea con un
+/// tiempo máximo, así un cliente colgado no bloquea a los demás (antes se atendía de uno en uno y
+/// una conexión que no enviaba nada congelaba también el cambio de sesión).
 /// </summary>
 internal sealed class PipeServer
 {
+    /// <summary>Conexiones atendidas a la vez; más allá, el servidor espera (contrapresión).</summary>
+    private const int MaxConcurrent = 16;
+
+    /// <summary>Tope de la línea de petición. Una lista de apps ocupa unos pocos KB.</summary>
+    private const int MaxRequestChars = 1 << 20;
+
+    /// <summary>Máximo de apps que se aceptan en una publicación.</summary>
+    private const int MaxAppsPerPublish = 200;
+
+    /// <summary>Tiempo máximo de una conexión completa (leer, atender y responder).</summary>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
+
     private readonly SessionManager _sessions;
     private readonly ILogger _log;
 
@@ -25,13 +40,25 @@ internal sealed class PipeServer
 
     public async Task RunAsync(CancellationToken ct)
     {
+        using var slots = new SemaphoreSlim(MaxConcurrent);
+
         while (!ct.IsCancellationRequested)
         {
+            bool slotTaken = false;
+            NamedPipeServerStream? server = null;
             try
             {
-                using var server = CreatePipe();
+                await slots.WaitAsync(ct);
+                slotTaken = true;
+
+                server = CreatePipe();
                 await server.WaitForConnectionAsync(ct);
-                await HandleConnectionAsync(server, ct);
+
+                // El manejador es ahora dueño de la conexión y del hueco; este bucle sigue aceptando.
+                var connected = server;
+                server = null;
+                slotTaken = false;
+                _ = HandleAsync(connected, slots, ct);
             }
             catch (OperationCanceledException)
             {
@@ -39,8 +66,13 @@ internal sealed class PipeServer
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "Error atendiendo una conexión; se reintenta.");
-                await Task.Delay(500, ct);
+                _log.LogWarning(ex, "Error aceptando una conexión; se reintenta.");
+                try { await Task.Delay(500, ct); } catch (OperationCanceledException) { break; }
+            }
+            finally
+            {
+                server?.Dispose();
+                if (slotTaken) slots.Release();
             }
         }
     }
@@ -69,34 +101,65 @@ internal sealed class PipeServer
             pipeSecurity: security);
     }
 
+    private async Task HandleAsync(NamedPipeServerStream server, SemaphoreSlim slots, CancellationToken ct)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(RequestTimeout);
+            await HandleConnectionAsync(server, timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cliente colgado (timeout) o servicio parándose: se cierra la conexión sin más.
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Error atendiendo una conexión.");
+        }
+        finally
+        {
+            server.Dispose();
+            slots.Release();
+        }
+    }
+
     private async Task HandleConnectionAsync(NamedPipeServerStream server, CancellationToken ct)
     {
+        // Debe leerse mientras el cliente sigue conectado.
+        int? clientSession = PipeInterop.ClientSessionId(server);
+
         using var reader = new StreamReader(server, Encoding.UTF8, false, 1024, leaveOpen: true);
         using var writer = new StreamWriter(server, new UTF8Encoding(false), 1024, leaveOpen: true)
         {
             AutoFlush = true,
         };
 
-        string? line = await reader.ReadLineAsync(ct);
-        if (line is null)
-            return;
-
         IpcResponse response;
         try
         {
+            string? line = await BoundedLine.ReadAsync(reader, MaxRequestChars, ct);
+            if (line is null)
+                return;
+
             var request = JsonSerializer.Deserialize<IpcRequest>(line, IpcProtocol.Json)
                 ?? throw new InvalidOperationException("Petición vacía.");
-            response = Dispatch(request);
+            response = Dispatch(request, clientSession);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             response = new IpcResponse { Ok = false, Error = ex.Message };
         }
 
-        await writer.WriteLineAsync(JsonSerializer.Serialize(response, IpcProtocol.Json));
+        await writer.WriteLineAsync(JsonSerializer.Serialize(response, IpcProtocol.Json).AsMemory(), ct);
+        await writer.FlushAsync(ct);
     }
 
-    private IpcResponse Dispatch(IpcRequest request) => request.Kind switch
+    private IpcResponse Dispatch(IpcRequest request, int? clientSession) => request.Kind switch
     {
         RequestKind.ListSessions =>
             new IpcResponse { Ok = true, Sessions = _sessions.GetSessions() },
@@ -107,9 +170,12 @@ internal sealed class PipeServer
         RequestKind.ListWindowedApps =>
             new IpcResponse { Ok = true, Apps = _sessions.GetWindowedApps(request.TargetSessionId) },
 
-        RequestKind.PublishApps => PublishResponse(request),
+        // Publicar y salir actúan SIEMPRE sobre la sesión real del cliente: nadie puede falsear
+        // la lista de otra sesión ni impedirle el gato a otro usuario.
+        RequestKind.PublishApps => OwnSession(clientSession, session =>
+            _sessions.PublishApps(session, request.Apps.Take(MaxAppsPerPublish).ToList())),
 
-        RequestKind.QuitSession => QuitResponse(request.TargetSessionId),
+        RequestKind.QuitSession => OwnSession(clientSession, _sessions.QuitSession),
 
         RequestKind.SwitchToSession => SwitchResponse(request.TargetSessionId),
 
@@ -118,15 +184,11 @@ internal sealed class PipeServer
         _ => new IpcResponse { Ok = false, Error = "Petición no reconocida." },
     };
 
-    private IpcResponse QuitResponse(int sessionId)
+    private static IpcResponse OwnSession(int? clientSession, Action<int> action)
     {
-        _sessions.QuitSession(sessionId);
-        return new IpcResponse { Ok = true };
-    }
-
-    private IpcResponse PublishResponse(IpcRequest request)
-    {
-        _sessions.PublishApps(request.TargetSessionId, request.Apps, request.ActiveConsole);
+        if (clientSession is null)
+            return new IpcResponse { Ok = false, Error = "No se pudo identificar la sesión del cliente." };
+        action(clientSession.Value);
         return new IpcResponse { Ok = true };
     }
 

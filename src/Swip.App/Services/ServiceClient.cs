@@ -26,20 +26,17 @@ public sealed class ServiceClient
         SendAsync(new IpcRequest { Kind = RequestKind.ListWindowedApps, TargetSessionId = sessionId }, ct,
             r => (IReadOnlyList<AppInfo>)r.Apps);
 
-    public Task PublishAppsAsync(int sessionId, IReadOnlyList<AppInfo> apps, bool activeConsole,
-        CancellationToken ct = default) =>
+    /// <summary>Publica las apps de ESTA sesión (el servicio identifica la sesión por el pipe).</summary>
+    public Task PublishAppsAsync(IReadOnlyList<AppInfo> apps, CancellationToken ct = default) =>
         SendAsync(new IpcRequest
         {
             Kind = RequestKind.PublishApps,
-            TargetSessionId = sessionId,
             Apps = apps as List<AppInfo> ?? new List<AppInfo>(apps),
-            ActiveConsole = activeConsole,
         }, ct, _ => true);
 
     /// <summary>Avisa al servicio de que el usuario cerró el gato: que no se lo relance.</summary>
-    public Task QuitSessionAsync(int sessionId, CancellationToken ct = default) =>
-        SendAsync(new IpcRequest { Kind = RequestKind.QuitSession, TargetSessionId = sessionId }, ct,
-            _ => true);
+    public Task QuitSessionAsync(CancellationToken ct = default) =>
+        SendAsync(new IpcRequest { Kind = RequestKind.QuitSession }, ct, _ => true);
 
     public Task SwitchToSessionAsync(int sessionId, CancellationToken ct = default) =>
         SendAsync(new IpcRequest { Kind = RequestKind.SwitchToSession, TargetSessionId = sessionId }, ct,

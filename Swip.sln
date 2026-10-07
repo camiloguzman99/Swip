@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -8,6 +8,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swip.Service", "src\Swip.Service\Swip.Service.csproj", "{B2222222-2222-2222-2222-222222222222}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swip.App", "src\Swip.App\Swip.App.csproj", "{C3333333-3333-3333-3333-333333333333}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A86846A7-ADF5-4610-91AB-B5863AE77F50}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swip.Tests", "tests\Swip.Tests\Swip.Tests.csproj", "{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,5 +31,12 @@ Global
 		{C3333333-3333-3333-3333-333333333333}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3333333-3333-3333-3333-333333333333}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3333333-3333-3333-3333-333333333333}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FA2B5266-743E-4370-A8DE-E98D4A3AC5F0} = {A86846A7-ADF5-4610-91AB-B5863AE77F50}
 	EndGlobalSection
 EndGlobal

@@ -81,19 +81,34 @@ try {
     Stop-Swip $ServiceName
 
     $zipUrl  = "https://github.com/$Owner/$Repo/releases/download/latest/Swip-win-x64.zip"
+    $shaUrl  = "$zipUrl.sha256"
     $tmp     = Join-Path $env:TEMP ("swip-update-" + [Guid]::NewGuid().ToString("N"))
     $zipPath = Join-Path $env:TEMP "Swip-win-x64.zip"
+    $shaPath = Join-Path $env:TEMP "Swip-win-x64.zip.sha256"
 
     Write-Host "==> Descargando la última versión..." -ForegroundColor Cyan
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    foreach ($f in @($zipPath, $shaPath)) { if (Test-Path $f) { Remove-Item $f -Force } }
 
-    # Reintentos: tras publicar una versión puede haber un 404 transitorio de GitHub.
+    # Reintentos: tras publicar una versión puede haber un 404 transitorio de GitHub, o un instante
+    # en que el zip y su hash son de versiones distintas (se suben uno tras otro).
+    # NUNCA se instala un zip cuyo SHA-256 no coincida con el publicado: protege de descargas
+    # corruptas o incompletas y de un zip sustituido sin su hash.
     $downloaded = $false
     for ($i = 1; $i -le 6; $i++) {
         try {
             Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
-            if ((Test-Path $zipPath) -and (Get-Item $zipPath).Length -ge 10000) { $downloaded = $true; break }
+            Invoke-WebRequest -Uri $shaUrl -OutFile $shaPath -UseBasicParsing
+            if ((Get-Item $zipPath).Length -lt 10000) { throw "el zip descargado es demasiado pequeño" }
+
+            $expected = ((Get-Content $shaPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+            $actual   = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -notmatch '^[0-9a-f]{64}$') { throw "el archivo .sha256 no es válido" }
+            if ($actual -ne $expected) { throw "SHA-256 distinto (esperado $expected, obtenido $actual)" }
+
+            Write-Host "   SHA-256 verificado: $actual" -ForegroundColor DarkGray
+            $downloaded = $true
+            break
         }
         catch {
             Write-Host "   (intento $i/6: $($_.Exception.Message))" -ForegroundColor DarkYellow
@@ -101,7 +116,7 @@ try {
         Start-Sleep -Seconds 5
     }
     if (-not $downloaded) {
-        throw "No se pudo descargar la última versión tras varios intentos ($zipUrl)."
+        throw "No se pudo descargar y VERIFICAR la última versión tras varios intentos ($zipUrl). No se instaló nada."
     }
 
     Write-Host "==> Extrayendo..." -ForegroundColor Cyan
@@ -137,7 +152,7 @@ try {
     } catch { Write-Host "   (no se pudo crear el acceso directo: $($_.Exception.Message))" -ForegroundColor DarkYellow }
 
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $zipPath, $shaPath -Force -ErrorAction SilentlyContinue
 
     Write-Host ""
     Write-Host "Swip actualizado correctamente." -ForegroundColor Green

@@ -22,6 +22,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Pruebas
+        run: dotnet test tests/Swip.Tests/Swip.Tests.csproj -c Release
+
       - name: Publicar servicio
         run: dotnet publish src/Swip.Service/Swip.Service.csproj -c Release -r win-x64 --self-contained false -o publish/Service
 
@@ -38,6 +41,14 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path publish/* -DestinationPath Swip-win-x64.zip -Force
 
+      - name: Calcular SHA-256 del paquete
+        shell: pwsh
+        run: |
+          # update.ps1 descarga este archivo junto al zip y se niega a instalar si no coinciden.
+          $hash = (Get-FileHash Swip-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Swip-win-x64.zip" | Set-Content -Path Swip-win-x64.zip.sha256 -Encoding ascii
+          Write-Host "SHA-256: $hash"
+
       - name: Publicar release "latest"
         shell: pwsh
         env:
@@ -52,4 +63,4 @@ jobs:
               --notes "Compilación automática (rolling)" `
               --target ${{ github.sha }}
           }
-          gh release upload latest Swip-win-x64.zip --clobber
+          gh release upload latest Swip-win-x64.zip Swip-win-x64.zip.sha256 --clobber

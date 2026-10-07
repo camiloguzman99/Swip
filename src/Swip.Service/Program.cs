@@ -3,14 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Swip.Service;
 
-// Modo ayudante: lanzado por el propio servicio dentro de la sesión objetivo para enumerar
-// sus ventanas. No arranca el host del servicio; enumera, imprime JSON a un archivo y sale.
-if (args.Length >= 2 && args[0] == "--enumerate-windows")
-{
-    var apps = WindowEnumeratorFile.Run(args[1]);
-    return apps;
-}
-
 // Modo diagnóstico: imprime TODAS las sesiones que Windows reporta y si Swip las cuenta como
 // usuario. Ejecútalo en una consola de administrador:
 //   "C:\Program Files\Swip\Service\Swip.Service.exe" --diagnose
