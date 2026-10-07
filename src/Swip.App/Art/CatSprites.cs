@@ -60,6 +60,14 @@ public static class BoxSprites
     public const double AspectW = 394.0;
     public const double AspectH = 282.0;
 
+    // Margen transparente superior de cada PNG (fracción del alto del lienzo). La caja cerrada
+    // empieza en y=46/282 y la abierta (con las solapas) en y=5/282; la colisión debe usar el
+    // borde VISIBLE de cada estado, no el del lienzo, o el gato flota sobre la caja cerrada.
+    public const double TopInsetClosed = 46.0 / 282.0;
+    public const double TopInsetOpen = 5.0 / 282.0;
+
+    public static double TopInset(bool open) => open ? TopInsetOpen : TopInsetClosed;
+
     private static BitmapImage? _closed;
     private static BitmapImage? _open;
 

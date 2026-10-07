@@ -594,16 +594,20 @@ public partial class MainWindow : Window
         double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
         agent.X = Math.Clamp(boxLeft + BoxW / 2 - catW / 2, 0, Math.Max(0, Width - catW));
 
+        // Borde superior VISIBLE de la caja en su estado actual (los PNG tienen distinto margen).
+        double visibleTop = boxTop + BoxH * BoxSprites.TopInset(_boxOpen);
+        double visibleH = boxTop + BoxH - visibleTop;
+
         if (_boxOpen)
         {
-            // Dentro de la caja: base al 50% del alto y por detrás de la caja (asoma por arriba).
-            agent.Y = boxTop + BoxH * 0.5 - CatPx;
+            // Dentro de la caja: base al 50% del alto visible y por detrás (asoma por arriba).
+            agent.Y = visibleTop + visibleH * 0.5 - CatPx;
             SetZ(sprite, -1);
         }
         else
         {
-            // Encima de la caja cerrada, por delante.
-            agent.Y = boxTop - CatPx;
+            // Encima de la caja cerrada, apoyado en su borde visible, por delante.
+            agent.Y = visibleTop - CatPx;
             SetZ(sprite, 0);
         }
     }
@@ -622,8 +626,9 @@ public partial class MainWindow : Window
 
         double catW = sprite.SpriteWidth > 0 ? sprite.SpriteWidth : CatPx;
         double cx = sprite.Agent.X, cy = sprite.Agent.Y;
+        double visibleTop = boxTop + BoxH * BoxSprites.TopInset(_boxOpen);
         bool overlapX = cx + catW > boxLeft && cx < boxLeft + BoxW;
-        bool overlapY = cy + CatPx > boxTop - CatPx * 0.5 && cy < boxTop + BoxH;
+        bool overlapY = cy + CatPx > visibleTop - CatPx * 0.5 && cy < boxTop + BoxH;
         return overlapX && overlapY;
     }
 
@@ -804,7 +809,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+    private async void Exit_Click(object sender, RoutedEventArgs e)
+    {
+        // Avisar al servicio ANTES de cerrar: si no, su vigilante relanzaría el gato en ~30 s.
+        // Si el servicio no responde, cerramos igualmente (el timeout del cliente es de 2 s).
+        try { await _client.QuitSessionAsync(Process.GetCurrentProcess().SessionId); }
+        catch { /* sin servicio no hay vigilante que relance */ }
+        Close();
+    }
 
     private void ShowStatus(string? message)
     {

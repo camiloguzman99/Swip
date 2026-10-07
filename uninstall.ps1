@@ -20,8 +20,17 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     return
 }
 
+# Primero el servicio: su vigilante relanza el gato cada 30 s y bloquearía los archivos.
+Write-Host "==> Deteniendo el servicio (su vigilante relanza el gato)..." -ForegroundColor Cyan
+$pre = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($pre -and $pre.Status -ne "Stopped") {
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    try { $pre.WaitForStatus("Stopped", "00:00:20") } catch { }
+}
+
 Write-Host "==> Cerrando el gato (si está abierto)..." -ForegroundColor Cyan
 Get-Process -Name "Swip" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 600
 
 Write-Host "==> Quitando el arranque automático..." -ForegroundColor Cyan
 foreach ($sc in @(

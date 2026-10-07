@@ -109,12 +109,20 @@ internal sealed class PipeServer
 
         RequestKind.PublishApps => PublishResponse(request),
 
+        RequestKind.QuitSession => QuitResponse(request.TargetSessionId),
+
         RequestKind.SwitchToSession => SwitchResponse(request.TargetSessionId),
 
         RequestKind.StartLogon => StartLogonResponse(),
 
         _ => new IpcResponse { Ok = false, Error = "Petición no reconocida." },
     };
+
+    private IpcResponse QuitResponse(int sessionId)
+    {
+        _sessions.QuitSession(sessionId);
+        return new IpcResponse { Ok = true };
+    }
 
     private IpcResponse PublishResponse(IpcRequest request)
     {

@@ -36,6 +36,11 @@ public sealed class ServiceClient
             ActiveConsole = activeConsole,
         }, ct, _ => true);
 
+    /// <summary>Avisa al servicio de que el usuario cerró el gato: que no se lo relance.</summary>
+    public Task QuitSessionAsync(int sessionId, CancellationToken ct = default) =>
+        SendAsync(new IpcRequest { Kind = RequestKind.QuitSession, TargetSessionId = sessionId }, ct,
+            _ => true);
+
     public Task SwitchToSessionAsync(int sessionId, CancellationToken ct = default) =>
         SendAsync(new IpcRequest { Kind = RequestKind.SwitchToSession, TargetSessionId = sessionId }, ct,
             _ => true);

@@ -204,6 +204,19 @@ internal sealed class SessionManager
     /// Se usa al arrancar el servicio (y tras una actualización) para que el gato reaparezca en
     /// todas las sesiones, no solo en la que corrió el actualizador.
     /// </summary>
+    /// <summary>
+    /// Sesiones donde el usuario cerró el gato con "Salir": el vigilante no se lo relanza.
+    /// Solo en memoria a propósito: al reiniciar o actualizar el servicio, el gato vuelve.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, byte> QuitSessions = new();
+
+    /// <summary>El usuario pulsó "Salir" en esa sesión: dejar de relanzarle el gato.</summary>
+    public void QuitSession(int sessionId)
+    {
+        QuitSessions[sessionId] = 0;
+        Log($"QuitSession sesión={sessionId}: el vigilante no relanzará el gato en ella");
+    }
+
     public void RelaunchAppInAllSessions()
     {
         string? serviceExe = Environment.ProcessPath;
@@ -213,9 +226,18 @@ internal sealed class SessionManager
         string appExe = Path.Combine(installRoot, "App", "Swip.exe");
         if (!File.Exists(appExe)) { Log($"RelaunchApp: no existe {appExe}"); return; }
 
-        foreach (var raw in EnumerateRaw())
+        var rawSessions = EnumerateRaw().ToList();
+
+        // Olvidar las exclusiones de sesiones que ya no existen (un nuevo inicio de sesión tiene
+        // otro id, así que el gato vuelve a arrancar solo en la siguiente sesión).
+        var liveIds = rawSessions.Select(r => r.SessionId).ToHashSet();
+        foreach (int id in QuitSessions.Keys.Where(id => !liveIds.Contains(id)).ToList())
+            QuitSessions.TryRemove(id, out _);
+
+        foreach (var raw in rawSessions)
         {
             if (!IsUserSession(raw)) continue;
+            if (QuitSessions.ContainsKey(raw.SessionId)) continue; // el usuario pulsó "Salir"
             try
             {
                 if (IsAppRunning(raw.SessionId, "Swip")) continue;

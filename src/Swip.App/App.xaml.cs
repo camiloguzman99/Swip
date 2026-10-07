@@ -6,8 +6,21 @@ namespace Swip.App;
 
 public partial class App : Application
 {
+    // Se guarda en un campo estático para que el mutex viva tanto como el proceso.
+    private static Mutex? _singleInstance;
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Una sola instancia POR SESIÓN: el espacio "Local\" es privado de cada sesión, así que
+        // cada usuario tiene su gato pero nunca dos. Evita duplicados cuando coinciden el acceso
+        // directo de inicio y el vigilante del servicio. Un duplicado sale sin crear nada.
+        _singleInstance = new Mutex(true, @"Local\Swip.SingleInstance", out bool isFirst);
+        if (!isFirst)
+        {
+            Environment.Exit(0);
+            return;
+        }
+
         base.OnStartup(e);
         ApplyWindowsAccent();
     }

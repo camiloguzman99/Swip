@@ -37,6 +37,12 @@ public enum RequestKind
     /// <summary>El gato publica las apps de SU sesión para que otras sesiones las consulten.</summary>
     PublishApps,
 
+    /// <summary>
+    /// El usuario pulsó "Salir" en la sesión indicada (TargetSessionId): el vigilante del servicio
+    /// no debe relanzarle el gato hasta que esa sesión cierre o el servicio se reinicie.
+    /// </summary>
+    QuitSession,
+
     /// <summary>Conecta (cambia) a la sesión indicada. Requiere el servicio como SYSTEM.</summary>
     SwitchToSession,
 
