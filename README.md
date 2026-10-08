@@ -43,9 +43,10 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 
 **Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con **desenfoque** del
 fondo y un tinte negro al 20 % (80 % de transparencia); sin borde de color y filas sin tarjetas de
-fondo. **Esquinas cuadradas**: el desenfoque de Windows cubre todo el rectángulo de la ventana y no
-respeta el recorte redondeado (se comprobó), así que con esquinas redondeadas asoman los picos del
-desenfoque; el valor es `MenuCornerRadius`, en `App.xaml`. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
+fondo. Esquinas redondeadas: el desenfoque de Windows cubre todo el rectángulo de la ventana y no
+respeta el recorte redondeado (se comprobó), así que en las esquinas puede asomar un resto del
+desenfoque; es una limitación conocida y aceptada. Con `MenuCornerRadius` a 0 (en `App.xaml`) las
+esquinas serían cuadradas y ese resto desaparecería. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
 `C:\ProgramData\Swip\settings.json` y vuelve el fondo normal con un 30 % de transparencia; los
 colores se cambian en `MenuPanelBrush` / `MenuPanelBlurBrush`, en `App.xaml`):
 1. Nombre de usuario y un botón blanco que despliega color y gordura.
