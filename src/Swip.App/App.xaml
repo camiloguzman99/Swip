@@ -5,22 +5,21 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <!-- Fondo del panel de los menús. El panel es TRANSPARENTE: solo se ven el borde de color y las
-             filas. Alfa 01 (de 255) en vez de 00 a propósito: con alfa 0 Windows deja pasar los clics a
-             la ventana de detrás, y un clic en el hueco entre dos filas cerraría el menú.
-             Para tintarlo sube el primer par de dígitos: #55000000 = negro al ~33%. -->
-        <SolidColorBrush x:Key="MenuPanelBrush" Color="#01000000" />
+        <!-- Fondo del panel de los menús: negro con un 10% de transparencia (E6 = 230 de 255 = 90% opaco).
+             Para cambiarlo, edita el primer par de dígitos: FF = opaco, CC = 20% transparente,
+             99 = 40% transparente. -->
+        <SolidColorBrush x:Key="MenuPanelBrush" Color="#E6000000" />
 
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />
         <SolidColorBrush x:Key="AccentFgBrush" Color="#FF202124" />
 
-        <!-- Fila de lista pulsable: transparente, solo resalta con el mouseover -->
+        <!-- Fila de lista pulsable: sin fondo (Transparent sigue recibiendo el clic), solo resalta con el mouseover -->
         <Style x:Key="ListRow" TargetType="Button">
             <Setter Property="Margin" Value="0,0,0,6" />
             <Setter Property="Padding" Value="12,9" />
-            <Setter Property="Background" Value="#66000000" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#FFE8EAED" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="12" />
@@ -126,7 +125,7 @@
 
         <!-- Tarjeta de lista no pulsable (encabezado / item de app) -->
         <Style x:Key="ListCard" TargetType="Border">
-            <Setter Property="Background" Value="#66000000" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="CornerRadius" Value="9" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="Margin" Value="0,0,0,6" />
