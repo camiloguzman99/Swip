@@ -26,7 +26,7 @@
         <Popup x:Name="InfoPopup" Placement="Custom" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
             <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="10" MinWidth="260"
-                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
+                    BorderBrush="{StaticResource MenuBorderBrush}" BorderThickness="2">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>
@@ -127,7 +127,7 @@
         <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Custom"
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
             <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="10" MinWidth="200"
-                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
+                    BorderBrush="{StaticResource MenuBorderBrush}" BorderThickness="2">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
                 </Border.Effect>

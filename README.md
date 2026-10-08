@@ -39,7 +39,7 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 | Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
 
 **Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con **desenfoque** del
-fondo y un 60 % de transparencia; borde del color de énfasis de Windows y filas sin tarjetas de
+fondo y un 50 % de transparencia; sin borde de color (marco invisible) y filas sin tarjetas de
 fondo. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
 `C:\ProgramData\Swip\settings.json` y vuelve el fondo normal con un 30 % de transparencia; los
 colores se cambian en `MenuPanelBrush` / `MenuPanelBlurBrush`, en `App.xaml`):

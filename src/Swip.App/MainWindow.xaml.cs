@@ -899,7 +899,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Al abrirse un menú: con <c>MenuBlur</c> activo, desenfoca lo de detrás y usa el fondo más
-    /// transparente (60%); si no, o si Windows rechaza el desenfoque, el fondo normal (30%).
+    /// transparente (50%); si no, o si Windows rechaza el desenfoque, el fondo normal (30%).
     /// Se hace en cada apertura porque Windows crea una ventana nueva cada vez.
     /// </summary>
     private void Popup_Opened(object? sender, EventArgs e)

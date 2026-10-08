@@ -10,9 +10,14 @@
              B3 = 30%, 99 = 40%, 66 = 60% transparente. -->
         <SolidColorBrush x:Key="MenuPanelBrush" Color="#B3000000" />
 
-        <!-- Fondo del panel cuando el desenfoque está activo (ajuste MenuBlur): negro con un 60% de
-             transparencia (66 = 102 de 255 = 40% opaco); lo que hay detrás se ve desenfocado. -->
-        <SolidColorBrush x:Key="MenuPanelBlurBrush" Color="#66000000" />
+        <!-- Fondo del panel cuando el desenfoque está activo (ajuste MenuBlur): negro con un 50% de
+             transparencia (80 = 128 de 255 = 50% opaco); lo que hay detrás se ve desenfocado.
+             Antes: 66 = 60% de transparencia. -->
+        <SolidColorBrush x:Key="MenuPanelBlurBrush" Color="#80000000" />
+
+        <!-- Borde del marco de los menús: invisible (el marco es el propio panel desenfocado). Para
+             volver a tener un borde, pon un color, p. ej. #FFFFFFFF, o el de énfasis de Windows. -->
+        <SolidColorBrush x:Key="MenuBorderBrush" Color="#00000000" />
 
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
