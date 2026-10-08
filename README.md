@@ -42,7 +42,14 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 1. Nombre de usuario y un botón blanco que despliega color y gordura.
 2. Apps con ventana de esa sesión, con **CPU %** y **RAM %** (agregados entre todos los procesos
    de cada app, como el Administrador de tareas).
-3. **Cambiar a esta sesión** (sin confirmación) o, si la cuenta no tiene sesión, **Iniciar sesión**.
+3. **Cambiar a esta sesión** (sin confirmación); en la sesión actual el mismo botón sale en gris
+   como **En esta sesión**, y si la cuenta no tiene sesión, **Iniciar sesión**.
+
+Qué cuenta como "app abierta": lo que verías en la barra de tareas o en Alt+Tab. Se descartan las
+apps de la Tienda suspendidas (Windows deja su ventana "visible" pero oculta), el marco
+`ApplicationFrameHost` (se muestra la app real que hay dentro), el escritorio, la barra de tareas
+y el menú Inicio; el **Explorador de archivos** sí cuenta. Las ventanas en otro escritorio virtual
+también cuentan. Qué se aceptó y qué se descartó queda en `app-s{N}.log` (solo procesos y clases).
 
 ---
 

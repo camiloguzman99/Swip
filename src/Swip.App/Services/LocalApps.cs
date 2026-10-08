@@ -21,6 +21,30 @@ public static class LocalApps
     [DllImport("user32.dll", SetLastError = true)] private static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool ProcessIdToSessionId(uint pid, out uint sid);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc f, IntPtr p);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int value, int size);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    private const int DWMWA_CLOAKED = 14;
+
+    // IVirtualDesktopManager: documentado por Microsoft. Solo se usa para distinguir una ventana
+    // "oculta" de una app de la Tienda suspendida (se descarta) de una que está en otro escritorio
+    // virtual (es una app abierta del usuario). Solo se declara el primer método de la interfaz.
+    [ComImport, Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IVirtualDesktopManager
+    {
+        [PreserveSig]
+        int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, [MarshalAs(UnmanagedType.Bool)] out bool onCurrentDesktop);
+    }
+
+    [ComImport, Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
+    private class VirtualDesktopManagerClass { }
+
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOOLWINDOW = 0x00000080;
 
@@ -45,38 +69,133 @@ public static class LocalApps
 
     public static List<AppInfo> Enumerate() => AppUsage.Collect(WindowedNames);
 
-    /// <summary>Nombres de proceso con ventana visible en la sesión actual, con un título por nombre.</summary>
+    /// <summary>
+    /// Nombres de proceso con ventana "de app" en la sesión actual (las que verías en la barra de
+    /// tareas), con un título por nombre. Qué cuenta como app lo decide <see cref="WindowFilter"/>;
+    /// aquí solo se reúnen los datos de cada ventana.
+    /// </summary>
     private static Dictionary<string, string> WindowedNames()
     {
         uint ownSession = (uint)Process.GetCurrentProcess().SessionId;
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        // Para diagnóstico: qué se aceptó y qué se descartó (solo proceso y clase, nunca títulos).
+        var accepted = new List<string>();
+        var rejected = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var skipped = new SortedDictionary<WindowVerdict, int>();
+
         EnumWindows((hWnd, _) =>
         {
-            if (!IsWindowVisible(hWnd)) return true;
-            if ((GetWindowLong(hWnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return true;
-            int len = GetWindowTextLength(hWnd);
-            if (len <= 0) return true;
-            var sb = new StringBuilder(len + 1);
-            GetWindowText(hWnd, sb, sb.Capacity);
-            string title = sb.ToString();
-            if (string.IsNullOrWhiteSpace(title)) return true;
+            if (!IsWindowVisible(hWnd)) return true; // la inmensa mayoría: descarte barato y sin registro
             GetWindowThreadProcessId(hWnd, out uint pid);
             if (pid == 0) return true;
             if (ProcessIdToSessionId(pid, out uint sid) && sid != ownSession) return true;
 
-            try
+            string title = TitleOf(hWnd);
+            string name;
+            try { using var p = Process.GetProcessById((int)pid); name = p.ProcessName; }
+            catch { return true; }
+
+            string cls = ClassOf(hWnd);
+
+            // Las apps de la Tienda se dibujan dentro de un marco de ApplicationFrameHost: hay que
+            // averiguar la app real, o todas saldrían como "Application Frame Host".
+            bool unresolvedHost = false;
+            if (name.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
             {
-                using var p = Process.GetProcessById((int)pid);
-                string name = p.ProcessName;
-                if (AppUsage.IsShell(name)) return true;
-                if (!result.ContainsKey(name)) result[name] = title;
+                string? real = ResolveStoreApp(hWnd, pid);
+                if (real is null) unresolvedHost = true;
+                else name = real;
             }
-            catch { }
+
+            bool cloaked = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out int c, sizeof(int)) == 0 && c != 0;
+            GetWindowRect(hWnd, out var r);
+
+            var verdict = WindowFilter.Classify(new WindowFacts(
+                IsVisible: true,
+                IsToolWindow: (GetWindowLong(hWnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0,
+                HasTitle: !string.IsNullOrWhiteSpace(title),
+                IsCloaked: cloaked,
+                OnOtherVirtualDesktop: cloaked && IsOnOtherVirtualDesktop(hWnd),
+                IsMinimized: IsIconic(hWnd),
+                Width: r.Right - r.Left,
+                Height: r.Bottom - r.Top,
+                ProcessName: name,
+                ClassName: cls,
+                IsUnresolvedHost: unresolvedHost));
+
+            if (verdict == WindowVerdict.Accept)
+            {
+                if (!result.ContainsKey(name))
+                {
+                    result[name] = title;
+                    accepted.Add($"{name}[{cls}]");
+                }
+            }
+            else
+            {
+                skipped[verdict] = skipped.GetValueOrDefault(verdict) + 1;
+                // Solo los descartes "interesantes" para diagnosticar, con un tope para no llenar el log.
+                bool interesting = verdict is WindowVerdict.Cloaked or WindowVerdict.Shell
+                    or WindowVerdict.UnresolvedHost or WindowVerdict.TooSmall;
+                if (interesting && rejected.Count < 14)
+                    rejected.Add($"{name}[{cls}]:{verdict}");
+            }
             return true;
         }, IntPtr.Zero);
 
+        AppLog.WriteOnChange("windows",
+            $"Ventanas aceptadas: {string.Join(", ", accepted)} | descartadas: " +
+            $"{string.Join(", ", skipped.Select(kv => $"{kv.Key}={kv.Value}"))} " +
+            $"({string.Join(", ", rejected)})");
+
         return result;
+    }
+
+    private static string TitleOf(IntPtr hWnd)
+    {
+        int len = GetWindowTextLength(hWnd);
+        if (len <= 0) return string.Empty;
+        var sb = new StringBuilder(len + 1);
+        GetWindowText(hWnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
+    private static string ClassOf(IntPtr hWnd)
+    {
+        var sb = new StringBuilder(256);
+        return GetClassName(hWnd, sb, sb.Capacity) > 0 ? sb.ToString() : string.Empty;
+    }
+
+    /// <summary>
+    /// Proceso de la app de la Tienda que hay dentro de un marco de ApplicationFrameHost: su
+    /// ventana hija "Windows.UI.Core.CoreWindow" pertenece a otro proceso, el de la app real.
+    /// Null si no se encuentra (p. ej. app suspendida sin ventana interior).
+    /// </summary>
+    private static string? ResolveStoreApp(IntPtr frame, uint hostPid)
+    {
+        string? found = null;
+        EnumChildWindows(frame, (child, _) =>
+        {
+            if (ClassOf(child) != "Windows.UI.Core.CoreWindow") return true;
+            GetWindowThreadProcessId(child, out uint childPid);
+            if (childPid == 0 || childPid == hostPid) return true;
+            try { using var p = Process.GetProcessById((int)childPid); found = p.ProcessName; }
+            catch { }
+            return found is null; // seguir buscando solo si aún no se resolvió
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>True solo si Windows confirma que la ventana está en un escritorio virtual que no es el actual.</summary>
+    private static bool IsOnOtherVirtualDesktop(IntPtr hWnd)
+    {
+        try
+        {
+            var manager = (IVirtualDesktopManager)new VirtualDesktopManagerClass();
+            return manager.IsWindowOnCurrentVirtualDesktop(hWnd, out bool onCurrent) == 0 && !onCurrent;
+        }
+        catch { return false; } // sin certeza, se trata como oculta (se descarta)
     }
 
     internal static ulong TotalPhysicalMemory()
@@ -89,16 +208,6 @@ public static class LocalApps
 /// <summary>Agrega CPU%/RAM% por app y resuelve el nombre amigable. Compartido por la lógica local.</summary>
 internal static class AppUsage
 {
-    public static bool IsShell(string name) => name.ToLowerInvariant() switch
-    {
-        "explorer" => true,
-        "textinputhost" => true,
-        "shellexperiencehost" => true,
-        "searchhost" => true,
-        "startmenuexperiencehost" => true,
-        _ => false,
-    };
-
     public static List<AppInfo> Collect(Func<Dictionary<string, string>> windowedNames)
     {
         var windowed = windowedNames();
@@ -179,6 +288,10 @@ internal static class AppUsage
 
     private static string FriendlyName(List<Process> procs, string fallback)
     {
+        // explorer.exe es también el escritorio y la barra de tareas; para el usuario es el Explorador.
+        if (string.Equals(fallback, "explorer", StringComparison.OrdinalIgnoreCase))
+            return "Explorador de Windows";
+
         if (FriendlyCache.TryGetValue(fallback, out var cached)) return cached;
 
         foreach (var p in procs)

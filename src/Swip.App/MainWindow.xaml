@@ -110,6 +110,12 @@
                     <Button Content="Cambiar a esta sesión" Style="{StaticResource ListRowAccent}"
                             Margin="0,8,0,0" Tag="{Binding SessionId}" Click="Switch_Click"
                             Visibility="{Binding CanSwitch, Converter={StaticResource BoolToVis}}" />
+                    <!-- Mismo tamaño y forma que "Cambiar a esta sesión", pero gris y sin acción -->
+                    <Border Style="{StaticResource ListRowDisabled}" Margin="0,8,0,0"
+                            Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="En esta sesión" Foreground="#FF808080" FontSize="12"
+                                   FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    </Border>
                     <Button Content="Iniciar sesión" Style="{StaticResource ListRowAccent}"
                             Margin="0,8,0,0" Click="StartLogon_Click"
                             Visibility="{Binding ShowNoSession, Converter={StaticResource BoolToVis}}" />
