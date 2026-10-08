@@ -189,6 +189,8 @@ public partial class MainWindow : Window
     private void Deactivate()
     {
         AppLog.Write("Sesión fuera de pantalla (en segundo plano o bloqueada): se detiene el render.");
+        try { PersistPositions(); }
+        catch (Exception ex) { AppLog.Write($"No se pudieron guardar las posiciones al salir: {ex.Message}"); }
         _loop.Stop();
         _refresh.Stop();
         _publish.Stop();
@@ -301,6 +303,25 @@ public partial class MainWindow : Window
         var before = _settings;
         _settings = _store.Update(mutate);
         ApplyDelta(SettingsDelta.Between(before, _settings));
+    }
+
+    /// <summary>
+    /// Guarda dónde está cada gato AHORA, para que la sesión a la que se cambia los muestre en el
+    /// mismo sitio (también al que camina y al que nunca se movió con el ratón). Si otra sesión ya
+    /// movió a un gato desde que lo vimos, a ese no se le pisa la posición.
+    /// </summary>
+    private void PersistPositions()
+    {
+        if (_agents.Count == 0) return;
+
+        // Un gato sentado en la caja no está "en el suelo": su X es la de la caja.
+        var cats = _agents.Values
+            .Where(a => !a.OnBox)
+            .Select(a => new CatSnapshot(a.Key, a.Color, a.FatLevel, a.X))
+            .ToList();
+        var known = _settings.Cats.ToDictionary(kv => kv.Key, kv => kv.Value.X);
+
+        UpdateSettings(s => CatPositions.Apply(s, cats, known));
     }
 
     private void ApplyDelta(SettingsDelta delta)
@@ -530,6 +551,7 @@ public partial class MainWindow : Window
 
             double maxX = Math.Max(0, Width - CatPx);
             double baseY = Height - CatPx;
+            bool placedNewCat = false; // algún gato recibió una X aleatoria que hay que compartir
 
             foreach (var u in users)
             {
@@ -557,6 +579,7 @@ public partial class MainWindow : Window
                     agent.Color = CatSprites.Normalize(pref?.Color ?? defaultColor);
                     agent.FatLevel = pref?.Fat ?? 0;
                     if (pref?.X is double px) agent.X = Math.Clamp(px, 0, maxX);
+                    else placedNewCat = true;
 
                     _agents[u.UserName] = agent;
 
@@ -569,6 +592,10 @@ public partial class MainWindow : Window
                     _sprites[u.UserName] = sprite;
                 }
             }
+
+            // Sin esto, cada sesión sorteaba su propia X para los gatos nunca movidos y los veías en
+            // sitios distintos al cambiar de usuario.
+            if (placedNewCat) PersistPositions();
 
             UpdateEmptyHint(_sprites.Count == 0
                 ? "No se detectaron usuarios."
@@ -936,6 +963,7 @@ public partial class MainWindow : Window
         try
         {
             InfoPopup.IsOpen = false;
+            PersistPositions();
             await _client.StartLogonAsync();
         }
         catch (Exception ex)
@@ -951,6 +979,7 @@ public partial class MainWindow : Window
         try
         {
             InfoPopup.IsOpen = false;
+            PersistPositions(); // la otra sesión leerá estas posiciones al ponerse en pantalla
             await _client.SwitchToSessionAsync(sessionId); // cambio directo, sin confirmación
         }
         catch (Exception ex)

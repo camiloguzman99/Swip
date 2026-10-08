@@ -83,9 +83,10 @@ segundo plano no se refleja hasta que vuelvas a entrar en ella.
 ### Qué hace Swip cuando la sesión no está en pantalla
 
 Si cambias de usuario o bloqueas, el gato de esa sesión **deja de animarse, refrescar y publicar**
-(nadie lo ve). Al volver a pantalla **relee la ubicación y el estado**: ajustes compartidos
-(lo que la otra sesión haya movido), tamaño del área de trabajo (monitor, resolución, barra de
-tareas) y estado de todas las sesiones.
+(nadie lo ve). Justo antes de irse **guarda dónde está cada gato** (también el que camina), y al
+volver a pantalla la otra sesión **relee la ubicación y el estado**: esas posiciones, los ajustes
+compartidos, el tamaño del área de trabajo (monitor, resolución, barra de tareas) y el estado de
+todas las sesiones. Así los gatos aparecen en el mismo sitio en las dos sesiones.
 
 ---
 
@@ -181,7 +182,8 @@ dos sesiones a la vez en pantalla (Windows de escritorio solo muestra una).
   queda abierta en segundo plano.
 - Lo que muestra una sesión en segundo plano es lo último que vio (ver arriba). Tras reiniciar o
   actualizar el servicio la caché está vacía hasta que visites esa sesión.
-- El gato sentado en la caja no se recuerda al reiniciar.
+- El gato sentado en la caja no se comparte entre sesiones ni se recuerda al reiniciar (en la otra sesión
+  aparece en el suelo, en la X donde estaba).
 - WPF solo compila en Windows; el CI (`windows-latest`) compila y ejecuta las pruebas.
 
 ## Desarrollo
