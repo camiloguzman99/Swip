@@ -1071,17 +1071,27 @@ public partial class MainWindow : Window
 
         try
         {
-            // Se lanza elevado (UAC); el script detiene el gato, actualiza y lo relanza.
+            ConfigPopup.IsOpen = false;
+
+            // En segundo plano: elevado (el aviso de UAC es inevitable, hay que parar el servicio y
+            // escribir en Archivos de programa) pero SIN ventana. -Silent quita las pausas "Pulsa
+            // Enter" (ocultas esperarían una tecla para siempre); el resultado queda en
+            // %ProgramData%\Swip\update.log y, si falla, el propio script muestra un aviso.
+            // Si va bien, se nota porque el gato desaparece unos segundos y vuelve.
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\" -Silent",
                 UseShellExecute = true,
                 Verb = "runas",
-                WindowStyle = ProcessWindowStyle.Normal,
+                WindowStyle = ProcessWindowStyle.Hidden,
             };
             Process.Start(psi);
-            ConfigPopup.IsOpen = false;
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED: rechazaste el aviso de UAC. No es un fallo: simplemente no se actualiza.
+            AppLog.Write("Actualización cancelada en el aviso de UAC.");
         }
         catch (Exception ex)
         {

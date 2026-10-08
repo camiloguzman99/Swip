@@ -15,6 +15,12 @@
              Para más tinte, sube el primer par: 66 = 40%, 80 = 50%, B3 = 70%. -->
         <SolidColorBrush x:Key="MenuPanelBlurBrush" Color="#33000000" />
 
+        <!-- Esquinas de los paneles de los menús. 0 = CUADRADAS, a propósito: el desenfoque de Windows
+             cubre todo el rectángulo de la ventana y NO respeta el recorte redondeado (se comprobó: el
+             recorte se aplicaba y las esquinas seguían viéndose), así que con esquinas redondeadas
+             asoman los 4 picos del desenfoque. Para redondearlas aceptando ese resto, pon p. ej. 12. -->
+        <CornerRadius x:Key="MenuCornerRadius">0</CornerRadius>
+
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />

@@ -102,6 +102,9 @@ internal static class BlurHelper
     /// <returns>Texto para el log con lo que se hizo (o por qué no se pudo).</returns>
     public static string RoundCorners(Visual visual, double cornerRadiusDip)
     {
+        // Esquinas cuadradas: la ventana ya coincide con el panel, no hay nada que recortar.
+        if (cornerRadiusDip <= 0) return "esquinas cuadradas (sin recorte)";
+
         try
         {
             if (PresentationSource.FromVisual(visual) is not HwndSource source)

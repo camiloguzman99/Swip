@@ -2,17 +2,27 @@
 .SYNOPSIS
     Actualiza Swip a la última versión publicada, SIN necesidad de descargar el repo.
 .DESCRIPTION
-    Lo primero que hace es CERRAR el gato y DETENER el servicio (para que no haya archivos
-    bloqueados). Luego descarga el release "latest", reemplaza los archivos y vuelve a arrancar.
-    Se auto-eleva. Si algo falla, deja la ventana abierta con el error y relanza el gato.
+    1) Descarga el release "latest" y VERIFICA su SHA-256; 2) lo extrae; 3) solo entonces cierra el
+    gato y detiene el servicio, reemplaza los archivos y lo vuelve a arrancar. Así el gato sigue
+    funcionando durante la descarga y, si esta falla, no se toca nada.
+    Se auto-eleva (UAC).
+
+    Con -Silent no muestra pausas ni espera ninguna tecla: es lo que usa el botón "Actualizar" del
+    gato, que lo lanza sin ventana. Todo queda en %ProgramData%\Swip\update.log y, si algo falla,
+    se muestra un aviso.
+.PARAMETER Silent
+    Modo segundo plano: sin pausas "Pulsa Enter", con registro en update.log y aviso solo si falla.
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File update.ps1
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File update.ps1 -Silent
 #>
 param(
     [string]$Owner       = "camiloguzman99",
     [string]$Repo        = "Swip",
     [string]$ServiceName = "SwipService",
-    [string]$InstallRoot = "$env:ProgramFiles\Swip"
+    [string]$InstallRoot = "$env:ProgramFiles\Swip",
+    [switch]$Silent
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,9 +31,27 @@ $ErrorActionPreference = "Stop"
 $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell.exe -Verb RunAs `
-        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $relaunch = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    if ($Silent) {
+        Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList ($relaunch + " -Silent")
+    }
+    else {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList $relaunch
+    }
     return
+}
+
+# --- Registro (modo silencioso): no hay consola que mirar ---------------------------
+$logFile = Join-Path $env:ProgramData "Swip\update.log"
+$transcribing = $false
+if ($Silent) {
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
+        if ((Test-Path $logFile) -and ((Get-Item $logFile).Length -gt 200KB)) { Remove-Item $logFile -Force }
+        Start-Transcript -Path $logFile -Append | Out-Null
+        $transcribing = $true
+    }
+    catch { }
 }
 
 function Stop-Swip($serviceName) {
@@ -59,26 +87,26 @@ function Copy-WithRetry($src, $dst) {
     }
 }
 
-function Pause-OnError($message) {
-    Write-Host ""
-    Write-Host "ERROR al actualizar:" -ForegroundColor Red
-    Write-Host $message -ForegroundColor Red
-    Write-Host ""
-    Read-Host "Pulsa Enter para cerrar"
+# El gato de ESTA sesión (el de otra sesión no cuenta: lo relanza el servicio).
+function Get-MySwip {
+    $mine = (Get-Process -Id $PID).SessionId
+    Get-Process -Name "Swip" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mine }
 }
 
-$appExe = Join-Path $InstallRoot "App\Swip.exe"
+function Show-Alert($text) {
+    try { (New-Object -ComObject WScript.Shell).Popup($text, 0, "Swip", 16) | Out-Null } catch { }
+}
+
+$appExe  = Join-Path $InstallRoot "App\Swip.exe"
+$failure = $null
 
 try {
-    $Host.UI.RawUI.WindowTitle = "Swip - Actualización"
+    try { $Host.UI.RawUI.WindowTitle = "Swip - Actualización" } catch { }
     Write-Host "============================================" -ForegroundColor Yellow
     Write-Host "   Swip - Actualizando a la ultima version" -ForegroundColor Yellow
     Write-Host "============================================" -ForegroundColor Yellow
+    Write-Host ("   {0}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss")) -ForegroundColor DarkGray
     Write-Host ""
-
-    # --- LO PRIMERO: cerrar el programa y el servicio ---------------------------
-    Write-Host "==> Cerrando Swip (gato y servicio)..." -ForegroundColor Cyan
-    Stop-Swip $ServiceName
 
     $zipUrl  = "https://github.com/$Owner/$Repo/releases/download/latest/Swip-win-x64.zip"
     $shaUrl  = "$zipUrl.sha256"
@@ -86,6 +114,7 @@ try {
     $zipPath = Join-Path $env:TEMP "Swip-win-x64.zip"
     $shaPath = Join-Path $env:TEMP "Swip-win-x64.zip.sha256"
 
+    # --- 1) Descargar y VERIFICAR (el gato y el servicio siguen en marcha) ---------
     Write-Host "==> Descargando la última versión..." -ForegroundColor Cyan
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     foreach ($f in @($zipPath, $shaPath)) { if (Test-Path $f) { Remove-Item $f -Force } }
@@ -119,17 +148,23 @@ try {
         throw "No se pudo descargar y VERIFICAR la última versión tras varios intentos ($zipUrl). No se instaló nada."
     }
 
+    # --- 2) Extraer y comprobar el contenido ANTES de parar nada -------------------
     Write-Host "==> Extrayendo..." -ForegroundColor Cyan
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
     Expand-Archive -Path $zipPath -DestinationPath $tmp -Force
+    if (-not (Test-Path (Join-Path $tmp "Service")) -and -not (Test-Path (Join-Path $tmp "App"))) {
+        throw "El zip no contenía las carpetas Service/App esperadas. No se instaló nada."
+    }
+
+    # --- 3) Solo ahora: cerrar el gato y el servicio, y reemplazar ------------------
+    Write-Host "==> Cerrando Swip (gato y servicio)..." -ForegroundColor Cyan
+    Stop-Swip $ServiceName
 
     Write-Host "==> Reemplazando archivos..." -ForegroundColor Cyan
-    $copied = $false
     foreach ($part in @("Service", "App")) {
         $src = Join-Path $tmp $part
-        if (Test-Path $src) { Copy-WithRetry $src (Join-Path $InstallRoot $part); $copied = $true }
+        if (Test-Path $src) { Copy-WithRetry $src (Join-Path $InstallRoot $part) }
     }
-    if (-not $copied) { throw "El zip no contenía las carpetas Service/App esperadas." }
 
     # Mantener actualizado el propio update.ps1 junto a la instalación.
     $zipUpdate = Join-Path $tmp "update.ps1"
@@ -138,7 +173,6 @@ try {
     # Asegurar el arranque automático para TODOS los usuarios (acceso directo común).
     Write-Host "==> Asegurando el arranque automático..." -ForegroundColor Cyan
     try {
-        $appExe   = Join-Path $InstallRoot "App\Swip.exe"
         $common   = [Environment]::GetFolderPath('CommonStartup')
         $shortcut = Join-Path $common "Swip.lnk"
         $wsh = New-Object -ComObject WScript.Shell
@@ -156,26 +190,49 @@ try {
 
     Write-Host ""
     Write-Host "Swip actualizado correctamente." -ForegroundColor Green
-    $ok = $true
 }
 catch {
-    Pause-OnError $_.Exception.Message
-    $ok = $false
+    $failure = $_.Exception.Message
+    Write-Host ""
+    Write-Host "ERROR al actualizar:" -ForegroundColor Red
+    Write-Host $failure -ForegroundColor Red
 }
 finally {
-    # Pase lo que pase, dejar el servicio y el gato en marcha.
+    # Pase lo que pase, dejar el servicio y el gato en marcha. Se hace ANTES de avisar de un error:
+    # un aviso que espera un clic no debe retrasar la vuelta del gato.
     Write-Host "==> Rearrancando el servicio..." -ForegroundColor Cyan
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -ne "Running") { Start-Service $ServiceName -ErrorAction SilentlyContinue }
 
-    if (-not (Get-Process -Name "Swip" -ErrorAction SilentlyContinue) -and (Test-Path $appExe)) {
+    # El servicio relanza el gato en cada sesión (sin privilegios de administrador) a los pocos
+    # segundos de arrancar. Solo si no aparece, se lanza desde aquí.
+    for ($i = 0; $i -lt 20; $i++) {
+        if (Get-MySwip) { break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not (Get-MySwip) -and (Test-Path $appExe)) {
         Write-Host "==> Lanzando el gato..." -ForegroundColor Cyan
-        Start-Process $appExe
+        try { Start-Process $appExe }
+        catch { Write-Host "   (no se pudo lanzar el gato: $($_.Exception.Message))" -ForegroundColor DarkYellow }
     }
 }
 
-if ($ok) {
+if ($transcribing) { try { Stop-Transcript | Out-Null } catch { } }
+
+if ($failure) {
+    if ($Silent) {
+        Show-Alert ("No se pudo actualizar Swip.`n`n" + $failure + "`n`nDetalles en: " + $logFile)
+    }
+    else {
+        Write-Host ""
+        Read-Host "Pulsa Enter para cerrar"
+    }
+    exit 1
+}
+
+if (-not $Silent) {
     Write-Host "El gato ya se relanzó con la nueva versión." -ForegroundColor Green
     Write-Host ""
     Read-Host "Pulsa Enter para cerrar"
 }
+exit 0

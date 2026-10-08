@@ -22,11 +22,12 @@ public static class RoundedRegion
     public const int CornerExtraPx = 3;
 
     /// <param name="widthPx">Ancho REAL de la ventana en píxeles (no el calculado a partir del panel).</param>
-    /// <returns>Null si la ventana aún no tiene tamaño.</returns>
+    /// <returns>Null si la ventana aún no tiene tamaño o las esquinas son cuadradas.</returns>
     public static RoundedRegionSize? FromPixels(
         int widthPx, int heightPx, double cornerRadiusDip, double dpiScaleX, double dpiScaleY)
     {
         if (widthPx <= 0 || heightPx <= 0) return null;
+        if (cornerRadiusDip <= 0) return null; // sin esquinas redondeadas no hay nada que recortar
 
         // CreateRoundRectRgn recibe el DIÁMETRO de la elipse de cada esquina, no el radio; y no
         // puede ser mayor que el lado, o la forma sale deformada.

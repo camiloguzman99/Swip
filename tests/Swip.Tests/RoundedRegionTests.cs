@@ -66,4 +66,12 @@ public class RoundedRegionTests
         Assert.Equal(10, r.EllipseWidth);
         Assert.Equal(6, r.EllipseHeight);
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4)]
+    public void Con_esquinas_cuadradas_no_hay_nada_que_recortar(double radio)
+    {
+        Assert.Null(RoundedRegion.FromPixels(260, 340, radio, 1.0, 1.0));
+    }
 }

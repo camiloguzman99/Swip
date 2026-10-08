@@ -40,8 +40,9 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 
 **Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con **desenfoque** del
 fondo y un tinte negro al 20 % (80 % de transparencia); sin borde de color y filas sin tarjetas de
-fondo. El desenfoque de Windows cubre toda la ventana (un rectángulo), así que la ventana se recorta
-a la forma redondeada del panel. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
+fondo. **Esquinas cuadradas**: el desenfoque de Windows cubre todo el rectángulo de la ventana y no
+respeta el recorte redondeado (se comprobó), así que con esquinas redondeadas asoman los picos del
+desenfoque; el valor es `MenuCornerRadius`, en `App.xaml`. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
 `C:\ProgramData\Swip\settings.json` y vuelve el fondo normal con un 30 % de transparencia; los
 colores se cambian en `MenuPanelBrush` / `MenuPanelBlurBrush`, en `App.xaml`):
 1. Nombre de usuario y un botón blanco que despliega color y gordura.
@@ -132,8 +133,18 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 powershell -ExecutionPolicy Bypass -File uninstall.ps1   # para quitarlo todo
 ```
 
-**Actualizar.** Clic derecho en la caja → **Actualizar**, o `update.ps1`. Detiene el servicio y
-el gato, descarga el release `latest`, **verifica su SHA-256** y reemplaza los archivos.
+**Actualizar.** Clic derecho en la caja → **Actualizar**, o `update.ps1`. El botón lo ejecuta **en
+segundo plano**: sin ventana de PowerShell, solo el aviso de UAC (hace falta administrador para
+parar el servicio y escribir en Archivos de programa). Va así:
+
+1. Descarga el release `latest` y **verifica su SHA-256**; lo extrae. El gato **sigue funcionando**
+   durante todo esto, y si algo falla en este punto no se toca nada.
+2. Solo entonces para el servicio y el gato, reemplaza los archivos y arranca el servicio, que
+   relanza el gato en cada sesión (sin privilegios de administrador). Si ves que el gato
+   desaparece unos segundos y vuelve, ha ido bien.
+
+El resultado queda en `C:\ProgramData\Swip\update.log`. Si falla, el script muestra un aviso con
+el motivo. Lanzado a mano (`update.ps1` sin `-Silent`) muestra la consola, con una pausa al final.
 
 ### Arranque y cierre
 
