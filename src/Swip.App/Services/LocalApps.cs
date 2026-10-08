@@ -67,7 +67,9 @@ public static class LocalApps
         catch { return false; }
     }
 
-    public static List<AppInfo> Enumerate() => AppUsage.Collect(WindowedNames);
+    /// <param name="logBreakdown">Anota en el log el desglose de cada app (para comparar con el Administrador de tareas).</param>
+    public static List<AppInfo> Enumerate(bool logBreakdown = false) =>
+        AppUsage.Collect(WindowedNames, logBreakdown);
 
     /// <summary>
     /// Nombres de proceso con ventana "de app" en la sesión actual (las que verías en la barra de
@@ -208,7 +210,7 @@ public static class LocalApps
 /// <summary>Agrega CPU%/RAM% por app y resuelve el nombre amigable. Compartido por la lógica local.</summary>
 internal static class AppUsage
 {
-    public static List<AppInfo> Collect(Func<Dictionary<string, string>> windowedNames)
+    public static List<AppInfo> Collect(Func<Dictionary<string, string>> windowedNames, bool logBreakdown = false)
     {
         var windowed = windowedNames();
         if (windowed.Count == 0) return new();
@@ -217,36 +219,38 @@ internal static class AppUsage
         ulong totalPhys = LocalApps.TotalPhysicalMemory();
         int ncpu = Math.Max(1, Environment.ProcessorCount);
 
-        // Todos los procesos de cada app (por nombre) en la sesión actual.
+        // Procesos de cada app: los que tienen su nombre MÁS sus ayudantes (como el Administrador de tareas).
         var procsByName = new Dictionary<string, List<Process>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in windowed.Keys)
+        foreach (var (app, pids) in GroupProcesses(windowed.Keys, ownSession))
         {
             var list = new List<Process>();
-            foreach (var p in Process.GetProcessesByName(name))
+            foreach (int pid in pids)
             {
-                try { if (p.SessionId == ownSession) list.Add(p); else p.Dispose(); }
-                catch { try { p.Dispose(); } catch { } }
+                try { list.Add(Process.GetProcessById(pid)); }
+                catch { /* terminó entre medias */ }
             }
-            procsByName[name] = list;
+            procsByName[app] = list;
         }
 
         try
         {
-            // Muestreo de CPU.
+            // Muestreo de CPU: 1 s, como el refresco del Administrador de tareas. Con 450 ms los
+            // valores saltaban mucho de una lectura a otra.
             var t0 = new Dictionary<int, TimeSpan>();
             foreach (var p in procsByName.Values.SelectMany(l => l))
                 try { t0[p.Id] = p.TotalProcessorTime; } catch { }
 
             var sw = Stopwatch.StartNew();
-            Thread.Sleep(450);
+            Thread.Sleep(1000);
             sw.Stop();
             double wall = sw.Elapsed.TotalMilliseconds;
 
             var result = new List<AppInfo>();
+            var breakdown = new List<string>();
             foreach (var (name, procs) in procsByName)
             {
-                double cpu = 0, ram = 0;
-                string friendly = name;
+                double cpu = 0;
+                ulong privateBytes = 0, workingSetBytes = 0;
                 foreach (var p in procs)
                 {
                     try
@@ -254,20 +258,40 @@ internal static class AppUsage
                         p.Refresh();
                         if (t0.TryGetValue(p.Id, out var start))
                             cpu += (p.TotalProcessorTime - start).TotalMilliseconds / (wall * ncpu) * 100.0;
-                        ram += p.WorkingSet64;
+
+                        ulong workingSet = (ulong)p.WorkingSet64;
+                        workingSetBytes += workingSet;
+                        // Memoria privada (la del Administrador de tareas). Sumar el working set
+                        // total contaba varias veces las páginas compartidas entre los procesos de
+                        // una misma app; si Windows no da la privada se usa el total.
+                        privateBytes += ProcessTable.PrivateWorkingSet(p.Id) ?? workingSet;
                     }
                     catch { }
                 }
-                friendly = FriendlyName(procs, name);
 
+                // El nombre sale de los procesos con el nombre de la app, no de sus ayudantes
+                // (si no, una app podría llamarse "Microsoft Edge WebView2").
+                var roots = procs.Where(p => IsNamed(p, name)).ToList();
+                string friendly = FriendlyName(roots, name);
+
+                double ramPercent = totalPhys > 0 ? privateBytes / (double)totalPhys * 100.0 : 0;
                 result.Add(new AppInfo
                 {
                     ProcessName = friendly,
                     WindowTitle = windowed.TryGetValue(name, out var t) ? t : null,
                     CpuPercent = Math.Clamp(cpu, 0, 100),
-                    RamPercent = totalPhys > 0 ? Math.Clamp(ram / totalPhys * 100.0, 0, 100) : 0,
+                    RamPercent = Math.Clamp(ramPercent, 0, 100),
                 });
+
+                if (logBreakdown)
+                    breakdown.Add($"{friendly}: {procs.Count} procesos ({roots.Count} propios), " +
+                        $"privada {privateBytes / 1048576.0:F0} MB, working set {workingSetBytes / 1048576.0:F0} MB, " +
+                        $"CPU {cpu:F1}%");
             }
+
+            if (logBreakdown)
+                AppLog.Write($"Consumo (RAM total {totalPhys / 1048576.0:F0} MB, {ncpu} CPU lógicas): " +
+                    string.Join(" | ", breakdown));
 
             return result
                 .OrderByDescending(a => a.RamPercent)
@@ -279,6 +303,38 @@ internal static class AppUsage
             foreach (var p in procsByName.Values.SelectMany(l => l))
                 try { p.Dispose(); } catch { }
         }
+    }
+
+    /// <summary>PID de cada app en esta sesión, con sus ayudantes. Si no se puede leer la tabla de procesos, solo por nombre.</summary>
+    private static Dictionary<string, List<int>> GroupProcesses(IReadOnlyCollection<string> apps, uint session)
+    {
+        try
+        {
+            var table = ProcessTable.Read(session);
+            if (table is { Count: > 0 })
+                return ProcessGrouping.Group(table, apps);
+        }
+        catch { /* se cae al respaldo */ }
+
+        var byName = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (string name in apps)
+        {
+            var ids = new List<int>();
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                try { if (p.SessionId == session) ids.Add(p.Id); }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            byName[name] = ids;
+        }
+        return byName;
+    }
+
+    private static bool IsNamed(Process p, string name)
+    {
+        try { return string.Equals(p.ProcessName, name, StringComparison.OrdinalIgnoreCase); }
+        catch { return false; } // el proceso ya terminó
     }
 
     // Resolver el nombre amigable abre el módulo principal y lee la versión del .exe: es lo más caro

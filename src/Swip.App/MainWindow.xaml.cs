@@ -897,13 +897,6 @@ public partial class MainWindow : Window
         if (_sprites.TryGetValue(agent.Key, out var sprite)) SetZ(sprite, 0);
     }
 
-    /// <summary>Aplica fondo negro translúcido con desenfoque (acrílico) al abrir un menú.</summary>
-    private void Popup_Opened(object? sender, EventArgs e)
-    {
-        if (sender is System.Windows.Controls.Primitives.Popup { Child: Visual child })
-            AcrylicHelper.Apply(child);
-    }
-
     private async Task LoadAppsAsync(CatAgent agent)
     {
         if (!agent.HasSession)
@@ -919,7 +912,7 @@ public partial class MainWindow : Window
         {
             // La sesión actual se enumera EN PROCESO (fiable); las otras, vía el servicio.
             IReadOnlyList<AppInfo> apps = agent.IsCurrent
-                ? await Task.Run(() => (IReadOnlyList<AppInfo>)LocalApps.Enumerate())
+                ? await Task.Run(() => (IReadOnlyList<AppInfo>)LocalApps.Enumerate(logBreakdown: true))
                 : await _client.GetWindowedAppsAsync(agent.SessionId);
             AppLog.Write($"LoadApps agente={agent.DisplayName} sesión={agent.SessionId} " +
                 $"current={agent.IsCurrent} → {apps.Count} apps " +
@@ -935,8 +928,8 @@ public partial class MainWindow : Window
                     agent.Apps.Add(new AppRow
                     {
                         Name = a.ProcessName,
-                        Cpu = $"{a.CpuPercent:0}%",
-                        Ram = $"{a.RamPercent:0}%",
+                        Cpu = PercentFormat.Format(a.CpuPercent),
+                        Ram = PercentFormat.Format(a.RamPercent),
                     });
             }
         }

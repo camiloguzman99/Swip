@@ -5,6 +5,12 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+        <!-- Fondo del panel de los menús. El panel es TRANSPARENTE: solo se ven el borde de color y las
+             filas. Alfa 01 (de 255) en vez de 00 a propósito: con alfa 0 Windows deja pasar los clics a
+             la ventana de detrás, y un clic en el hueco entre dos filas cerraría el menú.
+             Para tintarlo sube el primer par de dígitos: #55000000 = negro al ~33%. -->
+        <SolidColorBrush x:Key="MenuPanelBrush" Color="#01000000" />
+
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />

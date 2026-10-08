@@ -38,10 +38,16 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 | Arrastrar la caja                    | La mueves; también cae por gravedad                                 |
 | Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
 
-**Menú de un gato** (3 niveles, arrastrable por el encabezado):
+**Menú de un gato** (3 niveles, arrastrable por el encabezado; el fondo del panel es transparente,
+solo se ven el borde del color de énfasis de Windows y las filas; el tinte se cambia en
+`MenuPanelBrush`, en `App.xaml`):
 1. Nombre de usuario y un botón blanco que despliega color y gordura.
-2. Apps con ventana de esa sesión, con **CPU %** y **RAM %** (agregados entre todos los procesos
-   de cada app, como el Administrador de tareas).
+2. Apps con ventana de esa sesión, con **CPU %** y **RAM %**. Se miden como el Administrador de
+   tareas: cada app suma sus procesos **y los que cuelgan de ellos** (p. ej. los procesos
+   `msedgewebview2` del Outlook nuevo o de WhatsApp; el Explorador no se lleva los de las apps que
+   abrió), la RAM es la **memoria privada** (sin contar las páginas compartidas) en % de la RAM
+   física, y la CPU se mide durante 1 s como % del total de la CPU. Por debajo del 10 % se muestra
+   un decimal. El menú tarda ~1 s en rellenarse por esa medición.
 3. **Cambiar a esta sesión** (sin confirmación); en la sesión actual el mismo botón sale en gris
    como **En esta sesión**, y si la cuenta no tiene sesión, **Iniciar sesión**.
 
