@@ -38,7 +38,7 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 | Arrastrar la caja                    | La mueves; también cae por gravedad                                 |
 | Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
 
-**Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con un 10 % de
+**Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con un 30 % de
 transparencia, borde del color de énfasis de Windows y filas sin tarjetas de fondo; la
 transparencia se cambia en `MenuPanelBrush`, en `App.xaml`):
 1. Nombre de usuario y un botón blanco que despliega color y gordura.

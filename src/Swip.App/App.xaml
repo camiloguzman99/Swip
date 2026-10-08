@@ -5,10 +5,10 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <!-- Fondo del panel de los menús: negro con un 10% de transparencia (E6 = 230 de 255 = 90% opaco).
-             Para cambiarlo, edita el primer par de dígitos: FF = opaco, CC = 20% transparente,
-             99 = 40% transparente. -->
-        <SolidColorBrush x:Key="MenuPanelBrush" Color="#E6000000" />
+        <!-- Fondo del panel de los menús: negro con un 30% de transparencia (B3 = 179 de 255 = 70% opaco).
+             Para cambiarlo, edita el primer par de dígitos: FF = opaco, E6 = 10% transparente,
+             B3 = 30%, 99 = 40%, 66 = 60% transparente. -->
+        <SolidColorBrush x:Key="MenuPanelBrush" Color="#B3000000" />
 
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
