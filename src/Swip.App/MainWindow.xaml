@@ -25,8 +25,7 @@
         <!-- Menú de cada gato (clic derecho), en 3 niveles. El encabezado se puede arrastrar. -->
         <Popup x:Name="InfoPopup" Placement="Custom" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
-            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="10" MinWidth="260"
-                    BorderBrush="{StaticResource MenuBorderBrush}" BorderThickness="2">
+            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="12" MinWidth="260">
                 <StackPanel>
                     <!-- NIVEL 1: nombre + rueda de configuración (arrastrable) -->
                     <Border x:Name="CatHeader" Style="{StaticResource ListCard}"
@@ -123,8 +122,7 @@
         <!-- Menú de configuración (la caja). El encabezado se puede arrastrar. -->
         <Popup x:Name="ConfigPopup" PlacementTarget="{Binding ElementName=Box}" Placement="Custom"
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
-            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="10"
-                    BorderBrush="{StaticResource MenuBorderBrush}" BorderThickness="2">
+            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="12" Padding="12">
                 <StackPanel>
                     <Button Content="Etiquetas" Style="{StaticResource ListRow}" Click="ToggleLabels_Click" />
                     <Button Content="Actualizar" Style="{StaticResource ListRow}" Click="Update_Click" />

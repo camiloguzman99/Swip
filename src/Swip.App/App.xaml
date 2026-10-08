@@ -15,10 +15,6 @@
              Para más tinte, sube el primer par: 66 = 40%, 80 = 50%, B3 = 70%. -->
         <SolidColorBrush x:Key="MenuPanelBlurBrush" Color="#33000000" />
 
-        <!-- Borde del marco de los menús: invisible (el marco es el propio panel desenfocado). Para
-             volver a tener un borde, pon un color, p. ej. #FFFFFFFF, o el de énfasis de Windows. -->
-        <SolidColorBrush x:Key="MenuBorderBrush" Color="#00000000" />
-
         <!-- Color de énfasis: valores por defecto; App.xaml.cs los sobrescribe con el de Windows. -->
         <SolidColorBrush x:Key="AccentBrush" Color="#FFFFC400" />
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFFD633" />
