@@ -16,11 +16,17 @@
                    HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-6,0,0"
                    Visibility="Collapsed" />
 
-        <!-- Etiqueta con el nombre de la sesión -->
+        <!-- Rótulo con el nombre del usuario, ENCIMA del gato. Se coloca arriba desplazándolo con
+             LabelShift (código), así que no cambia el tamaño del control: si no, el gato se hundiría.
+             No se puede seleccionar ni pulsar: IsHitTestVisible=False. -->
         <Border x:Name="LabelBox" Background="#AA202124" CornerRadius="4" Padding="4,1"
-                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-2">
-            <TextBlock x:Name="NameLabel" Foreground="#FFFFE08A" FontSize="9"
-                       FontFamily="Consolas" TextTrimming="CharacterEllipsis" MaxWidth="110" />
+                HorizontalAlignment="Center" VerticalAlignment="Top" IsHitTestVisible="False">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="LabelShift" />
+            </Border.RenderTransform>
+            <TextBlock x:Name="NameLabel" Foreground="{DynamicResource AccentBrush}" FontSize="9"
+                       FontFamily="Consolas" TextAlignment="Center" IsHitTestVisible="False"
+                       TextTrimming="CharacterEllipsis" MaxWidth="110" />
         </Border>
     </Grid>
 </UserControl>

@@ -19,7 +19,8 @@ public partial class CatSprite : UserControl
     {
         InitializeComponent();
         Agent = agent;
-        NameLabel.Text = agent.DisplayName;
+        NameLabel.Text = LabelFormat.Split(agent.DisplayName); // dos palabras = dos filas
+        LabelBox.SizeChanged += (_, _) => PositionLabel();     // 1 o 2 líneas cambian su alto
         SetCatSize(catSize);
     }
 
@@ -28,6 +29,30 @@ public partial class CatSprite : UserControl
     {
         _baseSize = size;
         ApplyFat();
+    }
+
+    // Espacio entre el rótulo y la cabeza del gato.
+    private const double LabelGap = 5;
+
+    // Pose para la que se colocó el rótulo por última vez (se recoloca solo si cambia).
+    private string? _labelColor;
+    private CatAction? _labelAction;
+
+    /// <summary>
+    /// Pone el rótulo justo encima de la parte VISIBLE del gato. Los PNG tienen mucho margen
+    /// transparente arriba (dormido, el gato ocupa solo el 40% inferior de su imagen), así que
+    /// colocarlo sobre la imagen lo dejaría flotando lejos. Se usa el punto más alto de los DOS
+    /// fotogramas de la pose, para que el rótulo no tiemble al animarse.
+    /// </summary>
+    private void PositionLabel()
+    {
+        if (Img.ActualHeight <= 0) return;
+
+        double topFraction = Math.Min(
+            SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 0)).Y,
+            SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 1)).Y);
+
+        LabelShift.Y = topFraction * Img.ActualHeight - LabelBox.ActualHeight - LabelGap;
     }
 
     public void ApplyFat()
@@ -53,6 +78,14 @@ public partial class CatSprite : UserControl
 
         var heart = Agent.IsPetting ? Visibility.Visible : Visibility.Collapsed;
         if (Heart.Visibility != heart) Heart.Visibility = heart;
+
+        // La silueta cambia con la pose (dormido, caminando...): recolocar el rótulo solo entonces.
+        if (_labelColor != Agent.Color || _labelAction != Agent.Action)
+        {
+            _labelColor = Agent.Color;
+            _labelAction = Agent.Action;
+            PositionLabel();
+        }
     }
 
     /// <summary>

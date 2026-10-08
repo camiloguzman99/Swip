@@ -23,6 +23,9 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   gustan más las cajas que las casas.
 - 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
   dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
+- 🏷️ **Etiquetas** (opción de la caja): el nombre del usuario **sobre** cada gato, en el color de
+  énfasis de Windows; si tiene dos palabras, en dos filas centradas. No se puede seleccionar ni
+  estorba al clic.
 - 🎨 **Mismo aspecto en todas las sesiones**: color, posición de los gatos y de la caja, y
   etiquetas se comparten y se reflejan al instante entre sesiones.
 
