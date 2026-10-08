@@ -12,6 +12,12 @@ public sealed class AppSettings
     /// <summary>Mostrar la etiqueta con el nombre de la sesión bajo cada gato.</summary>
     public bool ShowLabels { get; set; } = true;
 
+    /// <summary>
+    /// Desenfoque del fondo de los menús (con el 60% de transparencia). Si en tu equipo se ve mal,
+    /// ponlo a false: los menús vuelven al fondo normal con el 30% de transparencia.
+    /// </summary>
+    public bool MenuBlur { get; set; } = true;
+
     /// <summary>Posición de la caja dentro de la franja (null = esquina inferior izquierda).</summary>
     public double? BoxLeft { get; set; }
     public double? BoxTop { get; set; }

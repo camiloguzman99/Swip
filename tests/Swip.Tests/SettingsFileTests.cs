@@ -112,4 +112,31 @@ public class SettingsFileTests
 
         Assert.Equal(77, file.Load().BoxLeft);
     }
+
+    // El desenfoque se prueba en tu equipo: por defecto activado, y apagable desde settings.json.
+    [Fact]
+    public void MenuBlur_esta_activado_por_defecto_incluso_en_un_settings_antiguo_sin_esa_clave()
+    {
+        using var dir = new TempDir();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, "{ \"ShowLabels\": false, \"BoxLeft\": 40 }"); // sin MenuBlur
+
+        var s = new SettingsFile(path).Load();
+
+        Assert.True(s.MenuBlur);
+        Assert.False(s.ShowLabels);
+    }
+
+    [Fact]
+    public void MenuBlur_se_puede_apagar_y_se_conserva()
+    {
+        using var dir = new TempDir();
+        var file = new SettingsFile(dir.File("settings.json"));
+
+        file.Update(s => s.MenuBlur = false);
+
+        Assert.False(file.Load().MenuBlur);
+        file.Update(s => s.BoxLeft = 10);          // otro cambio no lo vuelve a activar
+        Assert.False(file.Load().MenuBlur);
+    }
 }

@@ -897,6 +897,22 @@ public partial class MainWindow : Window
         if (_sprites.TryGetValue(agent.Key, out var sprite)) SetZ(sprite, 0);
     }
 
+    /// <summary>
+    /// Al abrirse un menú: con <c>MenuBlur</c> activo, desenfoca lo de detrás y usa el fondo más
+    /// transparente (60%); si no, o si Windows rechaza el desenfoque, el fondo normal (30%).
+    /// Se hace en cada apertura porque Windows crea una ventana nueva cada vez.
+    /// </summary>
+    private void Popup_Opened(object? sender, EventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Primitives.Popup { Child: Border panel }) return;
+
+        bool blurred = _settings.MenuBlur && BlurHelper.Apply(panel);
+        panel.Background = (Brush)FindResource(blurred ? "MenuPanelBlurBrush" : "MenuPanelBrush");
+        AppLog.WriteOnChange("blur", _settings.MenuBlur
+            ? $"Desenfoque de los menús: {(blurred ? "aceptado por Windows" : "RECHAZADO por Windows, se usa el fondo normal")}"
+            : "Desenfoque de los menús desactivado (MenuBlur=false)");
+    }
+
     private async Task LoadAppsAsync(CatAgent agent)
     {
         if (!agent.HasSession)

@@ -38,9 +38,11 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 | Arrastrar la caja                    | La mueves; también cae por gravedad                                 |
 | Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
 
-**Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con un 30 % de
-transparencia, borde del color de énfasis de Windows y filas sin tarjetas de fondo; la
-transparencia se cambia en `MenuPanelBrush`, en `App.xaml`):
+**Menú de un gato** (3 niveles, arrastrable por el encabezado; panel negro con **desenfoque** del
+fondo y un 60 % de transparencia; borde del color de énfasis de Windows y filas sin tarjetas de
+fondo. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
+`C:\ProgramData\Swip\settings.json` y vuelve el fondo normal con un 30 % de transparencia; los
+colores se cambian en `MenuPanelBrush` / `MenuPanelBlurBrush`, en `App.xaml`):
 1. Nombre de usuario y un botón blanco que despliega color y gordura.
 2. Apps con ventana de esa sesión, con **CPU %** y **RAM %**. Se miden como el Administrador de
    tareas: cada app suma sus procesos **y los que cuelgan de ellos** (p. ej. los procesos
