@@ -31,9 +31,6 @@ public partial class CatSprite : UserControl
         ApplyFat();
     }
 
-    // Espacio entre el rótulo y la cabeza del gato.
-    private const double LabelGap = 5;
-
     // Pose para la que se colocó el rótulo por última vez (se recoloca solo si cambia).
     private string? _labelColor;
     private CatAction? _labelAction;
@@ -42,7 +39,9 @@ public partial class CatSprite : UserControl
     /// Pone el rótulo justo encima de la parte VISIBLE del gato. Los PNG tienen mucho margen
     /// transparente arriba (dormido, el gato ocupa solo el 40% inferior de su imagen), así que
     /// colocarlo sobre la imagen lo dejaría flotando lejos. Se usa el punto más alto de los DOS
-    /// fotogramas de la pose, para que el rótulo no tiemble al animarse.
+    /// fotogramas de la pose, para que el rótulo no tiemble al animarse. El rótulo se ancla por su
+    /// CENTRO a una distancia fija (<see cref="LabelPlacement.CenterDistance"/>), así que un nombre de
+    /// una fila y otro de dos quedan igual de separados del gato.
     /// </summary>
     private void PositionLabel()
     {
@@ -52,7 +51,9 @@ public partial class CatSprite : UserControl
             SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 0)).Y,
             SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 1)).Y);
 
-        LabelShift.Y = topFraction * Img.ActualHeight - LabelBox.ActualHeight - LabelGap;
+        // El rótulo está en el borde superior del control (VerticalAlignment=Top): su desplazamiento
+        // es directamente la Y donde queremos su borde superior.
+        LabelShift.Y = LabelPlacement.Top(topFraction * Img.ActualHeight, LabelBox.ActualHeight);
     }
 
     public void ApplyFat()
