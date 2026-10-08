@@ -13,7 +13,7 @@ public sealed class AppSettings
     public bool ShowLabels { get; set; } = true;
 
     /// <summary>
-    /// Desenfoque del fondo de los menús (con el 50% de transparencia). Si en tu equipo se ve mal,
+    /// Desenfoque del fondo de los menús (con un tinte negro al 20%, 80% transparente). Si en tu equipo se ve mal,
     /// ponlo a false: los menús vuelven al fondo normal con el 30% de transparencia.
     /// </summary>
     public bool MenuBlur { get; set; } = true;

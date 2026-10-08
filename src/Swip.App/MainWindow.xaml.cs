@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     // Actividad de la sesión: solo se anima, refresca y publica mientras está en pantalla y sin bloquear.
     private bool _active;
     private bool _locked;
+    private readonly HashSet<Border> _clippedPanels = new(); // paneles que ya recortan su ventana al cambiar de tamaño
     private FileSystemWatcher? _settingsWatcher;
 
     // Arrastre de la caja
@@ -899,7 +900,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Al abrirse un menú: con <c>MenuBlur</c> activo, desenfoca lo de detrás y usa el fondo más
-    /// transparente (50%); si no, o si Windows rechaza el desenfoque, el fondo normal (30%).
+    /// transparente (80%: tinte negro al 20%); si no, o si Windows rechaza el desenfoque, el fondo normal (30%).
     /// Se hace en cada apertura porque Windows crea una ventana nueva cada vez.
     /// </summary>
     private void Popup_Opened(object? sender, EventArgs e)
@@ -908,10 +909,22 @@ public partial class MainWindow : Window
 
         bool blurred = _settings.MenuBlur && BlurHelper.Apply(panel);
         panel.Background = (Brush)FindResource(blurred ? "MenuPanelBlurBrush" : "MenuPanelBrush");
+
+        if (blurred)
+        {
+            // El desenfoque cubre toda la ventana (un rectángulo) y el panel solo su forma redondeada:
+            // se recorta la ventana a esa forma. Y se repite al cambiar el tamaño del panel.
+            ClipBlurToPanel(panel);
+            if (_clippedPanels.Add(panel))
+                panel.SizeChanged += (_, _) => { if (_settings.MenuBlur) ClipBlurToPanel(panel); };
+        }
         AppLog.WriteOnChange("blur", _settings.MenuBlur
             ? $"Desenfoque de los menús: {(blurred ? "aceptado por Windows" : "RECHAZADO por Windows, se usa el fondo normal")}"
             : "Desenfoque de los menús desactivado (MenuBlur=false)");
     }
+
+    private static void ClipBlurToPanel(Border panel) =>
+        BlurHelper.ClipToRoundedRect(panel, panel.ActualWidth, panel.ActualHeight, panel.CornerRadius.TopLeft);
 
     private async Task LoadAppsAsync(CatAgent agent)
     {
