@@ -300,12 +300,12 @@ internal static class AppUsage
             {
                 string? d = p.MainModule?.FileVersionInfo.FileDescription;
                 if (!string.IsNullOrWhiteSpace(d))
-                    return FriendlyCache[fallback] = d.Trim();
+                    return FriendlyCache[fallback] = AppNames.Clean(d); // "WhatsApp.Root" -> "WhatsApp"
             }
             catch { }
         }
         // Sin descripción (o sin permiso para leerla): nombre capitalizado. No se cachea, así que
         // se reintenta en la siguiente ronda por si el módulo ya es accesible.
-        return fallback.Length > 0 ? char.ToUpper(fallback[0]) + fallback[1..] : fallback;
+        return fallback.Length > 0 ? AppNames.Clean(char.ToUpper(fallback[0]) + fallback[1..]) : fallback;
     }
 }
