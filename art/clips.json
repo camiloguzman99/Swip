@@ -1,0 +1,867 @@
+{
+ "comment": "Fuente única de los clips de animación. La leen el motor (Swip.Shared, recurso incrustado) y tools/art/build_atlas.py. 'status': final = arte definitivo; placeholder = fotogramas de REFERENCIA generados desde las poses dibujadas, a la espera del arte conceptual. 'reference' es la receta de esos fotogramas.",
+ "baseSize": [
+  269,
+  379
+ ],
+ "clips": [
+  {
+   "id": "sleep_curl",
+   "fps": 1.1,
+   "loop": true,
+   "status": "final",
+   "description": "Dormido enroscado, respiración lenta (base del estado).",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0
+    },
+    {
+     "base": "sleep",
+     "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "sleep_turn",
+   "fps": 6,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se da la vuelta dormido: se encoge, gira y queda mirando al otro lado.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0,
+     "sx": 0.95,
+     "sy": 1.05
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "rot": -6,
+     "sy": 1.08
+    },
+    {
+     "base": "sleep",
+     "frame": 0,
+     "flip": true
+    }
+   ]
+  },
+  {
+   "id": "sleep_stretch",
+   "fps": 4,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Estira patas delanteras y traseras sin despertar.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "sleep",
+     "frame": 0,
+     "sx": 1.25,
+     "sy": 0.85
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.1,
+     "sy": 0.95
+    }
+   ]
+  },
+  {
+   "id": "sleep_ear",
+   "fps": 5,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Mueve una oreja dormido.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0
+    },
+    {
+     "base": "sleep",
+     "frame": 0,
+     "sy": 1.03
+    },
+    {
+     "base": "sleep",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "sleep_tail",
+   "fps": 5,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Sacude la punta de la cola dormido.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0,
+     "dx": -2
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "dx": 2
+    },
+    {
+     "base": "sleep",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "sleep_dream",
+   "fps": 8,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Sueña: patitas que tiemblan, bigotes que se mueven.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0,
+     "dx": -1
+    },
+    {
+     "base": "sleep",
+     "frame": 0,
+     "dx": 1
+    }
+   ]
+  },
+  {
+   "id": "sleep_petted",
+   "fps": 4,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Al acariciarlo abre un ojo, bosteza y vuelve a dormir.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 1
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sy": 1.07
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sy": 1.07,
+     "rot": -4
+    },
+    {
+     "base": "sleep",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "sleep_box",
+   "fps": 1.1,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Dormido dentro de la caja abierta, asomando orejas.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0,
+     "sx": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 0.9
+    }
+   ]
+  },
+  {
+   "id": "play_yarn",
+   "fps": 2,
+   "loop": true,
+   "status": "final",
+   "description": "Juega con el ovillo en su sitio (base del estado).",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "play_tail_chase",
+   "fps": 8,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Persigue su cola dando vueltas en el sitio.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": -8
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "flip": true,
+     "rot": 8
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "flip": true,
+     "rot": -8
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "rot": 8
+    }
+   ]
+  },
+  {
+   "id": "play_hunt_fly",
+   "fps": 5,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Sigue con la mirada una mosca y le lanza zarpazos.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.05
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": -10
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": 6
+    }
+   ]
+  },
+  {
+   "id": "play_hop",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se agacha y salta en el sitio.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "sx": 1.1,
+     "sy": 0.85
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sx": 0.92,
+     "sy": 1.12
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "sx": 0.95,
+     "sy": 1.08
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sx": 1.08,
+     "sy": 0.9
+    }
+   ]
+  },
+  {
+   "id": "play_roll",
+   "fps": 5,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se tumba y se revuelca panza arriba.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 0
+    },
+    {
+     "base": "sleep",
+     "frame": 0,
+     "rot": 60
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "rot": 170
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "rot": 175,
+     "sy": 0.95
+    }
+   ]
+  },
+  {
+   "id": "groom_paw",
+   "fps": 3,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Se lame la pata delantera.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": -6
+    }
+   ]
+  },
+  {
+   "id": "groom_face",
+   "fps": 3,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Se limpia la cara con la pata.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": 6
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": 6
+    }
+   ]
+  },
+  {
+   "id": "sit_look",
+   "fps": 1.2,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Sentado, mirando alrededor.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.015
+    }
+   ]
+  },
+  {
+   "id": "yawn",
+   "fps": 4,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Bosteza con la boca muy abierta.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sx": 0.95,
+     "sy": 1.08
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sx": 0.95,
+     "sy": 1.08
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "knead",
+   "fps": 4,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Amasa con las patas delanteras.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.97
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "sy": 1.0
+    }
+   ]
+  },
+  {
+   "id": "walk",
+   "fps": 3.8,
+   "loop": true,
+   "status": "final",
+   "description": "Camina despacio (base del estado).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "trot",
+   "fps": 7,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Trota.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.05
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.05
+    }
+   ]
+  },
+  {
+   "id": "run",
+   "fps": 12,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Corre una ráfaga corta, cuerpo estirado.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.12,
+     "sy": 0.92
+    }
+   ]
+  },
+  {
+   "id": "sniff",
+   "fps": 3,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Se para a olfatear el suelo.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": 8
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "rot": 8
+    }
+   ]
+  },
+  {
+   "id": "stretch_yoga",
+   "fps": 3,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se estira: patas delante, trasero arriba.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.2,
+     "sy": 0.8
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.3,
+     "sy": 0.74
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.3,
+     "sy": 0.74
+    },
+    {
+     "base": "walk",
+     "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "turn_around",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Media vuelta rápida.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 0.7
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 0.55,
+     "flip": true
+    }
+   ]
+  },
+  {
+   "id": "box_push",
+   "fps": 6,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Empuja la caja con la cabeza, inclinado hacia delante.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": 10,
+     "sx": 1.1
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "rot": 10,
+     "sx": 1.1
+    }
+   ]
+  },
+  {
+   "id": "jump",
+   "fps": 7,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Salto: se agacha, vuela estirado, aterriza.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.1,
+     "sy": 0.8
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.15,
+     "sy": 0.9,
+     "rot": -15
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.05,
+     "sy": 0.85
+    }
+   ]
+  },
+  {
+   "id": "box_rub",
+   "fps": 4,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Se frota contra la caja.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": -5
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "rot": 5
+    }
+   ]
+  },
+  {
+   "id": "box_scratch",
+   "fps": 6,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Araña el cartón, estirado hacia arriba.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": -14
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "rot": -14
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "rot": -9
+    }
+   ]
+  },
+  {
+   "id": "box_peek",
+   "fps": 2,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Dentro de la caja: se asoma y se esconde.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "dy": 40
+    },
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "dy": 40
+    }
+   ]
+  },
+  {
+   "id": "box_paw_out",
+   "fps": 4,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Dentro de la caja: saca una pata por el borde.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 1
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "ambush_pop",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Emboscada: sale de golpe de la caja.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "dy": 60
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.15
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "cursor_swat",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Zarpazo al cursor.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": -15
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "petted_happy",
+   "fps": 6,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Contento al acariciarlo: se estira hacia la mano.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.08
+    },
+    {
+     "base": "play",
+     "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "wake_up",
+   "fps": 4,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se despierta: abre los ojos, se estira y bosteza.",
+   "reference": [
+    {
+     "base": "sleep",
+     "frame": 1
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.15,
+     "sy": 0.9
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.05
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "to_sit",
+   "fps": 5,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Pasa de caminar a sentarse.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "play",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "to_sleep",
+   "fps": 3,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Bosteza, da una vuelta y se enrosca para dormir.",
+   "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.95
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.1,
+     "sy": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "land",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Aterriza tras caer: se aplasta y se sacude.",
+   "reference": [
+    {
+     "base": "carry",
+     "frame": 0,
+     "sx": 1.15,
+     "sy": 0.8
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.05,
+     "sy": 0.9
+    }
+   ]
+  },
+  {
+   "id": "carry",
+   "fps": 4.5,
+   "loop": true,
+   "status": "final",
+   "description": "Colgando mientras lo arrastras.",
+   "reference": [
+    {
+     "base": "carry",
+     "frame": 0
+    },
+    {
+     "base": "carry",
+     "frame": 1
+    }
+   ]
+  }
+ ]
+}

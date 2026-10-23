@@ -3,24 +3,32 @@ using System.Windows.Controls;
 using Swip.App.Art;
 using Swip.App.World;
 using Swip.Shared;
+using Swip.Shared.Engine;
 
 namespace Swip.App.Controls;
 
 /// <summary>
-/// Vista de un gato basada en sprites de imagen. La ventana le empuja el estado cada tick; pinta.
+/// Vista de un gato. El motor (<see cref="SwipWorld"/>) decide todo; este control solo dibuja la
+/// pose: fotograma del atlas con la paleta del gato, efectos de movimiento, sombra y rótulo.
 /// </summary>
 public partial class CatSprite : UserControl
 {
-    private double _baseSize = 64;
+    private readonly CatAtlas _atlas;
+    private double _baseSize = 48;
+
+    // Lo último que se dibujó, para no reasignar propiedades iguales en cada fotograma.
+    private string? _labelClip, _labelColor;
+    private CatPose _lastPose;
 
     public CatAgent Agent { get; }
 
-    public CatSprite(CatAgent agent, double catSize)
+    public CatSprite(CatAgent agent, CatAtlas atlas, double catSize)
     {
         InitializeComponent();
         Agent = agent;
+        _atlas = atlas;
         NameLabel.Text = LabelFormat.Split(agent.DisplayName); // dos palabras = dos filas
-        LabelBox.SizeChanged += (_, _) => PositionLabel();     // 1 o 2 líneas cambian su alto
+        LabelBox.SizeChanged += (_, _) => PositionLabel(_lastPose);
         SetCatSize(catSize);
     }
 
@@ -31,81 +39,82 @@ public partial class CatSprite : UserControl
         ApplyFat();
     }
 
-    // Pose para la que se colocó el rótulo por última vez (se recoloca solo si cambia).
-    private string? _labelColor;
-    private CatAction? _labelAction;
-
-    /// <summary>
-    /// Pone el rótulo justo encima de la parte VISIBLE del gato. Los PNG tienen mucho margen
-    /// transparente arriba (dormido, el gato ocupa solo el 40% inferior de su imagen), así que
-    /// colocarlo sobre la imagen lo dejaría flotando lejos. Se usa el punto más alto de los DOS
-    /// fotogramas de la pose, para que el rótulo no tiemble al animarse. El rótulo se ancla por su
-    /// CENTRO a una distancia fija (<see cref="LabelPlacement.CenterDistance"/>), así que un nombre de
-    /// una fila y otro de dos quedan igual de separados del gato.
-    /// </summary>
-    private void PositionLabel()
-    {
-        if (Img.ActualHeight <= 0) return;
-
-        double topFraction = Math.Min(
-            SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 0)).Y,
-            SpriteBounds.Opaque(CatSprites.Get(Agent.Color, Agent.Action, 1)).Y);
-
-        // El rótulo está en el borde superior del control (VerticalAlignment=Top): su desplazamiento
-        // es directamente la Y donde queremos su borde superior.
-        LabelShift.Y = LabelPlacement.Top(topFraction * Img.ActualHeight, LabelBox.ActualHeight);
-    }
-
     public void ApplyFat()
     {
         double height = _baseSize;
-        double width = height * (CatSprites.AspectW / CatSprites.AspectH);
+        double width = height * _atlas.Aspect;
         width *= 1.0 + Math.Clamp(Agent.FatLevel, 0, 6) * 0.14;
         Img.Height = height;
         Img.Width = width;
     }
 
-    /// <summary>
-    /// Refresca el sprite (acción + frame + color) y el espejo según la dirección. Solo toca lo que
-    /// cambió: reasignar propiedades iguales en cada tick invalidaba el dibujo 30 veces por segundo.
-    /// </summary>
+    /// <summary>Dibuja la pose actual del gato (se llama en cada fotograma).</summary>
     public void Render()
     {
-        var source = CatSprites.Get(Agent.Color, Agent.Action, Agent.FrameIndex);
+        if (Agent.Body is not { } cat) return;
+        var pose = cat.Pose;
+
+        var source = _atlas.Frame(Agent.Color, pose.Clip, pose.Frame);
         if (!ReferenceEquals(Img.Source, source)) Img.Source = source;
 
-        double flip = Agent.FacingRight ? 1 : -1;
+        double flip = pose.FacingRight ? 1 : -1;
         if (Flip.ScaleX != flip) Flip.ScaleX = flip;
+        if (Squash.ScaleX != pose.ScaleX) Squash.ScaleX = pose.ScaleX;
+        if (Squash.ScaleY != pose.ScaleY) Squash.ScaleY = pose.ScaleY;
+        if (Tilt.Angle != pose.Rotation) Tilt.Angle = pose.Rotation;
+        if (Shift.X != pose.OffsetX) Shift.X = pose.OffsetX;
+        if (Shift.Y != pose.OffsetY) Shift.Y = pose.OffsetY;
 
-        var heart = Agent.IsPetting ? Visibility.Visible : Visibility.Collapsed;
-        if (Heart.Visibility != heart) Heart.Visibility = heart;
-
-        // La silueta cambia con la pose (dormido, caminando...): recolocar el rótulo solo entonces.
-        if (_labelColor != Agent.Color || _labelAction != Agent.Action)
+        // Sombra: en la superficie (suelo o tapa de la caja), más pequeña y tenue cuanto más arriba.
+        if (pose.ShadowDrop < 0)
         {
-            _labelColor = Agent.Color;
-            _labelAction = Agent.Action;
-            PositionLabel();
+            Shadow.Visibility = Visibility.Collapsed;
         }
+        else
+        {
+            Shadow.Visibility = Visibility.Visible;
+            double k = 1 / (1 + pose.ShadowDrop / 40);
+            ShadowScale.ScaleX = ShadowScale.ScaleY = k;
+            ShadowShift.Y = pose.ShadowDrop;
+            Shadow.Opacity = 0.25 * k;
+        }
+
+        if (_labelClip != pose.Clip || _labelColor != Agent.Color || _lastPose.OffsetY != pose.OffsetY)
+        {
+            _labelClip = pose.Clip;
+            _labelColor = Agent.Color;
+            PositionLabel(pose);
+        }
+        _lastPose = pose;
     }
 
     /// <summary>
-    /// Zona clicable del gato, en coordenadas de este control: la caja de sus píxeles visibles (no
-    /// la imagen entera), colocada donde está dibujada la imagen y teniendo en cuenta el espejo.
+    /// Pone el rótulo encima de la parte VISIBLE del gato (los fotogramas tienen mucho margen
+    /// transparente arriba), anclado por su centro a una distancia fija
+    /// (<see cref="LabelPlacement.CenterDistance"/>), y sigue los saltos.
+    /// </summary>
+    private void PositionLabel(CatPose pose)
+    {
+        if (Img.ActualHeight <= 0 || pose.Clip is null) return;
+        double head = _atlas.HeadFraction(Agent.Color, pose.Clip) * Img.ActualHeight;
+        LabelShift.Y = LabelPlacement.Top(head, LabelBox.ActualHeight) + pose.OffsetY;
+    }
+
+    /// <summary>
+    /// Zona clicable del gato, en coordenadas de este control: la caja de sus píxeles visibles en el
+    /// fotograma actual (del atlas), colocada donde está dibujada la imagen y con el espejo real.
     /// </summary>
     public Rect GetHitRect()
     {
         var fallback = new Rect(0, 0, ActualWidth, ActualHeight);
-        if (Img.Source is null || Img.ActualWidth <= 0 || Img.ActualHeight <= 0)
+        if (Img.Source is null || Img.ActualWidth <= 0 || Img.ActualHeight <= 0 || Agent.Body is not { } cat)
             return fallback;
 
         Rect image;
         try
         {
-            // OJO: Img.TranslatePoint(0,0) NO sirve: incluye el espejo (ScaleTransform), de modo que
-            // con el gato mirando a la izquierda devolvía el borde DERECHO y la zona de clic quedaba
-            // desplazada un ancho de gato fuera de la figura. TransformBounds da el mismo rectángulo
-            // espejado o no (el espejo es alrededor del centro).
+            // TransformBounds (y no TranslatePoint): da el rectángulo dibujado con espejo, escala,
+            // giro y desplazamientos ya aplicados.
             image = Img.TransformToAncestor(this)
                 .TransformBounds(new Rect(0, 0, Img.ActualWidth, Img.ActualHeight));
         }
@@ -114,11 +123,11 @@ public partial class CatSprite : UserControl
             return fallback; // aún no está en el árbol visual
         }
 
-        var opaque = SpriteBounds.Opaque(Img.Source);
+        var opaque = _atlas.Bounds(Agent.Color, cat.Pose.Clip, cat.Pose.Frame);
         var area = HitGeometry.HitArea(
             new Area(image.X, image.Y, image.Width, image.Height),
             new Area(opaque.X, opaque.Y, opaque.Width, opaque.Height),
-            mirrored: Flip.ScaleX < 0); // lo que realmente está dibujado, no el modelo
+            mirrored: Flip.ScaleX < 0);
         return new Rect(area.X, area.Y, area.Width, area.Height);
     }
 

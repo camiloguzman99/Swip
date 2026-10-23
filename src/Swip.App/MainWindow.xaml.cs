@@ -13,6 +13,8 @@ using Swip.App.Native;
 using Swip.App.Services;
 using Swip.App.World;
 using Swip.Shared;
+using Swip.Shared.Art;
+using Swip.Shared.Engine;
 using Swip.Shared.Settings;
 using Microsoft.Win32;
 
@@ -46,13 +48,16 @@ public partial class MainWindow : Window
     private bool _locked;
     private FileSystemWatcher? _settingsWatcher;
 
+    // Motor de movimientos (gatos, caja, efectos) y hojas de sprites.
+    private SwipWorld _world = null!;
+    private CatAtlas _atlas = null!;
+    private readonly RotateTransform _boxTilt = new();   // tambaleo de la caja (lo calcula el motor)
+    private bool? _boxShownOpen;                          // estado de caja dibujado por última vez
+
     // Arrastre de la caja
     private bool _boxMoved;
     private double _boxStartLeft, _boxStartTop;
     private Point _boxGrab;
-    private double _boxVy;
-    private bool _boxOpen;              // si la caja está abierta ahora mismo
-    private CatAgent? _catOnBox;        // gato sentado en la caja (como máximo uno)
 
     // Arrastre de un gato
     private CatSprite? _catDrag;
@@ -72,7 +77,11 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         InfoPopup.Closed += (_, _) =>
         {
-            if (_openAgent is not null) _openAgent.MenuOpen = false;
+            if (_openAgent is not null)
+            {
+                _openAgent.MenuOpen = false;
+                _world?.SetAttention(_openAgent.Key, false);
+            }
             _openAgent = null;
         };
         // Al cerrar la configuración, la caja se vuelve a cerrar.
@@ -82,6 +91,8 @@ public partial class MainWindow : Window
         _settingsDebounce.Tick += (_, _) => { _settingsDebounce.Stop(); ApplySettingsFromDisk(); };
         _boundsDebounce.Interval = TimeSpan.FromMilliseconds(400);
         _boundsDebounce.Tick += (_, _) => { _boundsDebounce.Stop(); if (_active) ApplyStripBounds(); };
+
+        BuildColorSwatches();
 
         // Los menús se centran horizontalmente y aparecen ENCIMA del objetivo.
         InfoPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
@@ -114,6 +125,17 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
+
+        // Motor: medidas en DIP. El ancho del gato sale de las proporciones del atlas.
+        _atlas = CatAtlas.Default;
+        _world = new SwipWorld(new WorldConfig(
+            CatWidth: CatPx * _atlas.Aspect, CatHeight: CatPx,
+            BoxWidth: BoxW, BoxHeight: BoxH,
+            BoxTopInsetClosed: BoxSprites.TopInsetClosed, BoxTopInsetOpen: BoxSprites.TopInsetOpen));
+        _world.HeadFraction = clip => _atlas.HeadFraction("orange", clip);
+        Box.RenderTransformOrigin = new Point(0.5, 1);
+        Box.RenderTransform = _boxTilt;
+
         SetBoxOpen(false);
         ApplyStripBounds();
 
@@ -200,6 +222,7 @@ public partial class MainWindow : Window
 
         InfoPopup.IsOpen = false;
         ConfigPopup.IsOpen = false;
+        Effects.Clear();
         if (!_clickThrough)
         {
             InteropNative.SetClickThrough(_hwnd, true);
@@ -316,12 +339,25 @@ public partial class MainWindow : Window
 
         // Un gato sentado en la caja no está "en el suelo": su X es la de la caja.
         var cats = _agents.Values
-            .Where(a => !a.OnBox)
+            .Where(a => !a.InBox)
             .Select(a => new CatSnapshot(a.Key, a.Color, a.FatLevel, a.X))
             .ToList();
         var known = _settings.Cats.ToDictionary(kv => kv.Key, kv => kv.Value.X);
 
-        UpdateSettings(s => CatPositions.Apply(s, cats, known));
+        // La caja también: los gatos la empujan. Igual que con los gatos, no se pisa si otra sesión
+        // la movió desde la última vez que la vimos.
+        double boxX = _world.Box.X;
+        double? knownBox = _settings.BoxLeft;
+
+        UpdateSettings(s =>
+        {
+            CatPositions.Apply(s, cats, known);
+            if (s.BoxLeft is null || knownBox is null || Math.Abs(s.BoxLeft.Value - knownBox.Value) <= 0.5)
+            {
+                s.BoxLeft = boxX;
+                s.BoxTop = null;
+            }
+        });
     }
 
     private void ApplyDelta(SettingsDelta delta)
@@ -332,7 +368,7 @@ public partial class MainWindow : Window
             foreach (var sprite in _sprites.Values)
                 sprite.ShowLabel(_settings.ShowLabels);
 
-        if (delta.Box && !Box.IsMouseCaptured)
+        if (delta.Box && !Box.IsMouseCaptured && _world.Box.OccupantId is null)
             RepositionBox();
 
         foreach (string key in delta.Cats)
@@ -340,7 +376,7 @@ public partial class MainWindow : Window
             if (!_settings.Cats.TryGetValue(key, out var pref) || !_agents.TryGetValue(key, out var agent))
                 continue; // gato aún no creado: al crearse leerá _settings
 
-            agent.Color = CatSprites.Normalize(pref.Color ?? agent.Color);
+            agent.Color = CatPalettes.Normalize(pref.Color ?? agent.Color);
             agent.FatLevel = pref.Fat;
             if (_sprites.TryGetValue(key, out var sprite))
             {
@@ -348,9 +384,10 @@ public partial class MainWindow : Window
                 sprite.Render();
             }
 
-            // La posición solo se aplica si no lo estamos sujetando ni está sentado en la caja.
-            if (pref.X is double px && !agent.Dragging && !agent.OnBox)
-                agent.X = Math.Clamp(px, 0, Math.Max(0, Width - CatPx));
+            // La posición solo se aplica si está en el suelo (el motor no mueve a uno que llevas,
+            // que está en la caja o en mitad de un salto).
+            if (pref.X is double px)
+                _world.SetCatX(key, px);
         }
     }
 
@@ -402,23 +439,15 @@ public partial class MainWindow : Window
         Top = work.Top;
         Width = work.Width;
         Height = work.Height;
+        _world.Resize(Width, Height);
         RepositionCats();
     }
 
-    /// <summary>Recalcula la "línea de suelo" y reubica a los gatos dentro de la franja.</summary>
+    /// <summary>Ajusta el tamaño de los gatos y recoloca la caja (el motor ya ajustó el suelo).</summary>
     private void RepositionCats()
     {
-        double baseY = Height - CatPx;
-        double maxX = Math.Max(0, Width - CatPx);
-        foreach (var (_, agent) in _agents)
-        {
-            agent.Y = baseY;
-            if (agent.X > maxX) agent.X = maxX;
-            if (agent.X < 0) agent.X = 0;
-        }
         foreach (var (_, sprite) in _sprites)
             sprite.SetCatSize(CatPx);
-
         RepositionBox();
     }
 
@@ -427,12 +456,8 @@ public partial class MainWindow : Window
     {
         Box.Width = BoxW;
         Box.Height = BoxH;
-        double left = _settings.BoxLeft ?? 8;
-        double top = _settings.BoxTop ?? (Height - BoxH);
-        left = Math.Clamp(left, 0, Math.Max(0, Width - BoxW));
-        top = Math.Clamp(top, 0, Math.Max(0, Height - BoxH));
-        Canvas.SetLeft(Box, left);
-        Canvas.SetTop(Box, top);
+        _world.PlaceBox(_settings.BoxLeft ?? 8); // la caja siempre descansa en el suelo
+        RenderBox();
     }
 
     // --- Bucle de animación -----------------------------------------------------
@@ -442,44 +467,57 @@ public partial class MainWindow : Window
         long now = _clock.ElapsedTicks;
         double dt = (now - _lastTicks) / (double)Stopwatch.Frequency;
         _lastTicks = now;
-        if (dt > 0.1) dt = 0.1; // evita saltos tras pausas
 
-        foreach (var (id, agent) in _agents)
+        _world.Cursor = CursorInWorld();
+        _world.Step(dt); // el motor limita los saltos de tiempo tras una pausa
+
+        foreach (var (id, sprite) in _sprites)
         {
-            agent.Update(dt, Width, Height, CatPx);
-            if (_sprites.TryGetValue(id, out var sprite))
-            {
-                if (agent.OnBox) PlaceOnBox(agent, sprite);
-                Canvas.SetLeft(sprite, agent.X);
-                Canvas.SetTop(sprite, agent.Y);
-                sprite.Render();
-            }
+            if (sprite.Agent.Body is not { } cat) continue;
+            Canvas.SetLeft(sprite, cat.X);
+            Canvas.SetTop(sprite, cat.Y);
+            SetZ(sprite, cat.Pose.BehindBox ? -1 : 0); // dentro de la caja: detrás de ella
+            sprite.Render();
         }
 
-        UpdateBoxGravity(dt);
+        RenderBox();
+        Effects.Sync(_world.Particles);
         UpdateClickThrough();
     }
 
-    /// <summary>La caja también cae por gravedad hasta el fondo cuando no se está arrastrando.</summary>
-    private void UpdateBoxGravity(double dt)
+    /// <summary>Dibuja la caja donde la tiene el motor (posición, abierta/cerrada y tambaleo).</summary>
+    private void RenderBox()
     {
-        if (Box.IsMouseCaptured) return;
-        double floor = Math.Max(0, Height - BoxH);
-        double by = Canvas.GetTop(Box);
-        if (double.IsNaN(by)) { Canvas.SetTop(Box, floor); return; }
+        var b = _world.Box;
+        Canvas.SetLeft(Box, b.X);
+        Canvas.SetTop(Box, b.Y);
+        if (_boxShownOpen != b.Open)
+        {
+            _boxShownOpen = b.Open;
+            Box.Source = BoxSprites.Get(b.Open);
+        }
+        if (_boxTilt.Angle != b.Wobble) _boxTilt.Angle = b.Wobble;
+    }
 
-        if (by < floor - 0.5)
+    /// <summary>Cursor en coordenadas de la ventana (DIP), o null si está fuera de ella.</summary>
+    private (double X, double Y)? CursorInWorld()
+    {
+        if (!InteropNative.GetCursorPos(out var p)) return null;
+        try
         {
-            _boxVy += 2200 * dt;
-            by += _boxVy * dt;
-            if (by >= floor) { by = floor; _boxVy = 0; }
-            Canvas.SetTop(Box, by);
+            var local = PointFromScreen(new Point(p.X, p.Y));
+            if (local.X < 0 || local.Y < 0 || local.X > Width || local.Y > Height) return null;
+            return (local.X, local.Y);
         }
-        else if (by != floor)
+        catch (InvalidOperationException)
         {
-            _boxVy = 0;
-            Canvas.SetTop(Box, floor);
+            return null; // ventana aún sin mostrar
         }
+    }
+
+    private static void SetZ(UIElement el, int z)
+    {
+        if (Panel.GetZIndex(el) != z) Panel.SetZIndex(el, z);
     }
 
     /// <summary>
@@ -543,14 +581,13 @@ public partial class MainWindow : Window
             // Quitar gatos de usuarios que ya no existen.
             foreach (string gone in _agents.Keys.Where(k => !liveKeys.Contains(k)).ToList())
             {
-                if (_catOnBox is not null && _catOnBox.Key == gone) _catOnBox = null;
+                _world.RemoveCat(gone);
                 if (_sprites.Remove(gone, out var sprite))
                     Yard.Children.Remove(sprite);
                 _agents.Remove(gone);
             }
 
             double maxX = Math.Max(0, Width - CatPx);
-            double baseY = Height - CatPx;
             bool placedNewCat = false; // algún gato recibió una X aleatoria que hay que compartir
 
             foreach (var u in users)
@@ -559,6 +596,7 @@ public partial class MainWindow : Window
                 {
                     agent.IsCurrent = u.IsCurrent;
                     agent.SessionId = u.SessionId;
+                    _world.SetMode(agent.Key, agent.Mode); // lanza la transición si cambió la sesión
                 }
                 else
                 {
@@ -568,26 +606,25 @@ public partial class MainWindow : Window
                         SessionId = u.SessionId,
                         DisplayName = u.UserName, // solo el nombre de usuario (sin dominio)
                         IsCurrent = u.IsCurrent,
-                        Y = baseY,
-                        X = _rng.NextDouble() * maxX,
-                        FacingRight = _rng.NextDouble() < 0.5,
                     };
 
                     // Preferencias por gato: color (por defecto, distinto por gato), gordura y posición X.
                     _settings.Cats.TryGetValue(u.UserName, out var pref);
-                    string defaultColor = CatSprites.Colors[_agents.Count % CatSprites.Colors.Length];
-                    agent.Color = CatSprites.Normalize(pref?.Color ?? defaultColor);
+                    string defaultColor = CatPalettes.All[_agents.Count % CatPalettes.All.Count].Id;
+                    agent.Color = CatPalettes.Normalize(pref?.Color ?? defaultColor);
                     agent.FatLevel = pref?.Fat ?? 0;
-                    if (pref?.X is double px) agent.X = Math.Clamp(px, 0, maxX);
-                    else placedNewCat = true;
+                    double x;
+                    if (pref?.X is double px) x = Math.Clamp(px, 0, maxX);
+                    else { x = _rng.NextDouble() * maxX; placedNewCat = true; }
 
+                    agent.Body = _world.AddCat(agent.Key, x, agent.Mode, facingRight: _rng.NextDouble() < 0.5);
                     _agents[u.UserName] = agent;
 
-                    var sprite = new CatSprite(agent, CatPx);
+                    var sprite = new CatSprite(agent, _atlas, CatPx);
                     sprite.ShowLabel(_settings.ShowLabels);
                     WireSprite(sprite);
-                    Canvas.SetLeft(sprite, agent.X);
-                    Canvas.SetTop(sprite, agent.Y);
+                    Canvas.SetLeft(sprite, agent.Body.X);
+                    Canvas.SetTop(sprite, agent.Body.Y);
                     Yard.Children.Add(sprite);
                     _sprites[u.UserName] = sprite;
                 }
@@ -652,8 +689,6 @@ public partial class MainWindow : Window
         _catDrag = sprite;
         _catMoved = false;
         _dragging = true;
-        if (sprite.Agent.OnBox) DetachFromBox(sprite.Agent); // al cogerlo, se baja de la caja
-        sprite.Agent.Dragging = true; // acción "cargado"
         _catGrab = e.GetPosition(sprite);
         sprite.CaptureMouse();
         e.Handled = true;
@@ -662,54 +697,58 @@ public partial class MainWindow : Window
     private void Cat_Move(object sender, MouseEventArgs e)
     {
         var sprite = (CatSprite)sender;
-        if (!sprite.IsMouseCaptured || _catDrag != sprite) return;
+        if (!sprite.IsMouseCaptured || _catDrag != sprite || sprite.Agent.Body is not { } cat) return;
 
         var p = e.GetPosition(Yard);
-        double x = Math.Clamp(p.X - _catGrab.X, 0, Math.Max(0, Width - CatPx));
-        double y = Math.Clamp(p.Y - _catGrab.Y, 0, Math.Max(0, Height));
-        sprite.Agent.X = x;
-        sprite.Agent.Y = y;
-        sprite.Agent.Vy = 0;
-        Canvas.SetLeft(sprite, x);
-        Canvas.SetTop(sprite, y);
-        _catMoved = true;
+        double x = p.X - _catGrab.X, y = p.Y - _catGrab.Y;
+        if (!_catMoved)
+        {
+            // Solo se "coge" al moverlo de verdad: un clic sin mover es una caricia.
+            if (Math.Abs(x - cat.X) < 3 && Math.Abs(y - cat.Y) < 3) return;
+            _catMoved = true;
+            _world.BeginCarry(cat.Id); // se baja de la caja si estaba en ella; pose "cargado"
+        }
+        _world.CarryTo(cat.Id, x, y);
+        Canvas.SetLeft(sprite, cat.X);
+        Canvas.SetTop(sprite, cat.Y);
     }
 
     private void Cat_Up(object sender, MouseButtonEventArgs e)
     {
         var sprite = (CatSprite)sender;
         if (sprite.IsMouseCaptured) sprite.ReleaseMouseCapture();
-        sprite.Agent.Dragging = false; // al soltar, la gravedad lo hace caer al suelo
         _catDrag = null;
         _dragging = false;
+        if (sprite.Agent.Body is not { } cat) return;
 
         if (_catMoved)
         {
-            if (DroppedOnBox(sprite))
+            // Soltarlo: si cae sobre la caja libre se queda en ella (encima o dentro); si no, cae.
+            bool onBox = _world.Drop(cat.Id);
+            if (!onBox)
             {
-                // Se soltó sobre la caja: se sienta en ella.
-                AttachToBox(sprite.Agent);
-            }
-            else
-            {
-                // Guardar solo la posición horizontal (cae por gravedad hasta abajo).
                 var agent = sprite.Agent;
-                double x = agent.X;
-                UpdateSettings(s => GetOrAddCat(s, agent).X = x);
+                double x = cat.X;
+                UpdateSettings(s => GetOrAddCat(s, agent).X = x); // cae en vertical: la X ya es la final
             }
         }
         else
         {
-            sprite.Agent.Pet(); // clic izquierdo sin mover: acariciar (corazón)
+            _world.Pet(cat.Id); // clic sin mover: caricia (corazón, y el gato reacciona según su estado)
         }
         e.Handled = true;
     }
 
     private void OpenInfo(CatSprite sprite)
     {
-        if (_openAgent is not null) _openAgent.MenuOpen = false;
+        if (_openAgent is not null)
+        {
+            _openAgent.MenuOpen = false;
+            _world.SetAttention(_openAgent.Key, false);
+        }
         _openAgent = sprite.Agent;
-        _openAgent.MenuOpen = true; // el gato se pone a jugar mientras ves su menú
+        _openAgent.MenuOpen = true;
+        _world.SetAttention(_openAgent.Key, true); // te mira mientras ves su menú (dormido, no se entera)
         InfoPopup.DataContext = sprite.Agent;
         InfoPopup.PlacementTarget = sprite;
         InfoPopup.HorizontalOffset = 0;
@@ -768,8 +807,8 @@ public partial class MainWindow : Window
         e.Handled = true;
         _boxMoved = false;
         _dragging = true;
-        _boxStartLeft = Canvas.GetLeft(Box);
-        _boxStartTop = Canvas.GetTop(Box);
+        _boxStartLeft = _world.Box.X;
+        _boxStartTop = _world.Box.Y;
         _boxGrab = e.GetPosition(Box);
         Box.CaptureMouse();
     }
@@ -778,12 +817,15 @@ public partial class MainWindow : Window
     {
         if (!Box.IsMouseCaptured) return;
         var p = e.GetPosition(Yard);
-        double left = Math.Clamp(p.X - _boxGrab.X, 0, Math.Max(0, Width - BoxW));
-        double top = Math.Clamp(p.Y - _boxGrab.Y, 0, Math.Max(0, Height - BoxH));
-        Canvas.SetLeft(Box, left);
-        Canvas.SetTop(Box, top);
-        if (Math.Abs(left - _boxStartLeft) > 3 || Math.Abs(top - _boxStartTop) > 3)
+        double left = p.X - _boxGrab.X, top = p.Y - _boxGrab.Y;
+        if (!_boxMoved)
+        {
+            if (Math.Abs(left - _boxStartLeft) <= 3 && Math.Abs(top - _boxStartTop) <= 3) return;
             _boxMoved = true;
+            _world.BeginBoxDrag();
+        }
+        _world.BoxDragTo(left, top); // el gato que esté en la caja va con ella
+        RenderBox();
     }
 
     private void Box_Up(object sender, MouseButtonEventArgs e)
@@ -793,14 +835,15 @@ public partial class MainWindow : Window
 
         if (_boxMoved)
         {
+            _world.EndBoxDrag(); // cae por gravedad hasta el suelo
             // Solo guardamos la X; la caja cae por gravedad hasta el fondo.
-            double left = Canvas.GetLeft(Box);
+            double left = _world.Box.X;
             UpdateSettings(s => { s.BoxLeft = left; s.BoxTop = null; });
         }
         else
         {
             // Clic izquierdo (sin arrastrar): solo abrir/cerrar la caja, nada más.
-            SetBoxOpen(!_boxOpen);
+            SetBoxOpen(!_world.Box.Open);
         }
     }
 
@@ -820,83 +863,11 @@ public partial class MainWindow : Window
         ConfigPopup.IsOpen = true;
     }
 
-    /// <summary>Abre o cierra la caja (sprite + estado), manteniéndolos sincronizados.</summary>
+    /// <summary>Abre o cierra la caja. El gato que esté en ella pasa de encima a dentro (o al revés).</summary>
     private void SetBoxOpen(bool open)
     {
-        _boxOpen = open;
-        Box.Source = BoxSprites.Get(open);
-    }
-
-    // --- Colisión: sentar un gato en la caja ------------------------------------
-
-    /// <summary>
-    /// Fija la posición del gato que está sentado en la caja: encima de la caja cerrada, o dentro
-    /// de la caja abierta (detrás, con una base al 50% del alto para que asome por arriba).
-    /// </summary>
-    private void PlaceOnBox(CatAgent agent, CatSprite sprite)
-    {
-        double boxLeft = Canvas.GetLeft(Box);
-        double boxTop = Canvas.GetTop(Box);
-        if (double.IsNaN(boxLeft)) boxLeft = 0;
-        if (double.IsNaN(boxTop)) boxTop = Math.Max(0, Height - BoxH);
-
-        // Se centra con el ancho REAL del control (la etiqueta puede hacerlo más ancho que la imagen,
-        // que va centrada dentro), no con el ancho de la imagen.
-        double catW = sprite.ActualWidth > 0 ? sprite.ActualWidth : CatPx;
-        agent.X = Math.Clamp(boxLeft + BoxW / 2 - catW / 2, 0, Math.Max(0, Width - catW));
-
-        // Borde superior VISIBLE de la caja en su estado actual (los PNG tienen distinto margen).
-        double visibleTop = boxTop + BoxH * BoxSprites.TopInset(_boxOpen);
-        double visibleH = boxTop + BoxH - visibleTop;
-
-        if (_boxOpen)
-        {
-            // Dentro de la caja: base al 50% del alto visible y por detrás (asoma por arriba).
-            agent.Y = visibleTop + visibleH * 0.5 - CatPx;
-            SetZ(sprite, -1);
-        }
-        else
-        {
-            // Encima de la caja cerrada, apoyado en su borde visible, por delante.
-            agent.Y = visibleTop - CatPx;
-            SetZ(sprite, 0);
-        }
-    }
-
-    private static void SetZ(UIElement el, int z)
-    {
-        if (Panel.GetZIndex(el) != z) Panel.SetZIndex(el, z);
-    }
-
-    /// <summary>¿El gato se soltó encima de la caja? (solapamiento de rectángulos).</summary>
-    private bool DroppedOnBox(CatSprite sprite)
-    {
-        double boxLeft = Canvas.GetLeft(Box);
-        double boxTop = Canvas.GetTop(Box);
-        if (double.IsNaN(boxLeft) || double.IsNaN(boxTop)) return false;
-
-        double catW = sprite.ActualWidth > 0 ? sprite.ActualWidth : CatPx;
-        double cx = sprite.Agent.X + catW / 2, cy = sprite.Agent.Y; // cx = centro del gato
-        double visibleTop = boxTop + BoxH * BoxSprites.TopInset(_boxOpen);
-        bool overlapX = cx > boxLeft && cx < boxLeft + BoxW;
-        bool overlapY = cy + CatPx > visibleTop - CatPx * 0.5 && cy < boxTop + BoxH;
-        return overlapX && overlapY;
-    }
-
-    /// <summary>Sienta al gato en la caja (solo uno a la vez: el anterior se baja).</summary>
-    private void AttachToBox(CatAgent agent)
-    {
-        if (_catOnBox is not null && _catOnBox != agent)
-            DetachFromBox(_catOnBox);
-        _catOnBox = agent;
-        agent.OnBox = true; // la posición se aplica en el siguiente tick (PlaceOnBox)
-    }
-
-    private void DetachFromBox(CatAgent agent)
-    {
-        agent.OnBox = false;
-        if (_catOnBox == agent) _catOnBox = null;
-        if (_sprites.TryGetValue(agent.Key, out var sprite)) SetZ(sprite, 0);
+        _world.SetBoxOpen(open);
+        RenderBox();
     }
 
     /// <summary>
@@ -1041,10 +1012,29 @@ public partial class MainWindow : Window
         SaveCatPref(_openAgent);
     }
 
+    /// <summary>Una muestra de color por paleta del catálogo (las retintadas no necesitan arte nuevo).</summary>
+    private void BuildColorSwatches()
+    {
+        ColorSwatches.Children.Clear();
+        foreach (var palette in CatPalettes.All)
+        {
+            var c = palette.Swatch;
+            var button = new Button
+            {
+                Style = (Style)FindResource("Swatch"),
+                Tag = palette.Id,
+                ToolTip = palette.Name,
+                Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)),
+            };
+            button.Click += Color_Click;
+            ColorSwatches.Children.Add(button);
+        }
+    }
+
     private void Color_Click(object sender, RoutedEventArgs e)
     {
         if (_openAgent is null || sender is not Button { Tag: string theme }) return;
-        _openAgent.Color = CatSprites.Normalize(theme);
+        _openAgent.Color = CatPalettes.Normalize(theme);
         if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.Render();
         SaveCatPref(_openAgent);
     }

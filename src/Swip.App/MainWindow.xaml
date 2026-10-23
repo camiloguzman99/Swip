@@ -1,6 +1,7 @@
 <Window x:Class="Swip.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Swip.App.Controls"
         Title="Swip"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -21,6 +22,9 @@
                    MouseLeftButtonDown="Box_Down" MouseMove="Box_Move" MouseLeftButtonUp="Box_Up"
                    MouseRightButtonUp="BoxRight_Click" />
         </Canvas>
+
+        <!-- Partículas del motor (zzz, corazones, polvo...). Encima de todo y sin recibir clics. -->
+        <controls:EffectsLayer x:Name="Effects" />
 
         <!-- Menú de cada gato (clic derecho), en 3 niveles. El encabezado se puede arrastrar. -->
         <Popup x:Name="InfoPopup" Placement="Custom" StaysOpen="False"
@@ -51,10 +55,8 @@
                     <!-- Panel de personalización (lo muestra/oculta la rueda) -->
                     <StackPanel x:Name="CatSettingsPanel" Visibility="Collapsed" Margin="0,2,0,0">
                         <TextBlock Text="Color" Foreground="#FF9AA0A6" FontSize="10" Margin="2,0,0,4" />
-                        <WrapPanel>
-                            <Button Style="{StaticResource Swatch}" Tag="orange" Click="Color_Click" Background="#FFF2913B" />
-                            <Button Style="{StaticResource Swatch}" Tag="gray"   Click="Color_Click" Background="#FF8B8178" />
-                        </WrapPanel>
+                        <!-- Una muestra por paleta (CatPalettes); se crean en código. -->
+                        <WrapPanel x:Name="ColorSwatches" />
                         <Grid Margin="0,2,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

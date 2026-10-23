@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Herramienta de desarrollo: ejecuta el motor de Swip sin WPF y vuelca la simulación en JSON
+       para dibujarla con tools/art/render_trace.py. No forma parte de la app. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Swip.Shared\Swip.Shared.csproj" />
+  </ItemGroup>
+</Project>

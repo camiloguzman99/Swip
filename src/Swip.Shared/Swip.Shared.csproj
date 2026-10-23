@@ -7,4 +7,9 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Fuente única de los clips de animación (la lee también tools/art/build_atlas.py). -->
+    <EmbeddedResource Include="..\..\art\clips.json" LogicalName="Swip.clips.json" />
+  </ItemGroup>
+
 </Project>
