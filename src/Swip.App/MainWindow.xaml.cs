@@ -715,6 +715,7 @@ public partial class MainWindow : Window
         InfoPopup.HorizontalOffset = 0;
         InfoPopup.VerticalOffset = 0;
         if (CatSettingsPanel is not null) CatSettingsPanel.Visibility = Visibility.Collapsed;
+        PrepareMenuWindow(InfoPopup);
         InfoPopup.IsOpen = true;
         _ = LoadAppsAsync(sprite.Agent);
     }
@@ -815,6 +816,7 @@ public partial class MainWindow : Window
         SetBoxOpen(true); // la caja se abre al mostrar el menú
         ConfigPopup.HorizontalOffset = 0;
         ConfigPopup.VerticalOffset = 0;
+        PrepareMenuWindow(ConfigPopup);
         ConfigPopup.IsOpen = true;
     }
 
@@ -904,18 +906,42 @@ public partial class MainWindow : Window
     /// </summary>
     private void Popup_Opened(object? sender, EventArgs e)
     {
-        if (sender is not System.Windows.Controls.Primitives.Popup { Child: Border panel }) return;
+        if (sender is not System.Windows.Controls.Primitives.Popup { Child: Border panel } popup) return;
 
         bool blurred = _settings.MenuBlur && BlurHelper.Apply(panel);
         panel.Background = (Brush)FindResource(blurred ? "MenuPanelBlurBrush" : "MenuPanelBrush");
 
-        // El desenfoque cubre toda la ventana (un rectángulo) y el panel solo su forma redondeada:
-        // se recorta la ventana a esa forma (y se mantiene al cambiar de tamaño).
-        string region = blurred ? BlurHelper.RoundCorners(panel, panel.CornerRadius.TopLeft) : "sin recorte";
+        string region;
+        if (!popup.AllowsTransparency)
+        {
+            // Windows 11: redondea DWM y el desenfoque queda recortado con esquinas suavizadas. El
+            // panel usa el mismo radio que DWM para que su tinte encaje en la curva.
+            panel.CornerRadius = new CornerRadius(MenuCorners.DwmRadius);
+            region = BlurHelper.ApplyDwmRoundedCorners(panel);
+        }
+        else
+        {
+            // Respaldo: recorte por región (el desenfoque no lo respeta: puede asomar en las esquinas).
+            panel.CornerRadius = (CornerRadius)FindResource("MenuCornerRadius");
+            region = blurred ? BlurHelper.RoundCorners(panel, panel.CornerRadius.TopLeft) : "sin recorte";
+        }
 
         AppLog.WriteOnChange("blur", _settings.MenuBlur
             ? $"Desenfoque de los menús: {(blurred ? "aceptado por Windows" : "RECHAZADO por Windows, se usa el fondo normal")}; {region}"
             : "Desenfoque de los menús desactivado (MenuBlur=false)");
+    }
+
+    /// <summary>
+    /// Decide, ANTES de abrir un menú, qué ventana usa: en Windows 11 con desenfoque, una ventana no
+    /// "layered" para que DWM pueda redondearla (ver <see cref="MenuCorners"/>). Solo se puede
+    /// cambiar con el menú cerrado.
+    /// </summary>
+    private void PrepareMenuWindow(System.Windows.Controls.Primitives.Popup popup)
+    {
+        var mode = MenuCorners.Choose(Environment.OSVersion.Version.Build, _settings.MenuBlur);
+        bool layered = mode == MenuCornerMode.Layered;
+        if (!popup.IsOpen && popup.AllowsTransparency != layered)
+            popup.AllowsTransparency = layered;
     }
 
     private async Task LoadAppsAsync(CatAgent agent)

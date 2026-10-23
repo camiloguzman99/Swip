@@ -56,6 +56,58 @@ internal static class BlurHelper
     [DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr obj);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MARGINS { public int Left, Right, Top, Bottom; }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
+    private const int DWMWA_BORDER_COLOR = 34;
+    private const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+
+    /// <summary>
+    /// Windows 11: esquinas redondeadas que SÍ recortan el desenfoque. Lo hace el propio DWM
+    /// (DWMWA_WINDOW_CORNER_PREFERENCE), con el borde suavizado. Requisitos:
+    /// - la ventana del menú no debe ser "layered" (Popup con AllowsTransparency=false): DWM no
+    ///   redondea ventanas layered, por eso la región de antes no recortaba el desenfoque;
+    /// - el fondo de la ventana debe ser transparente para DWM (fondo de composición transparente +
+    ///   DwmExtendFrameIntoClientArea con márgenes -1), o se vería negro en vez del desenfoque.
+    /// También se quita el borde fino que DWM dibuja en las ventanas redondeadas.
+    /// </summary>
+    /// <returns>Texto para el log con el resultado de cada paso (0 = correcto).</returns>
+    public static string ApplyDwmRoundedCorners(Visual visual)
+    {
+        try
+        {
+            if (PresentationSource.FromVisual(visual) is not HwndSource source)
+                return "DWM: sin ventana";
+            if (source.CompositionTarget is not null)
+                source.CompositionTarget.BackgroundColor = Colors.Transparent;
+
+            var glass = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            int extend = DwmExtendFrameIntoClientArea(source.Handle, ref glass);
+
+            int round = DWMWCP_ROUND;
+            int corners = DwmSetWindowAttribute(source.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
+
+            int none = DWMWA_COLOR_NONE;
+            int border = DwmSetWindowAttribute(source.Handle, DWMWA_BORDER_COLOR, ref none, sizeof(int));
+
+            return $"DWM: fondo transparente={Hr(extend)}, esquinas={Hr(corners)}, sin borde={Hr(border)}";
+        }
+        catch (Exception ex)
+        {
+            return $"DWM: error {ex.Message}";
+        }
+    }
+
+    private static string Hr(int hresult) => hresult == 0 ? "ok" : $"0x{hresult:X8}";
+
     /// <returns>True si Windows aceptó la petición (no garantiza cómo se vea: eso se comprueba a ojo).</returns>
     public static bool Apply(Visual visual)
     {
