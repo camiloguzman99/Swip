@@ -9,15 +9,16 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 ## Qué hace
 
 - 🐱 **Un gato por cuenta de usuario** (si hay 5 usuarios, 5 gatos), tenga o no la sesión abierta.
-  Dos colores (naranja, gris) elegibles por gato.
-- 😺 **Cuatro acciones**, según el estado de la cuenta:
+  Seis colores elegibles por gato: naranja y atigrado (el arte original) y negro, blanco, crema
+  y chocolate (retintados automáticamente).
+- 😺 **Un temperamento por estado de la cuenta**, y dentro de él muchas acciones distintas
+  (ver [Motor de movimientos](#motor-de-movimientos)):
 
-  | Estado                                  | Acción del gato      |
-  |-----------------------------------------|----------------------|
-  | Sesión cerrada (sin sesión iniciada)    | Durmiendo            |
-  | Sesión activa (en pantalla ahora)       | Caminando (merodea)  |
-  | Iniciada pero en el otro escritorio     | Jugando              |
-  | Mientras lo arrastras                   | Cargado              |
+  | Estado de la cuenta                  | Temperamento | Regla                                         |
+  |--------------------------------------|--------------|-----------------------------------------------|
+  | Sesión cerrada (sin sesión iniciada) | Duerme       | Nunca se desplaza por su cuenta               |
+  | Iniciada pero en el otro escritorio  | Juega        | Se queda en su sitio, nunca camina            |
+  | Sesión activa (en pantalla ahora)    | Camina       | El único que recorre la pantalla y busca la caja |
 
 - 📦 **Una caja de cartón** en la esquina: con clic derecho abre el menú de Swip. A los gatos les
   gustan más las cajas que las casas.
@@ -33,7 +34,7 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 
 | Acción                               | Resultado                                                           |
 |--------------------------------------|---------------------------------------------------------------------|
-| Clic izquierdo en un gato            | Lo acaricias (aparece un corazón)                                   |
+| Clic izquierdo en un gato            | Lo acaricias: corazón, y reacciona según su estado (dormido abre un ojo y sigue durmiendo) |
 | Clic izquierdo MANTENIDO en un gato  | Lo cargas y arrastras; al soltar cae por gravedad                   |
 | Clic derecho en un gato              | Menú de ese usuario (ver abajo)                                     |
 | Clic izquierdo en la caja            | Se abre / se cierra, nada más                                       |
@@ -66,6 +67,45 @@ y el menú Inicio; el **Explorador de archivos** sí cuenta. Las ventanas en otr
 también cuentan. Qué se aceptó y qué se descartó queda en `app-s{N}.log` (solo procesos y clases).
 
 ---
+
+## Motor de movimientos
+
+Todo lo que se mueve vive en `Swip.Shared/Engine` (`SwipWorld`), sin depender de WPF, así que se
+prueba entero: física de gatos y caja, el cerebro de cada gato, los movimientos y los efectos. La
+app solo traduce clics y arrastres en llamadas al motor y dibuja lo que este le dice.
+
+- **Cerebro:** cuando un gato termina lo que hace, el planificador elige lo siguiente entre los
+  comportamientos permitidos para su temperamento y su situación (en el suelo, encima o dentro de
+  la caja, cerca de la caja, del cursor o de otro gato), con pesos y sin repetir seguido. Las
+  transiciones de sesión, las caricias, los aterrizajes y el menú abierto tienen prioridad.
+- **Comportamientos** (52, en `Behaviors.cs`):
+  - *Durmiendo:* enroscado, darse la vuelta, estirarse, oreja, cola, soñar, dormir dentro de la
+    caja, acurrucarse junto a otro gato dormido, abrir un ojo al acariciarlo.
+  - *Jugando:* ovillo, perseguir la cola, cazar una mosca, saltar, revolcarse, lamerse la pata o la
+    cara, mirar alrededor, bostezar, amasar ronroneando.
+  - *Caminando:* caminar, trotar, correr, olfatear, estirarse, media vuelta.
+  - *Caja:* empujarla, saltar encima, meterse de un salto, salir, frotarse, rodearla, arañarla,
+    asomarse, sacar una pata, emboscada, vigilar sentado encima.
+  - *Cursor, entre gatos, reacciones y transiciones:* mirar, seguir y dar un zarpazo al cursor;
+    olfatear a otro gato e invitarlo a jugar; despertarse, sentarse, levantarse, dormirse, aterrizar.
+- **Efectos de movimiento** (sin arte adicional): aplastar y estirar al aterrizar, respiración al
+  dormir, balanceo, giros, saltos en arco, tambaleo de la caja, sombra en el suelo o en la tapa, y
+  partículas: zzz, corazones, polvo, ¡!, notas, chispas, una mosca y arañazos.
+
+### Arte: hojas de sprites y paletas
+
+- `art/clips.json` es la **fuente única** de los clips (fotogramas, velocidad, descripción y la
+  receta de su fotograma de referencia). La leen el motor y el generador.
+- `python3 tools/art/build_atlas.py` genera `src/Swip.App/Assets/atlas/` (una hoja por piel y
+  `atlas.json` con la caja visible de cada fotograma), las hojas de referencia
+  `docs/art/reference/<clip>.png` y la lista **[`docs/art/ARTE_PENDIENTE.md`](docs/art/ARTE_PENDIENTE.md)**.
+- Los clips sin arte final funcionan ya con **fotogramas de referencia** derivados de las poses
+  dibujadas (`art/poses/`). Para sustituirlos, mira `ARTE_PENDIENTE.md`.
+- Las paletas retiñen pelaje y barriga de la piel naranja y dejan contorno, ojos, nariz y juguete:
+  un color nuevo es una línea en `Swip.Shared/Art/Palettes.cs`.
+- Para revisar el motor sin abrir la app:
+  `dotnet run --project tools/SimTrace -- trace.json 120` y
+  `python3 tools/art/render_trace.py trace.json salida.png 10,40,70`.
 
 ## Por qué hacen falta dos piezas
 
@@ -215,6 +255,8 @@ dos sesiones a la vez en pantalla (Windows de escritorio solo muestra una).
   actualizar el servicio la caché está vacía hasta que visites esa sesión.
 - El gato sentado en la caja no se comparte entre sesiones ni se recuerda al reiniciar (en la otra sesión
   aparece en el suelo, en la X donde estaba).
+- 34 de los 38 clips usan aún fotogramas de **referencia** (poses existentes con escalas y giros):
+  se mueven bien, pero no son el arte final.
 - WPF solo compila en Windows; el CI (`windows-latest`) compila y ejecuta las pruebas.
 
 ## Desarrollo
@@ -223,11 +265,14 @@ dos sesiones a la vez en pantalla (Windows de escritorio solo muestra una).
 dotnet test tests\Swip.Tests\Swip.Tests.csproj    # pruebas (también funcionan en Linux)
 ```
 
-Cubren la lógica donde un fallo pierde datos o congela cosas: escrituras concurrentes de los
-ajustes entre procesos, diferencias entre ajustes, política de la caché de apps, rotación del log
-y el lector de líneas con tope.
+Cubren la lógica donde un fallo pierde datos o congela cosas (escrituras concurrentes de los
+ajustes entre procesos, caché de apps, rotación del log, lector de líneas con tope) y el motor de
+movimientos: las reglas de cada temperamento en simulaciones largas, que cada acción con la caja
+llegue a ocurrir, las transiciones, los efectos, la coherencia entre catálogo, clips y atlas, y las
+paletas.
 
 ## Próxima fase
 
-Gatos de **forma fija** (sin engordar/adelgazar) renderizados **en tiempo real a partir de un
-modelo 3D con estilo pixel art**, con muchas más interacciones que los PNG actuales.
+- **Arte final** de los 34 clips con referencia (ver `docs/art/ARTE_PENDIENTE.md`).
+- Gatos de **forma fija** (sin engordar/adelgazar) a partir de un **modelo 3D con estilo pixel
+  art**: renderizado a hojas de sprites con el mismo formato del atlas, o en tiempo real.

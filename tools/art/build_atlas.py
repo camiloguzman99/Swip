@@ -152,11 +152,13 @@ def write_reference_sheets(clips, frames_by_clip, base_w, base_h):
     for clip in clips:
         frames = frames_by_clip[clip["id"]]
         n = len(clip["reference"])
-        sheet = Image.new("RGBA", (max(fw * n + 20, 420), 70 + (fh + 26) * len(SKINS)), (48, 50, 56, 255))
-        d = ImageDraw.Draw(sheet)
         tag = "ARTE FINAL" if clip["status"] == "final" else "REFERENCIA (pendiente de arte)"
-        d.text((10, 8), f"{clip['id']}  ·  {clip['fps']} fps  ·  {'bucle' if clip['loop'] else 'una vez'}  ·  {tag}",
-               fill=(255, 214, 120), font=title_font)
+        title = f"{clip['id']}  ·  {clip['fps']} fps  ·  {'bucle' if clip['loop'] else 'una vez'}  ·  {tag}"
+        # El ancho se ajusta también al texto: con pocos fotogramas el título se cortaba.
+        text_w = max(title_font.getlength(title), small_font.getlength(clip["description"]))
+        sheet = Image.new("RGBA", (max(fw * n + 20, round(text_w) + 24), 70 + (fh + 26) * len(SKINS)), (48, 50, 56, 255))
+        d = ImageDraw.Draw(sheet)
+        d.text((10, 8), title, fill=(255, 214, 120), font=title_font)
         d.text((10, 34), clip["description"], fill=(225, 225, 225), font=small_font)
         for r, skin in enumerate(SKINS):
             y = 62 + r * (fh + 26)
