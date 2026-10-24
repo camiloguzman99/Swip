@@ -1,0 +1,10 @@
+{
+ "_doc": "Imágenes de Gemini por piel. grid = [columnas, filas]; head = ancho de la cabeza (oreja a mejilla) en px de la imagen original, para igualar la escala entre acciones; align = cómo alinear los fotogramas entre sí: 'bbox' (centro de la silueta, para movimientos en el sitio) o 'cell' (posición dentro de su celda, cuando la silueta cambia mucho); fit = 'width' iguala el tamaño de todos los fotogramas al del primero.",
+ "orange": {
+  "pose_stand":    {"grid": [1, 1], "head": 245},
+  "pose_sit":      {"grid": [1, 1], "head": 540},
+  "pose_curl":     {"grid": [1, 1], "head": 744},
+  "sleep_curl":    {"grid": [2, 2], "head": 390, "align": "bbox", "fit": "width"},
+  "sleep_stretch": {"grid": [2, 2], "head": 390, "align": "cell"}
+ }
+}
