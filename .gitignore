@@ -11,3 +11,4 @@ out/
 
 # Resultados
 *.binlog
+__pycache__/

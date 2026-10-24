@@ -20,7 +20,7 @@ public sealed record WorldConfig(
 public sealed class SwipWorld
 {
     // Velocidades (píxeles por segundo).
-    public const double WalkSpeed = 16;
+    public const double WalkSpeed = 10;   // = paso del ciclo de caminar (3 px reales por pie) a 12 fps: los pies no patinan
     public const double TrotSpeed = 32;
     public const double RunSpeed = 70;
     public const double PushSpeed = 36;

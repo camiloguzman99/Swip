@@ -426,10 +426,10 @@
   },
   {
    "id": "walk",
-   "fps": 3.8,
+   "fps": 12,
    "loop": true,
    "status": "final",
-   "description": "Camina despacio (base del estado).",
+   "description": "Camina despacio (base del estado). Ciclo de 8 fotogramas armado por piezas (tools/art/pieces.py).",
    "reference": [
     {
      "base": "walk",
@@ -437,7 +437,31 @@
     },
     {
      "base": "walk",
-     "frame": 1
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
     }
    ]
   },

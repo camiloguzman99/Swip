@@ -60,5 +60,5 @@ no hace falta dibujarlos. La hoja de referencia de cada clip está en `docs/art/
 
 - `sleep_curl`: Dormido enroscado, respiración lenta (base del estado).
 - `play_yarn`: Juega con el ovillo en su sitio (base del estado).
-- `walk`: Camina despacio (base del estado).
+- `walk`: Camina despacio (base del estado). Ciclo de 8 fotogramas armado por piezas (tools/art/pieces.py).
 - `carry`: Colgando mientras lo arrastras.
