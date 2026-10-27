@@ -68,7 +68,7 @@ public class SettingsFileTests
         {
             var file = new SettingsFile(path); // una instancia por "proceso"
             for (int i = 0; i < perWriter; i++)
-                file.Update(s => s.Cats[$"gato-{w}-{i}"] = new CatPref { Fat = w });
+                file.Update(s => s.Cats[$"gato-{w}-{i}"] = new CatPref { X = w });
         });
 
         Assert.Equal(writers * perWriter, new SettingsFile(path).Load().Cats.Count);

@@ -13,17 +13,14 @@ public sealed record WorldConfig(
 /// <summary>
 /// El motor de movimientos de Swip. Todo lo que se mueve vive aquí: física de gatos y caja,
 /// cerebro de cada gato (qué comportamiento hace y cuándo cambia), movimientos (caminar, saltar,
-/// empujar...), efectos de movimiento (aplastar/estirar, respirar, tambaleo, sombra) y partículas.
+/// empujar...), tambaleo de la caja, sombra y partículas. El gato se desplaza por fotogramas: solo
+/// avanza cuando cambia el fotograma del clip, lo que ese fotograma tenga asignado (ClipDef.Advance).
 /// La app solo traduce la entrada del usuario en llamadas y dibuja <see cref="Cat.Pose"/>,
 /// <see cref="Box"/> y <see cref="Particles"/>. No depende de WPF, así que se prueba entero.
 /// </summary>
 public sealed class SwipWorld
 {
-    // Velocidades (píxeles por segundo).
-    public const double WalkSpeed = 10;   // = paso del ciclo de caminar (3 px reales por pie) a 12 fps: los pies no patinan
-    public const double TrotSpeed = 32;
-    public const double RunSpeed = 70;
-    public const double PushSpeed = 36;
+    // Las velocidades de desplazamiento salen de los clips (avance por fotograma × fps), no de aquí.
     public const double JumpTime = 0.55;
     public const double HopHeight = 14;
 
@@ -488,14 +485,8 @@ public sealed class SwipWorld
         var b = cat.Current;
         switch (b.Motion)
         {
-            case Motion.Walk:
-                Locomote(cat, WalkSpeed, dt);
-                break;
-            case Motion.Trot:
-                Locomote(cat, TrotSpeed, dt);
-                break;
-            case Motion.Run:
-                Locomote(cat, RunSpeed, dt);
+            case Motion.Walk or Motion.Trot or Motion.Run:
+                Locomote(cat);
                 break;
             case Motion.Spin:
                 cat.FacingRight = ((int)(cat.BehaviorTime / 0.14)) % 2 == 0;
@@ -520,7 +511,7 @@ public sealed class SwipWorld
                 RubBox(cat, dt);
                 break;
             case Motion.PushBox:
-                PushBox(cat, dt);
+                PushBox(cat);
                 break;
             case Motion.JumpOntoBox:
                 JumpToBox(cat, dt, CatPlace.OnBox);
@@ -533,7 +524,7 @@ public sealed class SwipWorld
                 break;
             case Motion.CircleBox:
                 cat.ClipOverride = null;
-                if (MoveToward(cat, cat.TargetX, WalkSpeed, dt)) cat.Finished = true;
+                if (MoveToward(cat, cat.TargetX)) cat.Finished = true;
                 break;
             case Motion.Ambush:
                 double pop = ClipLength(b.Clip);
@@ -548,26 +539,51 @@ public sealed class SwipWorld
         }
     }
 
-    private void Locomote(Cat cat, double speed, double dt)
+    /// <summary>
+    /// Casillas que debe avanzar el gato en este paso: las del fotograma (o fotogramas) que acaban de
+    /// mostrarse del clip actual. Entre dos cambios de fotograma devuelve 0, así que el gato no se
+    /// desliza: el desplazamiento va siempre unido al dibujo de las patas.
+    /// </summary>
+    private int FrameStep(Cat cat)
+    {
+        string clipId = CurrentClip(cat);
+        if (!_clips.Contains(clipId)) return 0;
+        var clip = _clips[clipId];
+        int tick = clip.TickAt(cat.ClipOverride is null ? cat.BehaviorTime : cat.PhaseTime);
+        cat.Speed = clip.Speed;
+        // Clip nuevo, clip reiniciado o un salto grande de tiempo (pausa): se toma como punto de
+        // partida sin avanzar, para no dar un tirón.
+        if (cat.StepClip != clipId || tick < cat.StepTick || tick - cat.StepTick > 2)
+        {
+            cat.StepClip = clipId;
+            cat.StepTick = tick;
+            return 0;
+        }
+        int step = 0;
+        for (int t = cat.StepTick + 1; t <= tick; t++)
+            step += clip.AdvanceOf(clip.FrameOfTick(t));
+        cat.StepTick = tick;
+        return step;
+    }
+
+    private void Locomote(Cat cat)
     {
         if (cat.Place != CatPlace.Ground) return;
-        cat.X += cat.Direction * speed * dt;
-        cat.Speed = speed;
+        cat.X += cat.Direction * FrameStep(cat);
         if (cat.X <= 0) { cat.X = 0; cat.Direction = 1; }
         else if (cat.X >= MaxCatX) { cat.X = MaxCatX; cat.Direction = -1; }
         cat.FacingRight = cat.Direction > 0;
     }
 
-    /// <summary>Camina hacia una X; devuelve true al llegar.</summary>
-    private bool MoveToward(Cat cat, double targetX, double speed, double dt)
+    /// <summary>Camina hacia una X (al ritmo de los fotogramas del clip); devuelve true al llegar.</summary>
+    private bool MoveToward(Cat cat, double targetX)
     {
         if (cat.Place != CatPlace.Ground) return true;
         double dx = targetX - cat.X;
         if (Math.Abs(dx) <= 1.5) return true;
-        double step = Math.Min(Math.Abs(dx), speed * dt);
+        double step = Math.Min(Math.Abs(dx), FrameStep(cat));
         cat.X = Math.Clamp(cat.X + Math.Sign(dx) * step, 0, MaxCatX);
         cat.FacingRight = dx > 0;
-        cat.Speed = speed;
         return Math.Abs(targetX - cat.X) <= 1.5;
     }
 
@@ -575,7 +591,7 @@ public sealed class SwipWorld
     {
         if (Cursor is not { } c) { cat.Finished = true; return; }
         double target = Math.Clamp(c.X - cat.Width / 2, 0, MaxCatX);
-        bool arrived = Math.Abs(c.X - cat.CenterX) < 24 || MoveToward(cat, target, TrotSpeed, dt);
+        bool arrived = Math.Abs(c.X - cat.CenterX) < 24 || MoveToward(cat, target);
         if (arrived) cat.FacingRight = c.X > cat.CenterX;
         cat.ClipOverride = arrived ? "sit_look" : null;
     }
@@ -586,7 +602,7 @@ public sealed class SwipWorld
         double gap = cat.Width + 8;
         double target = partner.CenterX > cat.CenterX ? partner.X - gap : partner.X + gap;
         bool arrived = Math.Abs(partner.CenterX - cat.CenterX) <= gap + 2
-                       || MoveToward(cat, Math.Clamp(target, 0, MaxCatX), WalkSpeed, dt);
+                       || MoveToward(cat, Math.Clamp(target, 0, MaxCatX));
         cat.ClipOverride = arrived ? null : "walk";
         if (arrived) cat.FacingRight = partner.CenterX > cat.CenterX;
     }
@@ -599,19 +615,19 @@ public sealed class SwipWorld
         bool left = cat.CenterX < Box.CenterX;
         cat.FacingRight = left;
         if (cat.Mode != CatMode.Walk) return; // jugando: se frota solo si ya está al lado
-        bool arrived = MoveToward(cat, Math.Clamp(SideStandX(cat, left), 0, MaxCatX), WalkSpeed, dt);
+        bool arrived = MoveToward(cat, Math.Clamp(SideStandX(cat, left), 0, MaxCatX));
         cat.ClipOverride = arrived ? null : "walk";
         cat.FacingRight = left;
     }
 
-    private void PushBox(Cat cat, double dt)
+    private void PushBox(Cat cat)
     {
         bool fromLeft = cat.Direction > 0;
         double contactX = SideStandX(cat, fromLeft);
         if (cat.Phase == 0)
         {
             cat.ClipOverride = "trot";
-            if (MoveToward(cat, Math.Clamp(contactX, 0, MaxCatX), TrotSpeed, dt))
+            if (MoveToward(cat, Math.Clamp(contactX, 0, MaxCatX)))
             {
                 cat.Phase = 1;
                 cat.PhaseTime = 0;
@@ -620,16 +636,20 @@ public sealed class SwipWorld
             return;
         }
 
-        // Empujando: la caja avanza y el gato la sigue pegado a ella.
+        // Empujando: en cada fotograma del clip la caja avanza lo que ese fotograma tenga asignado y
+        // el gato la sigue pegado a ella (los dos se mueven a la vez, al ritmo de las patas).
         cat.ClipOverride = null;
         cat.FacingRight = fromLeft;
-        Box.Vx = cat.Direction * PushSpeed;
-        cat.X = Math.Clamp(SideStandX(cat, fromLeft), 0, MaxCatX);
-        cat.Speed = PushSpeed;
-        if ((int)(cat.PhaseTime / 0.25) != (int)((cat.PhaseTime - dt) / 0.25))
-            EmitDustAt(fromLeft ? Box.Right : Box.X, Box.Bottom, 2);
-
         double maxBoxX = Math.Max(0, Width - Box.Width);
+        int step = FrameStep(cat);
+        if (step > 0)
+        {
+            Box.Vx = 0;
+            Box.X = Math.Clamp(Box.X + cat.Direction * step, 0, maxBoxX);
+            EmitDustAt(fromLeft ? Box.Right : Box.X, Box.Bottom, 1);
+        }
+        cat.X = Math.Clamp(SideStandX(cat, fromLeft), 0, MaxCatX);
+
         bool atWall = fromLeft ? Box.X >= maxBoxX - 0.5 : Box.X <= 0.5;
         if (atWall || cat.PhaseTime > 2.5) cat.Finished = true;
     }
@@ -655,7 +675,7 @@ public sealed class SwipWorld
             double standX = left ? Box.X - cat.Width - 4 : Box.Right + 4;
             standX = Math.Clamp(standX, 0, MaxCatX);
             cat.ClipOverride = "trot";
-            bool arrived = MoveToward(cat, standX, TrotSpeed, dt) || cat.BehaviorTime > 6;
+            bool arrived = MoveToward(cat, standX) || cat.BehaviorTime > 6;
             if (!arrived) return;
 
             cat.FacingRight = left;

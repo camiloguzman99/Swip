@@ -48,7 +48,6 @@ public sealed class CatAgent : INotifyPropertyChanged
     // --- Apariencia ------------------------------------------------------------
     /// <summary>Id de paleta (ver Swip.Shared.Art.CatPalettes).</summary>
     public string Color { get; set; } = "orange";
-    public int FatLevel { get; set; }
 
     // --- Motor -----------------------------------------------------------------
     /// <summary>Su cuerpo en el motor de movimientos.</summary>

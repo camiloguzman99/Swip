@@ -381,6 +381,70 @@ public class EngineTests
         });
     }
 
+    // ---------------------------------------------------------------- desplazamiento por fotogramas
+
+    [Fact]
+    public void Los_clips_con_los_que_se_desplaza_tienen_avance_por_fotograma()
+    {
+        var clips = ClipLibrary.Default;
+        foreach (var id in new[] { "walk", "trot", "run", "box_push" })
+        {
+            var clip = clips[id];
+            Assert.True(clip.Speed > 0, $"{id} no tiene 'advance'");
+            Assert.True(clip.Advance!.Length == 1 || clip.Advance.Length == clip.FrameCount,
+                $"{id}: 'advance' debe tener un valor o uno por fotograma");
+        }
+    }
+
+    [Fact]
+    public void El_gato_solo_se_desplaza_cuando_cambia_el_fotograma()
+    {
+        var clips = ClipLibrary.Default;
+        var w = NewWorld(3, boxX: 1600);
+        var cat = w.AddCat("a", 400, CatMode.Walk);
+        int moves = 0, movesWithoutNewFrame = 0;
+        (string Clip, int Frame) last = (cat.Pose.Clip, cat.Pose.Frame);
+        double lastX = cat.X;
+        Run(w, 120, () =>
+        {
+            var now = (cat.Pose.Clip, cat.Pose.Frame);
+            bool walking = cat.Place == CatPlace.Ground && cat.Current.Motion is Motion.Walk or Motion.Trot or Motion.Run;
+            if (walking && cat.X != lastX)
+            {
+                moves++;
+                if (now == last) movesWithoutNewFrame++;
+                // Cada avance es un número entero de casillas (salvo al chocar con el borde de la pantalla).
+                bool atWall = cat.X <= 0 || cat.X >= W - Config.CatWidth;
+                if (!atWall) Assert.True(Math.Abs(Math.Round(Math.Abs(cat.X - lastX)) - Math.Abs(cat.X - lastX)) < 1e-6,
+                    $"{cat.Current.Id} {cat.Pose.Clip} {lastX} -> {cat.X}");
+            }
+            last = now;
+            lastX = cat.X;
+        });
+        Assert.True(moves > 20, $"apenas se movió ({moves} avances)");
+        Assert.Equal(0, movesWithoutNewFrame);
+    }
+
+    [Fact]
+    public void Al_caminar_la_velocidad_es_el_avance_por_fotograma_por_los_fps()
+    {
+        var walk = ClipLibrary.Default["walk"];
+        var w = NewWorld(4, boxX: 1600);
+        var cat = w.AddCat("a", 300, CatMode.Walk);
+        double walked = 0, time = 0, lastX = cat.X;
+        Run(w, 200, () =>
+        {
+            if (cat.Current.Motion == Motion.Walk && cat.Place == CatPlace.Ground && cat.X > 1 && cat.X < W - 60)
+            {
+                walked += Math.Abs(cat.X - lastX);
+                time += Dt;
+            }
+            lastX = cat.X;
+        });
+        Assert.True(time > 5, "no caminó lo suficiente para medir");
+        Assert.InRange(walked / time, walk.Speed * 0.8, walk.Speed * 1.2);
+    }
+
     // ---------------------------------------------------------------- arte
 
     [Fact]

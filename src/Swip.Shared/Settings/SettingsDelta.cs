@@ -35,7 +35,7 @@ public sealed class SettingsDelta
     }
 
     private static bool CatDiffers(CatPref a, CatPref b) =>
-        a.Color != b.Color || a.Fat != b.Fat || Differs(a.X, b.X) || Differs(a.Y, b.Y);
+        a.Color != b.Color || Differs(a.X, b.X) || Differs(a.Y, b.Y);
 
     private static bool Differs(double? a, double? b)
     {

@@ -39,6 +39,9 @@ FINAL = os.path.join(ROOT, "art", "final")                            # arte def
 OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "atlas")
 REF = os.path.join(ROOT, "docs", "art", "reference")
 GRID = os.path.join(ROOT, "art", "grid")
+BOX_SRC = os.path.join(ROOT, "art", "box")                           # dibujos de la caja (cerrada/abierta)
+BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadrícula para la app
+BOX_GRID = (50, 36)              # casillas de la caja: 36 de alto = su alto en la app (px lógicos)
 SKINS = ["orange", "gray"]
 GRID_H = 48                      # casillas de alto = px de alto del gato en la app (escala 100%)
 GRID_W = 34                      # casillas de ancho (proporción del lienzo original 269x379)
@@ -165,6 +168,7 @@ def main():
         json.dump(meta, f, ensure_ascii=False, indent=1)
 
     write_reference_sheets(clips, grids)
+    build_box()
     write_pending(clips)
     pending = [c for c in clips if c["status"] != "final"]
     print(f"{len(clips)} clips, {total} fotogramas por piel; "
@@ -176,17 +180,17 @@ def luminance(c):
     return 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
 
 
-def to_cells(img):
-    """Lienzo 269x379 -> GRID_W x GRID_H casillas. Cada casilla toma el color mediano de su zona,
+def to_cells(img, grid_w=GRID_W, grid_h=GRID_H):
+    """Lienzo (269x379 los gatos) -> grid_w x grid_h casillas. Cada casilla toma el color mediano de su zona,
     pero si el contorno oscuro cubre al menos el 30% de ella, la casilla es contorno: así las líneas
     finas del dibujo no desaparecen al reducir (un promedio las convertiría en un borde borroso)."""
     px = img.load()
-    out = Image.new("RGBA", (GRID_W, GRID_H), (0, 0, 0, 0))
+    out = Image.new("RGBA", (grid_w, grid_h), (0, 0, 0, 0))
     o = out.load()
-    for j in range(GRID_H):
-        y0, y1 = round(j * img.height / GRID_H), round((j + 1) * img.height / GRID_H)
-        for i in range(GRID_W):
-            x0, x1 = round(i * img.width / GRID_W), round((i + 1) * img.width / GRID_W)
+    for j in range(grid_h):
+        y0, y1 = round(j * img.height / grid_h), round((j + 1) * img.height / grid_h)
+        for i in range(grid_w):
+            x0, x1 = round(i * img.width / grid_w), round((i + 1) * img.width / grid_w)
             area = (x1 - x0) * (y1 - y0)
             solid = [px[x, y] for y in range(y0, y1) for x in range(x0, x1) if px[x, y][3] > 128]
             if len(solid) * 2.5 < area:
@@ -271,7 +275,8 @@ def grid_path(skin, clip_id):
 
 def write_grid(skin, clip, frames, palette):
     index = {c: k for k, c in enumerate(palette)}
-    lines = [f"# {clip['id']} · piel {skin} · {GRID_W}x{GRID_H} casillas · {len(frames)} fotogramas · "
+    gw, gh = frames[0].size
+    lines = [f"# {clip['id']} · piel {skin} · {gw}x{gh} casillas · {len(frames)} fotogramas · "
              f"{clip['fps']} fps · {'bucle' if clip['loop'] else 'una vez'}",
              f"# {clip['description']}",
              "# fuente: auto",
@@ -279,8 +284,8 @@ def write_grid(skin, clip, frames, palette):
     for i, g in enumerate(frames):
         lines.append(f"--- {i}")
         px = g.load()
-        for y in range(GRID_H):
-            lines.append("".join(LETTERS[index[px[x, y][:3]]] if px[x, y][3] else "." for x in range(GRID_W)))
+        for y in range(gh):
+            lines.append("".join(LETTERS[index[px[x, y][:3]]] if px[x, y][3] else "." for x in range(gw)))
     os.makedirs(os.path.join(GRID, skin), exist_ok=True)
     with open(grid_path(skin, clip["id"]), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -322,6 +327,22 @@ def read_grid(skin, clip_id):
                 px[x, y] = (*palette[k], 255)
         imgs.append(img)
     return imgs
+
+
+def build_box():
+    """La caja también es una cuadrícula (BOX_GRID casillas, misma densidad que los gatos). La app
+    la dibuja como cuadrados: al tambalearse gira entera y cada casilla sigue siendo un cuadrado."""
+    gw, gh = BOX_GRID
+    cells = {n: to_cells(Image.open(os.path.join(BOX_SRC, f"{n}.png")).convert("RGBA"), gw, gh)
+             for n in ("box_closed", "box_open")}
+    palette = load_or_build_palette("box", list(cells.values()))
+    os.makedirs(BOX_OUT, exist_ok=True)
+    for name, img in cells.items():
+        grid = snap_to_palette(img, palette)
+        grid.save(os.path.join(BOX_OUT, f"{name}.png"), optimize=True)
+        write_grid("box", {"id": name, "fps": 0, "loop": False,
+                           "description": "Caja " + ("abierta" if "open" in name else "cerrada") + "."},
+                   [grid], palette)
 
 
 def font(size):

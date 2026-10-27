@@ -37,11 +37,12 @@ public partial class CatSprite : UserControl
         SetCatSize(catSize);
     }
 
-    /// <summary>Ajusta el tamaño del gato (alto en DIP) y aplica el ensanchado por gordura.</summary>
+    /// <summary>Ajusta el tamaño del gato (alto en DIP; el ancho sale de las proporciones de la cuadrícula).</summary>
     public void SetCatSize(double size)
     {
         _baseSize = size;
-        ApplyFat();
+        Img.Height = size;
+        Img.Width = size * _atlas.Aspect;
         UpdateScale();
     }
 
@@ -65,14 +66,6 @@ public partial class CatSprite : UserControl
     /// <summary>Escala de pantalla con la que se dibuja (para ajustar posiciones al píxel real).</summary>
     public double Scale => _scale;
 
-    public void ApplyFat()
-    {
-        double height = _baseSize;
-        double width = height * _atlas.Aspect;
-        width *= 1.0 + Math.Clamp(Agent.FatLevel, 0, 6) * 0.14;
-        Img.Height = height;
-        Img.Width = width;
-    }
 
     /// <summary>Dibuja la pose actual del gato (se llama en cada fotograma).</summary>
     public void Render()

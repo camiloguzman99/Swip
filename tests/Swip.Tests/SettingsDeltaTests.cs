@@ -7,7 +7,7 @@ public class SettingsDeltaTests
     private static AppSettings Base() => new()
     {
         BoxLeft = 100,
-        Cats = { ["camilo"] = new CatPref { Color = "orange", Fat = 1, X = 200 } },
+        Cats = { ["camilo"] = new CatPref { Color = "orange", X = 200 } },
     };
 
     [Fact]

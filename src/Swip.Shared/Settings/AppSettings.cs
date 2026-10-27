@@ -22,7 +22,7 @@ public sealed class AppSettings
     public double? BoxLeft { get; set; }
     public double? BoxTop { get; set; }
 
-    /// <summary>Preferencias por gato (clave = nombre de usuario): color, gordura y posición.</summary>
+    /// <summary>Preferencias por gato (clave = nombre de usuario): color y posición.</summary>
     public Dictionary<string, CatPref> Cats { get; set; } = new();
 }
 
@@ -31,9 +31,6 @@ public sealed class CatPref
 {
     /// <summary>Color del gato ("orange" o "gray"); null = asignar por defecto.</summary>
     public string? Color { get; set; }
-
-    /// <summary>Nivel de gordura (0 = normal).</summary>
-    public int Fat { get; set; }
 
     /// <summary>Posición donde se dejó el gato (null = automática).</summary>
     public double? X { get; set; }

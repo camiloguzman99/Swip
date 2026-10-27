@@ -111,8 +111,9 @@ public partial class MainWindow : Window
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
     private const double CatPx = 48;   // alto del gato en pantalla
-    private const double BoxH = 36;    // alto de la caja (reducido 40%)
-    private double BoxW => BoxH * (BoxSprites.AspectW / BoxSprites.AspectH);
+    // La caja mide lo que su cuadrícula: 1 casilla = 1 px lógico (50x36).
+    private static double BoxH => BoxSprites.AspectH;
+    private static double BoxW => BoxSprites.AspectW;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -340,7 +341,7 @@ public partial class MainWindow : Window
         // Un gato sentado en la caja no está "en el suelo": su X es la de la caja.
         var cats = _agents.Values
             .Where(a => !a.InBox)
-            .Select(a => new CatSnapshot(a.Key, a.Color, a.FatLevel, a.X))
+            .Select(a => new CatSnapshot(a.Key, a.Color, a.X))
             .ToList();
         var known = _settings.Cats.ToDictionary(kv => kv.Key, kv => kv.Value.X);
 
@@ -377,12 +378,8 @@ public partial class MainWindow : Window
                 continue; // gato aún no creado: al crearse leerá _settings
 
             agent.Color = CatPalettes.Normalize(pref.Color ?? agent.Color);
-            agent.FatLevel = pref.Fat;
             if (_sprites.TryGetValue(key, out var sprite))
-            {
-                sprite.ApplyFat();
                 sprite.Render();
-            }
 
             // La posición solo se aplica si está en el suelo (el motor no mueve a uno que llevas,
             // que está en la caja o en mitad de un salto).
@@ -519,8 +516,9 @@ public partial class MainWindow : Window
     private void RenderBox()
     {
         var b = _world.Box;
-        Canvas.SetLeft(Box, b.X);
-        Canvas.SetTop(Box, b.Y);
+        double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        Canvas.SetLeft(Box, PixelScale.Snap(b.X, scale)); // casillas sobre píxeles reales
+        Canvas.SetTop(Box, PixelScale.Snap(b.Y, scale));
         if (_boxShownOpen != b.Open)
         {
             _boxShownOpen = b.Open;
@@ -582,7 +580,7 @@ public partial class MainWindow : Window
         var dpi = VisualTreeHelper.GetDpi(this);
 
         // La caja: solo su figura visible (el PNG cerrado tiene ~16% de margen transparente arriba).
-        var area = SpriteBounds.Opaque(Box.Source);
+        var area = SpriteBounds.Opaque(BoxSprites.Grid(_world.Box.Open));
         var boxRect = new Rect(
             area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
             area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
@@ -648,11 +646,10 @@ public partial class MainWindow : Window
                         IsCurrent = u.IsCurrent,
                     };
 
-                    // Preferencias por gato: color (por defecto, distinto por gato), gordura y posición X.
+                    // Preferencias por gato: color (por defecto, distinto por gato) y posición X.
                     _settings.Cats.TryGetValue(u.UserName, out var pref);
                     string defaultColor = CatPalettes.All[_agents.Count % CatPalettes.All.Count].Id;
                     agent.Color = CatPalettes.Normalize(pref?.Color ?? defaultColor);
-                    agent.FatLevel = pref?.Fat ?? 0;
                     double x;
                     if (pref?.X is double px) x = Math.Clamp(px, 0, maxX);
                     else { x = _rng.NextDouble() * maxX; placedNewCat = true; }
@@ -1037,18 +1034,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // --- Personalización por gato (color / gordura) -----------------------------
-
-    private void Fatten_Click(object sender, RoutedEventArgs e) => ChangeFat(+1);
-    private void Slim_Click(object sender, RoutedEventArgs e) => ChangeFat(-1);
-
-    private void ChangeFat(int delta)
-    {
-        if (_openAgent is null) return;
-        _openAgent.FatLevel = Math.Clamp(_openAgent.FatLevel + delta, 0, 6);
-        if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.ApplyFat();
-        SaveCatPref(_openAgent);
-    }
+    // --- Personalización por gato (color) ---------------------------------------
 
     /// <summary>Una muestra de color por paleta del catálogo (las retintadas no necesitan arte nuevo).</summary>
     private void BuildColorSwatches()
@@ -1077,17 +1063,11 @@ public partial class MainWindow : Window
         SaveCatPref(_openAgent);
     }
 
-    /// <summary>Guarda color y gordura del gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
+    /// <summary>Guarda el color del gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
     private void SaveCatPref(CatAgent agent)
     {
         string color = agent.Color;
-        int fat = agent.FatLevel;
-        UpdateSettings(s =>
-        {
-            var pref = GetOrAddCat(s, agent);
-            pref.Color = color;
-            pref.Fat = fat;
-        });
+        UpdateSettings(s => GetOrAddCat(s, agent).Color = color);
     }
 
     /// <summary>Preferencias del gato; si no existen aún, se crean con su aspecto actual.</summary>
@@ -1095,7 +1075,7 @@ public partial class MainWindow : Window
     {
         if (!settings.Cats.TryGetValue(agent.Key, out var pref))
         {
-            pref = new CatPref { Color = agent.Color, Fat = agent.FatLevel };
+            pref = new CatPref { Color = agent.Color };
             settings.Cats[agent.Key] = pref;
         }
         return pref;

@@ -73,7 +73,7 @@ def render(snapshot, width, height):
     d.line([0, H - 1, W, H - 1], fill=(120, 124, 132), width=2)
 
     box = snapshot["box"]
-    bimg = box_img[box["Open"]].resize((BOX_W * SCALE, BOX_H * SCALE), Image.LANCZOS)
+    bimg = box_img[box["Open"]].resize((BOX_W * SCALE, BOX_H * SCALE), Image.NEAREST)  # cuadrícula: casillas cuadradas
     if abs(box["Wobble"]) > 0.05:
         bimg = bimg.rotate(-box["Wobble"], resample=Image.BICUBIC, expand=True)
     bx, by = box["X"] * SCALE, box["Y"] * SCALE

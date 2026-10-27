@@ -1,5 +1,5 @@
 {
- "comment": "Fuente única de los clips de animación. La leen el motor (Swip.Shared, recurso incrustado) y tools/art/build_atlas.py. 'status': final = arte definitivo; placeholder = fotogramas de REFERENCIA generados desde las poses dibujadas, a la espera del arte conceptual. 'reference' es la receta de esos fotogramas.",
+ "comment": "Fuente única de los clips de animación. La leen el motor (Swip.Shared, recurso incrustado) y tools/art/build_atlas.py. 'status': final = arte definitivo; placeholder = fotogramas de REFERENCIA generados desde las poses dibujadas, a la espera del arte conceptual. 'reference' es la receta de esos fotogramas. 'advance' (opcional): casillas (px lógicos) que avanza el gato en cada fotograma cuando se desplaza con ese clip; solo se mueve al cambiar de fotograma, así que la velocidad es avance medio × fps.",
  "baseSize": [
   269,
   379
@@ -428,6 +428,16 @@
    "id": "walk",
    "fps": 12,
    "loop": true,
+   "advance": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
    "status": "final",
    "description": "Camina despacio (base del estado). Ciclo de 8 fotogramas armado por piezas (tools/art/pieces.py).",
    "reference": [
@@ -469,6 +479,10 @@
    "id": "trot",
    "fps": 7,
    "loop": true,
+   "advance": [
+    5,
+    4
+   ],
    "status": "placeholder",
    "description": "Trota.",
    "reference": [
@@ -488,6 +502,10 @@
    "id": "run",
    "fps": 12,
    "loop": true,
+   "advance": [
+    6,
+    6
+   ],
    "status": "placeholder",
    "description": "Corre una ráfaga corta, cuerpo estirado.",
    "reference": [
@@ -579,6 +597,10 @@
    "id": "box_push",
    "fps": 6,
    "loop": true,
+   "advance": [
+    6,
+    6
+   ],
    "status": "placeholder",
    "description": "Empuja la caja con la cabeza, inclinado hacia delante.",
    "reference": [

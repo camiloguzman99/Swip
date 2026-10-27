@@ -57,7 +57,9 @@ public sealed class Cat
     internal int Phase;              // fase del movimiento (acercarse, saltar, empujar...)
     internal double PhaseTime;
     internal double StartX, StartY, TargetX, TargetY;
-    internal double Speed;           // velocidad horizontal de este paso (para el clip)
+    internal double Speed;           // velocidad horizontal nominal mientras se desplaza (para el polvo)
+    internal string? StepClip;       // clip y cambio de fotograma del último avance: el gato solo
+    internal int StepTick;           // se desplaza cuando cambia el fotograma (ver SwipWorld.FrameStep)
     internal int Direction = 1;
     internal string? ClipOverride;   // clip de la fase (p. ej. trotar mientras se acerca a la caja)
     internal string? PartnerId;      // gato con el que interactúa

@@ -1,7 +1,7 @@
 namespace Swip.Shared.Settings;
 
 /// <summary>Estado de un gato en el momento de guardar su posición.</summary>
-public readonly record struct CatSnapshot(string Key, string Color, int Fat, double X);
+public readonly record struct CatSnapshot(string Key, string Color, double X);
 
 /// <summary>
 /// Guarda dónde están los gatos AHORA para que la otra sesión los muestre en el mismo sitio al
@@ -28,14 +28,14 @@ public static class CatPositions
             if (!settings.Cats.TryGetValue(cat.Key, out var pref))
             {
                 // Gato aún sin preferencias: se crean con su aspecto actual y esta posición.
-                settings.Cats[cat.Key] = new CatPref { Color = cat.Color, Fat = cat.Fat, X = cat.X };
+                settings.Cats[cat.Key] = new CatPref { Color = cat.Color, X = cat.X };
                 continue;
             }
 
             knownX.TryGetValue(cat.Key, out var known);
             if (!Same(pref.X, known)) continue; // otra sesión lo movió desde que lo vimos
 
-            pref.X = cat.X; // solo la posición: color y gordura no se tocan
+            pref.X = cat.X; // solo la posición: el color no se toca
         }
     }
 

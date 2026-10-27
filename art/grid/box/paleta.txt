@@ -1,0 +1,15 @@
+# Paleta de la piel 'box': letra -> color. '.' = transparente.
+# No cambies las letras existentes (los archivos editados a mano dependen de ellas);
+# para un color nuevo, añade una línea con la siguiente letra libre.
+a #010101
+b #160200
+c #794516
+d #864E1D
+e #8E5A34
+f #995E24
+g #B7742D
+h #C98437
+i #BE924A
+j #D78D38
+k #D9974B
+l #EBA04F
