@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     private SwipWorld _world = null!;
     private CatAtlas _atlas = null!;
     private readonly RotateTransform _boxTilt = new();   // tambaleo de la caja (lo calcula el motor)
+    private int _topmostTicks;                            // cuenta para reafirmar "siempre encima"
     private bool? _boxShownOpen;                          // estado de caja dibujado por última vez
 
     // Arrastre de la caja
@@ -110,7 +111,6 @@ public partial class MainWindow : Window
     }
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
-    private const double CatPx = 48;   // alto del gato en pantalla
     // La caja mide lo que su cuadrícula: 1 casilla = 1 px lógico (50x36).
     private static double BoxH => BoxSprites.AspectH;
     private static double BoxW => BoxSprites.AspectW;
@@ -127,15 +127,19 @@ public partial class MainWindow : Window
     {
         _settings = _store.Load();
 
-        // Motor: medidas en DIP. El ancho del gato sale de las proporciones del atlas.
+        // Motor: medidas en DIP = casillas. Para el motor el gato es su cuadro por ENCIMA de la base
+        // (48x48): lo que cuelga por debajo (24 filas) se dibuja sobre la barra de tareas.
         _atlas = CatAtlas.Default;
         _world = new SwipWorld(new WorldConfig(
-            CatWidth: CatPx * _atlas.Aspect, CatHeight: CatPx,
+            CatWidth: _atlas.GridWidth, CatHeight: _atlas.BaseRows,
             BoxWidth: BoxW, BoxHeight: BoxH,
             BoxTopInsetClosed: BoxSprites.TopInsetClosed, BoxTopInsetOpen: BoxSprites.TopInsetOpen));
-        _world.HeadFraction = clip => _atlas.HeadFraction("orange", clip);
+        // El atlas mide la cabeza sobre el cuadro entero (72 filas); el motor, sobre las 48 de encima de la base.
+        _world.HeadFraction = clip => _atlas.HeadFraction("orange", clip) * _atlas.GridHeight / _atlas.BaseRows;
         Box.RenderTransformOrigin = new Point(0.5, 1);
         Box.RenderTransform = _boxTilt;
+        BoxFrame.RenderTransformOrigin = new Point(0.5, 1);
+        BoxFrame.RenderTransform = _boxTilt; // el marco gira con la caja
 
         SetBoxOpen(false);
         ApplyStripBounds();
@@ -433,18 +437,26 @@ public partial class MainWindow : Window
         // La franja ocupa toda el ÁREA DE TRABAJO (pantalla menos la barra de tareas), fija. Se mide
         // en píxeles reales del monitor principal: si se pasa a otra pantalla con otra escala, la
         // ventana se recoloca ahí y el motor recibe el tamaño en px lógicos de esa pantalla.
+        // La ventana baja además, sobre la barra de tareas, lo que los gatos dibujan por debajo de la
+        // base (24 filas): la cola que cuelga, algo que se cae... El suelo del motor sigue siendo el
+        // borde del área de trabajo.
+        double below = _atlas.GridHeight - _atlas.BaseRows;
         if (_hwnd != IntPtr.Zero && DisplayNative.PrimaryWorkArea() is { } work)
         {
             DisplayNative.PlaceWindow(_hwnd, work.Pixels);
             // Si al moverla cambió de monitor (y de escala), WPF la redimensiona a su manera:
             // se vuelve a colocar ya con la escala nueva para que ocupe exactamente el área.
             double scale = DisplayNative.WindowScale(_hwnd);
-            DisplayNative.PlaceWindow(_hwnd, work.Pixels);
-            Left = work.Pixels.Left / scale;
-            Top = work.Pixels.Top / scale;
-            Width = work.Pixels.Width / scale;
-            Height = work.Pixels.Height / scale;
+            int extra = Math.Max(0, Math.Min((int)Math.Ceiling(below * scale), work.Monitor.Bottom - work.Pixels.Bottom));
+            var rect = work.Pixels;
+            rect.Bottom += extra;
+            DisplayNative.PlaceWindow(_hwnd, rect);
+            Left = rect.Left / scale;
+            Top = rect.Top / scale;
+            Width = rect.Width / scale;
+            Height = rect.Height / scale;
             _world.Resize(work.Pixels.Width / scale, work.Pixels.Height / scale);
+            EmptyHint.Margin = new Thickness(0, 0, 0, 8 + extra / scale);
         }
         else
         {
@@ -475,7 +487,7 @@ public partial class MainWindow : Window
     private void RepositionCats()
     {
         foreach (var (_, sprite) in _sprites)
-            sprite.SetCatSize(CatPx);
+            sprite.UpdateScale();
         RepositionBox();
     }
 
@@ -510,6 +522,14 @@ public partial class MainWindow : Window
         RenderBox();
         Effects.Sync(_world.Particles);
         UpdateClickThrough();
+
+        // Cada segundo, volver a ponerse por encima de la barra de tareas (al pulsarla se pone delante
+        // y taparía lo que cuelga por debajo de la base). No con un menú abierto: quedaría detrás.
+        if (++_topmostTicks >= 30)
+        {
+            _topmostTicks = 0;
+            if (!InfoPopup.IsOpen && !ConfigPopup.IsOpen) DisplayNative.KeepOnTop(_hwnd);
+        }
     }
 
     /// <summary>Dibuja la caja donde la tiene el motor (posición, abierta/cerrada y tambaleo).</summary>
@@ -517,8 +537,14 @@ public partial class MainWindow : Window
     {
         var b = _world.Box;
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        Canvas.SetLeft(Box, PixelScale.Snap(b.X, scale)); // casillas sobre píxeles reales
-        Canvas.SetTop(Box, PixelScale.Snap(b.Y, scale));
+        double left = PixelScale.Snap(b.X, scale), top = PixelScale.Snap(b.Y, scale); // casillas sobre píxeles reales
+        Canvas.SetLeft(Box, left);
+        Canvas.SetTop(Box, top);
+        Canvas.SetLeft(BoxFrame, left);
+        Canvas.SetTop(BoxFrame, top);
+        BoxFrame.Width = Box.Width;
+        BoxFrame.Height = Box.Height;
+        BoxFrame.StrokeThickness = 1 / scale; // 1 píxel real
         if (_boxShownOpen != b.Open)
         {
             _boxShownOpen = b.Open;
@@ -625,7 +651,7 @@ public partial class MainWindow : Window
                 _agents.Remove(gone);
             }
 
-            double maxX = Math.Max(0, Width - CatPx);
+            double maxX = Math.Max(0, _world.Width - _atlas.GridWidth);
             bool placedNewCat = false; // algún gato recibió una X aleatoria que hay que compartir
 
             foreach (var u in users)
@@ -657,7 +683,7 @@ public partial class MainWindow : Window
                     agent.Body = _world.AddCat(agent.Key, x, agent.Mode, facingRight: _rng.NextDouble() < 0.5);
                     _agents[u.UserName] = agent;
 
-                    var sprite = new CatSprite(agent, _atlas, CatPx);
+                    var sprite = new CatSprite(agent, _atlas);
                     sprite.ShowLabel(_settings.ShowLabels);
                     WireSprite(sprite);
                     PlaceSprite(sprite, agent.Body);

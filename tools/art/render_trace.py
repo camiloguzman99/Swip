@@ -17,13 +17,15 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 ATLAS = os.path.join(ROOT, "src", "Swip.App", "Assets", "atlas")
 BOX = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")
-CAT_H, CAT_W, BOX_H, BOX_W = 48, 34, 36, 50
+BOX_H, BOX_W = 36, 50
+BELOW = 24      # filas del cuadro por debajo de la base (sobre la barra de tareas)
 SCALE = 2  # dibujar al doble para que se vea
 SKIN_OF = {"activo": "orange", "fondo": "gray", "dormido": "orange"}
 
 meta = json.load(open(os.path.join(ATLAS, "atlas.json"), encoding="utf-8"))
 sheets = {s: Image.open(os.path.join(ATLAS, f)).convert("RGBA") for s, f in meta["skins"].items()}
 cw, ch = meta["cell"]
+CAT_W, CAT_H = cw, meta.get("base", ch)   # para el motor el gato es su cuadro por encima de la base
 box_img = {o: Image.open(os.path.join(BOX, f"box_{'open' if o else 'closed'}.png")).convert("RGBA") for o in (False, True)}
 
 
@@ -47,11 +49,15 @@ def cat_frame(skin, clip, frame):
 
 def draw_cat(canvas, c, skin):
     # El dibujo no se deforma: cuadrícula ampliada píxel a píxel, espejo y desplazamiento en casillas enteras.
-    img = cat_frame(skin, c["clip"], c["frame"]).resize((CAT_W * SCALE, CAT_H * SCALE), Image.NEAREST)
+    img = cat_frame(skin, c["clip"], c["frame"]).resize((cw * SCALE, ch * SCALE), Image.NEAREST)
     if not c["facingRight"]:
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    cx = (round(c["X"] + c["ox"]) + CAT_W / 2) * SCALE
-    bottom = (round(c["Y"] + c["oy"]) + CAT_H) * SCALE
+    # Marco del cuadro de dibujo y su base, como en la app.
+    fd = ImageDraw.Draw(img)
+    fd.rectangle([0, 0, img.width - 1, img.height - 1], outline=(0, 229, 255, 150))
+    fd.line([0, CAT_H * SCALE - 1, img.width, CAT_H * SCALE - 1], fill=(255, 79, 216, 200))
+    cx = (round(c["X"] + c["ox"]) + cw / 2) * SCALE
+    bottom = (round(c["Y"] + c["oy"]) + ch) * SCALE
     canvas.alpha_composite(img, (round(cx - img.width / 2), round(bottom - img.height)))
 
 
@@ -66,11 +72,12 @@ def draw_shadow(d, c):
 
 
 def render(snapshot, width, height):
-    W, H = round(width * SCALE), round(height * SCALE)
+    W, H = round(width * SCALE), round((height + BELOW) * SCALE)
     canvas = Image.new("RGBA", (W, H), (58, 62, 70, 255))
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    d.line([0, H - 1, W, H - 1], fill=(120, 124, 132), width=2)
+    floor = round(height * SCALE)
+    d.rectangle([0, floor, W, H], fill=(32, 34, 38, 255))   # la barra de tareas, debajo del suelo
 
     box = snapshot["box"]
     bimg = box_img[box["Open"]].resize((BOX_W * SCALE, BOX_H * SCALE), Image.NEAREST)  # cuadrícula: casillas cuadradas

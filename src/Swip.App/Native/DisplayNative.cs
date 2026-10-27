@@ -17,8 +17,27 @@ internal static class DisplayNative
         public int Height => Bottom - Top;
     }
 
-    /// <summary>Área de trabajo del monitor principal (pantalla menos la barra de tareas) y su escala.</summary>
-    public readonly record struct WorkArea(RECT Pixels, double Scale);
+    /// <summary>
+    /// Área de trabajo del monitor principal (pantalla menos la barra de tareas), el monitor entero
+    /// (para saber cuánto se puede bajar sobre la barra) y su escala.
+    /// </summary>
+    public readonly record struct WorkArea(RECT Pixels, RECT Monitor, double Scale);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
 
     private const uint SPI_GETWORKAREA = 0x0030;
     private const uint MONITOR_DEFAULTTOPRIMARY = 1;
@@ -52,7 +71,9 @@ internal static class DisplayNative
         double scale = 1;
         if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, out uint dpi, out _) == 0 && dpi > 0)
             scale = dpi / 96.0;
-        return new WorkArea(rect, scale);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        var screen = monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref info) ? info.rcMonitor : rect;
+        return new WorkArea(rect, screen, scale);
     }
 
     /// <summary>Escala actual de la ventana (1 = 100 %, 1.25 = 125 %…).</summary>
@@ -61,6 +82,13 @@ internal static class DisplayNative
         uint dpi = hwnd == IntPtr.Zero ? 0 : GetDpiForWindow(hwnd);
         return dpi > 0 ? dpi / 96.0 : 1;
     }
+
+    /// <summary>
+    /// Vuelve a poner la ventana por encima de todo (sin activarla). La barra de tareas también está
+    /// "siempre encima" y al pulsarla se pondría delante de lo que cuelga por debajo de la base.
+    /// </summary>
+    public static void KeepOnTop(IntPtr hwnd) =>
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     /// <summary>Coloca la ventana exactamente en un rectángulo de píxeles reales.</summary>
     public static void PlaceWindow(IntPtr hwnd, RECT r) =>

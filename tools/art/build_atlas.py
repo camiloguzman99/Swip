@@ -8,7 +8,8 @@ Para cada piel (orange, gray) y cada clip:
     (escala, giro, desplazamiento, espejo) sobre las poses ya dibujadas.
 
 Cada fotograma se convierte después a una CUADRÍCULA de GRID_W x GRID_H casillas (1 casilla = 1 px
-de la app a escala 100%): cada casilla es un color de la paleta de la piel, escrito con una letra en
+de la app a escala 100%; la base donde se apoyan los pies está en la fila GRID_BASE, y por debajo
+quedan 24 filas para lo que cuelga): cada casilla es un color de la paleta de la piel, escrito con una letra en
   art/grid/<piel>/<clip>.txt      (fotogramas en letras; "." = transparente)
   art/grid/<piel>/paleta.txt      (letra -> color; estable entre ejecuciones)
 Los archivos con "fuente: auto" se regeneran en cada ejecución. Si editas uno a mano, cambia esa
@@ -43,8 +44,13 @@ BOX_SRC = os.path.join(ROOT, "art", "box")                           # dibujos d
 BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadrícula para la app
 BOX_GRID = (50, 36)              # casillas de la caja: 36 de alto = su alto en la app (px lógicos)
 SKINS = ["orange", "gray"]
-GRID_H = 48                      # casillas de alto = px de alto del gato en la app (escala 100%)
-GRID_W = 34                      # casillas de ancho (proporción del lienzo original 269x379)
+# Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %):
+# 48x48 encima de la BASE (la línea donde se apoyan los pies) y 24 filas más por debajo, para
+# acciones que cuelgan (la cola por debajo, algo que se le cae, buscar algo por el borde).
+GRID_W = 48
+GRID_BASE = 48                   # filas por encima de la base: los pies se apoyan en la fila 47
+GRID_H = GRID_BASE + 24
+ART_W, ART_H = 34, 48            # el arte actual (lienzo 269x379, pies abajo) ocupa 34x48 casillas
 COLUMNS = 12
 ALPHA_MIN = 20
 PALETTE_SIZE = 62                # colores por piel (máximo: una letra o dígito por color)
@@ -129,7 +135,7 @@ def main():
                     img = final_frame(skin, clip["id"], i, spec, (base_w, base_h))
                 else:
                     img = render_reference(skin, spec, (base_w, base_h))
-                imgs.append(to_cells(img))
+                imgs.append(on_base(to_cells(img, ART_W, ART_H)))
             pending[skin][clip["id"]] = imgs
 
     # 2) Paleta estable por piel y escritura de las cuadrículas automáticas en letras.
@@ -143,7 +149,7 @@ def main():
 
     # 3) Atlas: una celda por fotograma, a tamaño real (1 casilla = 1 px).
     sheets = {s: Image.new("RGBA", (GRID_W * COLUMNS, GRID_H * rows), (0, 0, 0, 0)) for s in SKINS}
-    meta = {"cell": [GRID_W, GRID_H], "columns": COLUMNS, "grid": True,
+    meta = {"cell": [GRID_W, GRID_H], "base": GRID_BASE, "columns": COLUMNS, "grid": True,
             "skins": {s: f"cats_{s}.png" for s in SKINS}, "clips": {}}
     cell = 0
     for clip in clips:
@@ -180,7 +186,14 @@ def luminance(c):
     return 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
 
 
-def to_cells(img, grid_w=GRID_W, grid_h=GRID_H):
+def on_base(cells):
+    """Coloca el dibujo (pies abajo) centrado en el cuadro GRID_W x GRID_H con los pies sobre la base."""
+    out = Image.new("RGBA", (GRID_W, GRID_H), (0, 0, 0, 0))
+    out.alpha_composite(cells, ((GRID_W - cells.width) // 2, GRID_BASE - cells.height))
+    return out
+
+
+def to_cells(img, grid_w, grid_h):
     """Lienzo (269x379 los gatos) -> grid_w x grid_h casillas. Cada casilla toma el color mediano de su zona,
     pero si el contorno oscuro cubre al menos el 30% de ella, la casilla es contorno: así las líneas
     finas del dibujo no desaparecen al reducir (un promedio las convertiría en un borde borroso)."""
@@ -375,6 +388,7 @@ def write_reference_sheets(clips, grids):
                 d.rectangle([x, y, x + fw - 4, y + fh], outline=(90, 94, 102))
                 big = img.resize((GRID_W * zoom, GRID_H * zoom), Image.NEAREST)
                 sheet.alpha_composite(big, (x, y))
+                d.line([x, y + GRID_BASE * zoom, x + fw - 4, y + GRID_BASE * zoom], fill=(255, 80, 200))
                 d.text((x + 4, y + fh + 4), f"{skin} #{i}", fill=(170, 170, 170), font=small_font)
         sheet.convert("RGB").save(os.path.join(REF, f"{clip['id']}.png"), optimize=True)
 
@@ -412,7 +426,8 @@ def write_pending(clips):
         "4. Ejecuta `python3 tools/art/build_atlas.py`.",
         "",
         f"El script reduce cada fotograma a una **cuadrícula de {GRID_W}×{GRID_H} casillas** (1 casilla = 1 px",
-        "del gato en la app) y la guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en",
+        f"del gato en la app; los pies se apoyan en la base, fila {GRID_BASE}, y las {GRID_H - GRID_BASE} filas de debajo",
+        "son para lo que cuelga) y la guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en",
         "`art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia",
         "`fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.",
         "",

@@ -36,6 +36,7 @@ public sealed class CatAtlas
         _cellH = cell[1].GetInt32();
         _columns = root.GetProperty("columns").GetInt32();
         Aspect = _cellW / (double)_cellH;
+        BaseRows = root.TryGetProperty("base", out var baseRows) ? baseRows.GetInt32() : _cellH;
 
         foreach (var skin in root.GetProperty("skins").EnumerateObject())
             _sheets[skin.Name] = LoadBitmap($"Assets/atlas/{skin.Value.GetString()}");
@@ -110,6 +111,12 @@ public sealed class CatAtlas
     /// <summary>Tamaño de la cuadrícula de cada fotograma (casillas = px lógicos).</summary>
     public int GridWidth => _cellW;
     public int GridHeight => _cellH;
+
+    /// <summary>
+    /// Filas por encima de la BASE, la línea donde se apoyan los pies (48). Por debajo quedan
+    /// <c>GridHeight - BaseRows</c> filas para lo que cuelga (la cola, algo que se cae...).
+    /// </summary>
+    public int BaseRows { get; }
 
     /// <summary>Caja de los píxeles visibles del fotograma (0..1 sobre el lienzo, sin espejar).</summary>
     public Rect Bounds(string paletteId, string clip, int frame)

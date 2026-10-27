@@ -17,7 +17,6 @@ namespace Swip.App.Controls;
 public partial class CatSprite : UserControl
 {
     private readonly CatAtlas _atlas;
-    private double _baseSize = 48;
 
     // Lo último que se dibujó, para no reasignar propiedades iguales en cada fotograma.
     private string? _labelClip, _labelColor;
@@ -27,22 +26,20 @@ public partial class CatSprite : UserControl
 
     public CatAgent Agent { get; }
 
-    public CatSprite(CatAgent agent, CatAtlas atlas, double catSize)
+    public CatSprite(CatAgent agent, CatAtlas atlas)
     {
         InitializeComponent();
         Agent = agent;
         _atlas = atlas;
         NameLabel.Text = LabelFormat.Split(agent.DisplayName); // dos palabras = dos filas
         LabelBox.SizeChanged += (_, _) => PositionLabel(_lastPose);
-        SetCatSize(catSize);
-    }
 
-    /// <summary>Ajusta el tamaño del gato (alto en DIP; el ancho sale de las proporciones de la cuadrícula).</summary>
-    public void SetCatSize(double size)
-    {
-        _baseSize = size;
-        Img.Height = size;
-        Img.Width = size * _atlas.Aspect;
+        // El cuadro de dibujo mide lo que la cuadrícula: 1 casilla = 1 px lógico, siempre.
+        Cell.Width = Img.Width = Frame.Width = BaseLine.Width = atlas.GridWidth;
+        Cell.Height = Img.Height = Frame.Height = atlas.GridHeight;
+        Width = atlas.GridWidth;
+        Height = atlas.GridHeight;
+        Shadow.Margin = new Thickness(0, atlas.BaseRows - Shadow.Height / 2, 0, 0); // sobre la base
         UpdateScale();
     }
 
@@ -57,6 +54,9 @@ public partial class CatSprite : UserControl
         if (scale <= 0) scale = 1;
         _scale = scale;
         _prescale = PixelScale.Prescale(scale);
+        // Marco y base de exactamente 1 píxel real, alineados con las casillas.
+        Frame.StrokeThickness = BaseLine.Height = 1 / scale;
+        BaseLine.Margin = new Thickness(0, _atlas.BaseRows - 1 / scale, 0, 0);
         RenderOptions.SetBitmapScalingMode(Img,
             PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
         Img.Source = null; // se vuelve a pedir el fotograma con la ampliación nueva
@@ -91,7 +91,8 @@ public partial class CatSprite : UserControl
             Shadow.Visibility = Visibility.Visible;
             double k = 1 / (1 + pose.ShadowDrop / 40);
             ShadowScale.ScaleX = ShadowScale.ScaleY = k;
-            ShadowShift.Y = pose.ShadowDrop;
+            // Pies (con el salto) + distancia hasta la superficie = la superficie: ahí va la sombra.
+            ShadowShift.Y = PixelScale.Snap(pose.OffsetY + pose.ShadowDrop, _scale);
             Shadow.Opacity = 0.25 * k;
         }
 
