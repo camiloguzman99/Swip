@@ -51,9 +51,8 @@ public partial class MainWindow : Window
     // Motor de movimientos (gatos, caja, efectos) y hojas de sprites.
     private SwipWorld _world = null!;
     private CatAtlas _atlas = null!;
-    private readonly RotateTransform _boxTilt = new();   // tambaleo de la caja (lo calcula el motor)
     private int _topmostTicks;                            // cuenta para reafirmar "siempre encima"
-    private bool? _boxShownOpen;                          // estado de caja dibujado por última vez
+    private (bool Open, int Degrees, int Prescale)? _boxShown; // caja dibujada por última vez
 
     // Arrastre de la caja
     private bool _boxMoved;
@@ -112,8 +111,8 @@ public partial class MainWindow : Window
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
     // La caja mide lo que su cuadrícula: 1 casilla = 1 px lógico (50x36).
-    private static double BoxH => BoxSprites.AspectH;
-    private static double BoxW => BoxSprites.AspectW;
+    private static double BoxH => BoxSprites.Rows;
+    private static double BoxW => BoxSprites.Columns;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -136,10 +135,6 @@ public partial class MainWindow : Window
             BoxTopInsetClosed: BoxSprites.TopInsetClosed, BoxTopInsetOpen: BoxSprites.TopInsetOpen));
         // El atlas mide la cabeza sobre el cuadro entero (72 filas); el motor, sobre las 48 de encima de la base.
         _world.HeadFraction = clip => _atlas.HeadFraction("orange", clip) * _atlas.GridHeight / _atlas.BaseRows;
-        Box.RenderTransformOrigin = new Point(0.5, 1);
-        Box.RenderTransform = _boxTilt;
-        BoxFrame.RenderTransformOrigin = new Point(0.5, 1);
-        BoxFrame.RenderTransform = _boxTilt; // el marco gira con la caja
 
         SetBoxOpen(false);
         ApplyStripBounds();
@@ -494,8 +489,9 @@ public partial class MainWindow : Window
     /// <summary>Coloca la caja en su posición guardada, o por defecto en la esquina inferior izquierda.</summary>
     private void RepositionBox()
     {
-        Box.Width = BoxW;
-        Box.Height = BoxH;
+        // El cuadro de dibujo de la caja tiene margen para la caja inclinada (BoxSprites).
+        Box.Width = BoxFrame.Width = BoxSprites.FrameWidth;
+        Box.Height = BoxFrame.Height = BoxSprites.FrameHeight;
         _world.PlaceBox(_settings.BoxLeft ?? 8); // la caja siempre descansa en el suelo
         RenderBox();
     }
@@ -537,20 +533,24 @@ public partial class MainWindow : Window
     {
         var b = _world.Box;
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        double left = PixelScale.Snap(b.X, scale), top = PixelScale.Snap(b.Y, scale); // casillas sobre píxeles reales
+        // El cuadro empieza PadX/PadTop casillas antes que la caja recta; todo sobre píxeles reales.
+        double left = PixelScale.Snap(b.X - BoxSprites.PadX, scale);
+        double top = PixelScale.Snap(b.Y - BoxSprites.PadTop, scale);
         Canvas.SetLeft(Box, left);
         Canvas.SetTop(Box, top);
         Canvas.SetLeft(BoxFrame, left);
         Canvas.SetTop(BoxFrame, top);
-        BoxFrame.Width = Box.Width;
-        BoxFrame.Height = Box.Height;
         BoxFrame.StrokeThickness = 1 / scale; // 1 píxel real
-        if (_boxShownOpen != b.Open)
+
+        // El tambaleo se dibuja con píxeles (la caja gira dentro de su cuadrícula), a grados enteros.
+        var shown = (b.Open, (int)Math.Round(b.Wobble), PixelScale.Prescale(scale));
+        if (_boxShown != shown)
         {
-            _boxShownOpen = b.Open;
-            Box.Source = BoxSprites.Get(b.Open);
+            _boxShown = shown;
+            Box.Source = BoxSprites.Get(shown.Item1, shown.Item2, shown.Item3);
+            RenderOptions.SetBitmapScalingMode(Box,
+                PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
         }
-        if (_boxTilt.Angle != b.Wobble) _boxTilt.Angle = b.Wobble;
     }
 
     /// <summary>Cursor en coordenadas de la ventana (DIP), o null si está fuera de ella.</summary>
@@ -605,11 +605,13 @@ public partial class MainWindow : Window
 
         var dpi = VisualTreeHelper.GetDpi(this);
 
-        // La caja: solo su figura visible (el PNG cerrado tiene ~16% de margen transparente arriba).
+        // La caja: solo su figura visible (la cerrada tiene margen transparente arriba), dentro de su
+        // cuadro de dibujo (que deja margen para el tambaleo).
         var area = SpriteBounds.Opaque(BoxSprites.Grid(_world.Box.Open));
+        double cell = Box.ActualWidth / BoxSprites.FrameWidth;
         var boxRect = new Rect(
-            area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
-            area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
+            (BoxSprites.PadX + area.X * BoxSprites.Columns) * cell, (BoxSprites.PadTop + area.Y * BoxSprites.Rows) * cell,
+            area.Width * BoxSprites.Columns * cell, area.Height * BoxSprites.Rows * cell);
         if (IsPointOver(Box, boxRect, p, dpi)) return true;
 
         // Cada gato: la caja de sus píxeles visibles, según su pose y hacia dónde mira.
@@ -870,7 +872,9 @@ public partial class MainWindow : Window
         _dragging = true;
         _boxStartLeft = _world.Box.X;
         _boxStartTop = _world.Box.Y;
-        _boxGrab = e.GetPosition(Box);
+        // Punto agarrado respecto a la caja recta (el cuadro de dibujo empieza antes, por el margen).
+        var grab = e.GetPosition(Box);
+        _boxGrab = new Point(grab.X - BoxSprites.PadX, grab.Y - BoxSprites.PadTop);
         Box.CaptureMouse();
     }
 

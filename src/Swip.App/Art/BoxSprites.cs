@@ -1,92 +1,125 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Swip.Shared.Art;
 
 namespace Swip.App.Art;
 
 /// <summary>
 /// La caja de cartón (cerrada / abierta) es una CUADRÍCULA, igual que los gatos (Assets/box, generada
-/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico). Se dibuja como cuadrados vectoriales, no
-/// como imagen: cuando se tambalea gira la cuadrícula entera y cada casilla sigue siendo un cuadrado
-/// (inclinado, con el borde suavizado), sin remuestrear el dibujo ni deformarlo.
+/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico). El tambaleo también se hace con píxeles:
+/// la caja se gira DENTRO de su cuadrícula (cada casilla toma el color que le toca, las casillas nunca
+/// se inclinan ni se estiran) y se balancea sobre la esquina de abajo que queda apoyada.
+/// El cuadro de dibujo tiene margen alrededor para que quepa la caja inclinada.
 /// </summary>
 public static class BoxSprites
 {
-    private static BitmapSource? _closedGrid, _openGrid;
-    private static DrawingImage? _closed, _open;
+    /// <summary>Inclinación máxima del motor (grados): define el margen del cuadro de dibujo.</summary>
+    private const double MaxTilt = 12;
 
-    /// <summary>Cuadrícula de la caja (para medidas y zona clicable).</summary>
+    private static BitmapSource? _closedGrid, _openGrid;
+    private static int[]? _closedPx, _openPx;
+    private static readonly Dictionary<(bool Open, int Degrees, int Prescale), BitmapSource> Cache = new();
+
+    /// <summary>Cuadrícula de la caja recta (para medidas y zona clicable).</summary>
     public static BitmapSource Grid(bool open) =>
         open ? _openGrid ??= Load("Assets/box/box_open.png") : _closedGrid ??= Load("Assets/box/box_closed.png");
 
-    /// <summary>Proporciones de la caja: casillas de ancho y de alto.</summary>
-    public static double AspectW => Grid(false).PixelWidth;
-    public static double AspectH => Grid(false).PixelHeight;
+    /// <summary>Casillas de la caja (ancho y alto de la caja recta).</summary>
+    public static int Columns => Grid(false).PixelWidth;
+    public static int Rows => Grid(false).PixelHeight;
+
+    /// <summary>Margen del cuadro de dibujo a cada lado y por encima, para la caja inclinada.</summary>
+    public static int PadX => (int)Math.Ceiling(Rows * Math.Sin(MaxTilt * Math.PI / 180));
+    public static int PadTop => (int)Math.Ceiling(Columns * Math.Sin(MaxTilt * Math.PI / 180));
+
+    /// <summary>Cuadro de dibujo completo de la caja (casillas = px lógicos).</summary>
+    public static int FrameWidth => Columns + 2 * PadX;
+    public static int FrameHeight => Rows + PadTop;
 
     // Margen transparente superior de cada estado (fracción del alto). La colisión debe usar el borde
     // VISIBLE (la tapa cerrada está más baja que las solapas abiertas) o el gato flota sobre la caja.
     public static double TopInsetClosed => SpriteBounds.Opaque(Grid(false)).Y;
     public static double TopInsetOpen => SpriteBounds.Opaque(Grid(true)).Y;
 
-    /// <summary>Dibujo de la caja: un cuadrado por casilla.</summary>
-    public static ImageSource Get(bool open) =>
-        open ? _open ??= Cells(Grid(true)) : _closed ??= Cells(Grid(false));
-
     /// <summary>
-    /// Convierte la cuadrícula en cuadrados vectoriales. Las casillas de un mismo color se juntan en
-    /// una sola figura por fila (sin rendijas al girar) y cada color es una única geometría.
+    /// La caja inclinada <paramref name="degrees"/> grados (positivo = horario, se levanta el lado
+    /// izquierdo), dibujada en su cuadro de <see cref="FrameWidth"/>x<see cref="FrameHeight"/> casillas
+    /// y ampliada píxel a píxel por <paramref name="prescale"/> (ver <see cref="PixelScale"/>).
     /// </summary>
-    private static DrawingImage Cells(BitmapSource grid)
+    public static BitmapSource Get(bool open, double degrees, int prescale = 1)
     {
-        var bgra = new FormatConvertedBitmap(grid, PixelFormats.Bgra32, null, 0);
-        int w = bgra.PixelWidth, h = bgra.PixelHeight, stride = w * 4;
-        var px = new byte[stride * h];
-        bgra.CopyPixels(px, stride, 0);
+        int deg = (int)Math.Round(Math.Clamp(degrees, -MaxTilt, MaxTilt));
+        prescale = Math.Clamp(prescale, 1, 8);
+        var key = (open, deg, prescale);
+        if (Cache.TryGetValue(key, out var cached)) return cached;
 
-        var runs = new Dictionary<uint, List<Rect>>();
+        int[] src = Pixels(open);
+        int cols = Columns, rows = Rows, w = FrameWidth, h = FrameHeight;
+        var cells = new int[w * h];
+
+        // Giro en el espacio de las casillas: para cada casilla del cuadro se busca de qué casilla de la
+        // caja recta viene (giro inverso) y se copia su color tal cual. Pivote: la esquina de abajo que
+        // se queda en el suelo (la derecha si se levanta la izquierda, y al revés).
+        // El pivote es la esquina de la BASE del dibujo: la fila de abajo, de su primera a su última
+        // casilla visible (los dibujos tienen margen transparente, y la caja abierta es más ancha
+        // arriba por las solapas que abajo).
+        var (footLeft, footRight, footRow) = Foot(src, cols, rows);
+        double a = deg * Math.PI / 180, cos = Math.Cos(a), sin = Math.Sin(a);
+        double pivotX = deg >= 0 ? footRight : footLeft;   // en coordenadas de la caja recta
+        double pivotY = footRow;
         for (int y = 0; y < h; y++)
         {
-            int x = 0;
-            while (x < w)
+            for (int x = 0; x < w; x++)
             {
-                int i = y * stride + x * 4;
-                if (px[i + 3] == 0) { x++; continue; }
-                uint color = (uint)(px[i + 2] << 16 | px[i + 1] << 8 | px[i]);
-                int start = x;
-                while (x < w && px[y * stride + x * 4 + 3] != 0
-                       && (uint)(px[y * stride + x * 4 + 2] << 16 | px[y * stride + x * 4 + 1] << 8 | px[y * stride + x * 4]) == color)
-                    x++;
-                // Un pelín más grande (0.03 casillas) hacia la derecha y abajo, sin salirse de la
-                // cuadrícula: las figuras vecinas se solapan y al girar no asoma el fondo entre ellas.
-                if (!runs.TryGetValue(color, out var list)) runs[color] = list = new List<Rect>();
-                list.Add(new Rect(start, y, Math.Min(x - start + 0.03, w - start), Math.Min(1.03, h - y)));
+                // Centro de la casilla del cuadro, en coordenadas de la caja recta respecto al pivote.
+                double dx = x + 0.5 - PadX - pivotX, dy = y + 0.5 - PadTop - pivotY;
+                double sx = dx * cos + dy * sin + pivotX;   // giro inverso
+                double sy = -dx * sin + dy * cos + pivotY;
+                int ix = (int)Math.Floor(sx), iy = (int)Math.Floor(sy);
+                if (ix >= 0 && ix < cols && iy >= 0 && iy < rows)
+                    cells[y * w + x] = src[iy * cols + ix];
             }
         }
 
-        var group = new DrawingGroup();
-        // Rectángulo transparente del tamaño de la cuadrícula: fija los límites del dibujo, para que
-        // los márgenes transparentes cuenten y la caja no se estire al ajustarse a la imagen.
-        group.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, w, h))));
-        foreach (var (color, rects) in runs)
+        // Ampliación entera (casilla = bloque de prescale x prescale píxeles).
+        int pw = w * prescale, ph = h * prescale;
+        var output = new int[pw * ph];
+        for (int y = 0; y < ph; y++)
+            for (int x = 0; x < pw; x++)
+                output[y * pw + x] = cells[(y / prescale) * w + x / prescale];
+        var bitmap = BitmapSource.Create(pw, ph, 96, 96, PixelFormats.Bgra32, null, output, pw * 4);
+        bitmap.Freeze();
+        Cache[key] = bitmap;
+        return bitmap;
+    }
+
+    /// <summary>Extremos izquierdo y derecho (bordes de casilla) de la fila visible más baja, y su borde inferior.</summary>
+    private static (double Left, double Right, double Bottom) Foot(int[] px, int cols, int rows)
+    {
+        for (int y = rows - 1; y >= 0; y--)
         {
-            var geometry = new StreamGeometry();
-            using (var ctx = geometry.Open())
+            int first = -1, last = -1;
+            for (int x = 0; x < cols; x++)
             {
-                foreach (var r in rects)
-                {
-                    ctx.BeginFigure(r.TopLeft, isFilled: true, isClosed: true);
-                    ctx.PolyLineTo(new[] { r.TopRight, r.BottomRight, r.BottomLeft }, isStroked: false, isSmoothJoin: false);
-                }
+                if ((px[y * cols + x] >>> 24) == 0) continue;
+                if (first < 0) first = x;
+                last = x;
             }
-            geometry.Freeze();
-            var brush = new SolidColorBrush(Color.FromRgb((byte)(color >> 16), (byte)(color >> 8), (byte)color));
-            brush.Freeze();
-            group.Children.Add(new GeometryDrawing(brush, null, geometry));
+            if (first >= 0) return (first, last + 1, y + 1);
         }
-        group.Freeze();
-        var image = new DrawingImage(group);
-        image.Freeze();
-        return image;
+        return (0, cols, rows);
+    }
+
+    private static int[] Pixels(bool open)
+    {
+        ref int[]? slot = ref open ? ref _openPx : ref _closedPx;
+        if (slot is not null) return slot;
+        var bgra = new FormatConvertedBitmap(Grid(open), PixelFormats.Bgra32, null, 0);
+        var px = new int[bgra.PixelWidth * bgra.PixelHeight];
+        bgra.CopyPixels(px, bgra.PixelWidth * 4, 0);
+        slot = px;
+        return px;
     }
 
     private static BitmapImage Load(string relativePath)

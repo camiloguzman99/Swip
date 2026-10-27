@@ -9,6 +9,7 @@ Dibuja las mismas transformaciones que la app: espejo, aplastar/estirar y giro c
 pivote, desplazamientos, sombra, gato detrás de la caja, tambaleo de la caja y partículas.
 """
 import json
+import math
 import os
 import sys
 
@@ -27,6 +28,35 @@ sheets = {s: Image.open(os.path.join(ATLAS, f)).convert("RGBA") for s, f in meta
 cw, ch = meta["cell"]
 CAT_W, CAT_H = cw, meta.get("base", ch)   # para el motor el gato es su cuadro por encima de la base
 box_img = {o: Image.open(os.path.join(BOX, f"box_{'open' if o else 'closed'}.png")).convert("RGBA") for o in (False, True)}
+
+
+MAX_TILT = 12
+PAD_X = math.ceil(BOX_H * math.sin(math.radians(MAX_TILT)))
+PAD_TOP = math.ceil(BOX_W * math.sin(math.radians(MAX_TILT)))
+
+
+def tilt_box(img, degrees):
+    """Igual que BoxSprites.Get en la app: la caja gira DENTRO de su cuadrícula (cada casilla toma el
+    color que le toca) sobre la esquina de abajo que queda apoyada. Devuelve el cuadro con margen."""
+    deg = round(max(-MAX_TILT, min(MAX_TILT, degrees)))
+    w, h = BOX_W + 2 * PAD_X, BOX_H + PAD_TOP
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    src, o = img.load(), out.load()
+    a = math.radians(deg)
+    cos, sin = math.cos(a), math.sin(a)
+    # Pivote: la esquina de la fila visible más baja (la base del dibujo, no las solapas).
+    alpha = img.getchannel("A").load()
+    bottom = max(y for y in range(BOX_H) for x in range(BOX_W) if alpha[x, y])
+    row = [x for x in range(BOX_W) if alpha[x, bottom]]
+    px, py = (row[-1] + 1 if deg >= 0 else row[0]), bottom + 1
+    for y in range(h):
+        for x in range(w):
+            dx, dy = x + 0.5 - PAD_X - px, y + 0.5 - PAD_TOP - py
+            sx, sy = dx * cos + dy * sin + px, -dx * sin + dy * cos + py
+            ix, iy = math.floor(sx), math.floor(sy)
+            if 0 <= ix < BOX_W and 0 <= iy < BOX_H:
+                o[x, y] = src[ix, iy]
+    return out
 
 
 def font(size):
@@ -80,10 +110,9 @@ def render(snapshot, width, height):
     d.rectangle([0, floor, W, H], fill=(32, 34, 38, 255))   # la barra de tareas, debajo del suelo
 
     box = snapshot["box"]
-    bimg = box_img[box["Open"]].resize((BOX_W * SCALE, BOX_H * SCALE), Image.NEAREST)  # cuadrícula: casillas cuadradas
-    if abs(box["Wobble"]) > 0.05:
-        bimg = bimg.rotate(-box["Wobble"], resample=Image.BICUBIC, expand=True)
-    bx, by = box["X"] * SCALE, box["Y"] * SCALE
+    framed = tilt_box(box_img[box["Open"]], box["Wobble"])   # tambaleo con píxeles, como en la app
+    bimg = framed.resize((framed.width * SCALE, framed.height * SCALE), Image.NEAREST)
+    bx, by = (box["X"] - PAD_X) * SCALE, (box["Y"] - PAD_TOP) * SCALE
 
     cats = snapshot["cats"]
     for c in cats:
@@ -91,7 +120,7 @@ def render(snapshot, width, height):
     canvas.alpha_composite(layer)
     for c in [c for c in cats if c["behind"]]:
         draw_cat(canvas, c, SKIN_OF.get(c["Id"], "orange"))
-    canvas.alpha_composite(bimg, (round(bx + BOX_W * SCALE / 2 - bimg.width / 2), round(by + BOX_H * SCALE - bimg.height)))
+    canvas.alpha_composite(bimg, (round(bx), round(by)))
     for c in [c for c in cats if not c["behind"]]:
         draw_cat(canvas, c, SKIN_OF.get(c["Id"], "orange"))
 

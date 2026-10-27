@@ -17,12 +17,12 @@
         <!-- Área transparente donde merodean los gatos y vive la caja. -->
         <Canvas x:Name="Yard" Background="{x:Null}">
             <!-- Caja de configuración (arrastrable). Posición fijada en código. -->
-            <!-- La caja se dibuja como cuadrados vectoriales (BoxSprites): al tambalearse gira la
-                 cuadrícula entera y las casillas siguen siendo cuadradas, con el borde suavizado. -->
-            <Image x:Name="Box" Cursor="Hand" Stretch="Fill"
+            <!-- La caja es una cuadrícula (BoxSprites): el tambaleo se dibuja con píxeles, girándola
+                 dentro de su cuadro de dibujo; las casillas nunca se inclinan ni se estiran. -->
+            <Image x:Name="Box" Cursor="Hand" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="Box_Down" MouseMove="Box_Move" MouseLeftButtonUp="Box_Up"
                    MouseRightButtonUp="BoxRight_Click" />
-            <!-- Marco del cuadro de dibujo de la caja (siempre visible): gira con ella. -->
+            <!-- Marco del cuadro de dibujo de la caja (siempre visible). -->
             <Rectangle x:Name="BoxFrame" Stroke="#9900E5FF" IsHitTestVisible="False" />
         </Canvas>
 
