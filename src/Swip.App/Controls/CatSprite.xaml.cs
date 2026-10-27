@@ -19,7 +19,7 @@ public partial class CatSprite : UserControl
     private readonly CatAtlas _atlas;
 
     // Lo último que se dibujó, para no reasignar propiedades iguales en cada fotograma.
-    private string? _labelClip, _labelColor;
+    private string? _labelClip, _labelSkin;
     private CatPose _lastPose;
     private double _scale = 1;      // escala de la pantalla (1 = 100 %)
     private int _prescale = 1;      // ampliación entera previa (PixelScale.Prescale)
@@ -77,7 +77,7 @@ public partial class CatSprite : UserControl
         if (Agent.Body is not { } cat) return;
         var pose = cat.Pose;
 
-        var source = _atlas.Frame(Agent.Color, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, _prescale);
+        var source = _atlas.Frame(Agent.Skin, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, _prescale);
         if (!ReferenceEquals(Img.Source, source)) Img.Source = source;
 
         // Desplazamientos en píxeles reales enteros: un medio píxel emborronaría la cuadrícula.
@@ -100,10 +100,10 @@ public partial class CatSprite : UserControl
             Shadow.Opacity = 0.25 * k;
         }
 
-        if (_labelClip != pose.Clip || _labelColor != Agent.Color || _lastPose.OffsetY != pose.OffsetY)
+        if (_labelClip != pose.Clip || _labelSkin != Agent.Skin || _lastPose.OffsetY != pose.OffsetY)
         {
             _labelClip = pose.Clip;
-            _labelColor = Agent.Color;
+            _labelSkin = Agent.Skin;
             PositionLabel(pose);
         }
         _lastPose = pose;
@@ -117,7 +117,7 @@ public partial class CatSprite : UserControl
     private void PositionLabel(CatPose pose)
     {
         if (Img.ActualHeight <= 0 || pose.Clip is null) return;
-        double head = _atlas.HeadFraction(Agent.Color, pose.Clip) * Img.ActualHeight;
+        double head = _atlas.HeadFraction(Agent.Skin, pose.Clip) * Img.ActualHeight;
         LabelShift.Y = LabelPlacement.Top(head, LabelBox.ActualHeight) + pose.OffsetY;
     }
 
@@ -144,7 +144,7 @@ public partial class CatSprite : UserControl
             return fallback; // aún no está en el árbol visual
         }
 
-        var opaque = _atlas.Bounds(Agent.Color, cat.Pose.Clip, cat.Pose.Frame);
+        var opaque = _atlas.Bounds(Agent.Skin, cat.Pose.Clip, cat.Pose.Frame);
         var area = HitGeometry.HitArea(
             new Area(image.X, image.Y, image.Width, image.Height),
             new Area(opaque.X, opaque.Y, opaque.Width, opaque.Height),

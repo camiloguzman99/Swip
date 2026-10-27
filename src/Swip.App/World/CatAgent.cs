@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using Swip.Shared.Art;
 using Swip.Shared.Engine;
 
 namespace Swip.App.World;
@@ -46,8 +47,8 @@ public sealed class CatAgent : INotifyPropertyChanged
     public bool MenuOpen { get; set; }
 
     // --- Apariencia ------------------------------------------------------------
-    /// <summary>Id de paleta (ver Swip.Shared.Art.CatPalettes).</summary>
-    public string Color { get; set; } = "orange";
+    /// <summary>Su dibujo, fijo (ver Swip.Shared.Art.CatSkins): "orange" o "gray".</summary>
+    public string Skin { get; set; } = CatSkins.Orange;
 
     // --- Motor -----------------------------------------------------------------
     /// <summary>Su cuerpo en el motor de movimientos.</summary>

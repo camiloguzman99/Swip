@@ -52,33 +52,18 @@
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
             <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="{StaticResource MenuCornerRadius}" Padding="12" MinWidth="260">
                 <StackPanel>
-                    <!-- NIVEL 1: nombre + rueda de configuración (arrastrable) -->
+                    <!-- NIVEL 1: nombre (arrastrable) -->
                     <Border x:Name="CatHeader" Style="{StaticResource ListCard}"
                             Cursor="SizeAll"
                             MouseLeftButtonDown="InfoHeader_Down" MouseMove="InfoHeader_Move"
                             MouseLeftButtonUp="InfoHeader_Up">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}" Foreground="#FFFFFFFF"
                                            FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
                             </StackPanel>
-                            <Button Grid.Column="1" Style="{StaticResource GearBtn}"
-                                    VerticalAlignment="Center" Click="Gear_Click" ToolTip="Cambiar aspecto del gato">
-                                <Ellipse Width="10" Height="10" Fill="#FFFFFFFF" />
-                            </Button>
                         </Grid>
                     </Border>
-
-                    <!-- Panel de personalización (lo muestra/oculta la rueda) -->
-                    <StackPanel x:Name="CatSettingsPanel" Visibility="Collapsed" Margin="0,2,0,0">
-                        <TextBlock Text="Color" Foreground="#FF9AA0A6" FontSize="10" Margin="2,0,0,4" />
-                        <!-- Una muestra por paleta (CatPalettes); se crean en código. -->
-                        <WrapPanel x:Name="ColorSwatches" Margin="0,0,0,4" />
-                    </StackPanel>
 
                     <!-- Separador 1px (encima de las apps) -->
                     <Border Height="1" Background="#40FFFFFF" Margin="2,6,2,2" />

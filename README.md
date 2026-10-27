@@ -9,8 +9,9 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 ## Qué hace
 
 - 🐱 **Un gato por cuenta de usuario** (si hay 5 usuarios, 5 gatos), tenga o no la sesión abierta.
-  Seis colores elegibles por gato: naranja y atigrado (el arte original) y negro, blanco, crema
-  y chocolate (retintados automáticamente).
+  Cada gato está ligado a su usuario y **no cambia**: no hay selector de color ni variantes. El
+  primer usuario es el gato naranja y el siguiente el atigrado gris; se asigna la primera vez y queda
+  guardado en `settings.json` (`Cats.<usuario>.Color`: `orange` o `gray`), igual en todas las sesiones.
 - 😺 **Un temperamento por estado de la cuenta**, y dentro de él muchas acciones distintas
   (ver [Motor de movimientos](#motor-de-movimientos)):
 
@@ -27,8 +28,8 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 - 🏷️ **Etiquetas** (opción de la caja): el nombre del usuario **sobre** cada gato, en el color de
   énfasis de Windows; si tiene dos palabras, en dos filas centradas. No se puede seleccionar ni
   estorba al clic.
-- 🎨 **Mismo aspecto en todas las sesiones**: color, posición de los gatos y de la caja, y
-  etiquetas se comparten y se reflejan al instante entre sesiones.
+- 🎨 **Mismo aspecto en todas las sesiones**: el gato de cada usuario, la posición de los gatos y de
+  la caja, y las etiquetas se comparten y se reflejan al instante entre sesiones.
 
 ### Controles
 
@@ -50,7 +51,7 @@ usa un recorte por región que el desenfoque no respeta, así que en las esquina
 resto. `app-s{N}.log` anota qué modo se usó y el resultado de cada paso. Si el desenfoque se ve mal en tu equipo, pon `"MenuBlur": false` en
 `C:\ProgramData\Swip\settings.json` y vuelve el fondo normal con un 30 % de transparencia; los
 colores se cambian en `MenuPanelBrush` / `MenuPanelBlurBrush`, en `App.xaml`):
-1. Nombre de usuario y un botón blanco que despliega color y gordura.
+1. Nombre de usuario.
 2. Apps con ventana de esa sesión, con **CPU %** y **RAM %**. Se miden como el Administrador de
    tareas: cada app suma sus procesos **y los que cuelgan de ellos** (p. ej. los procesos
    `msedgewebview2` del Outlook nuevo o de WhatsApp; el Explorador no se lleva los de las apps que
@@ -92,7 +93,7 @@ app solo traduce clics y arrastres en llamadas al motor y dibuja lo que este le 
   dormir, balanceo, giros, saltos en arco, tambaleo de la caja, sombra en el suelo o en la tapa, y
   partículas: zzz, corazones, polvo, ¡!, notas, chispas, una mosca y arañazos.
 
-### Arte: hojas de sprites y paletas
+### Arte: hojas de sprites
 
 - `art/clips.json` es la **fuente única** de los clips (fotogramas, velocidad, descripción y la
   receta de su fotograma de referencia). La leen el motor y el generador.
@@ -101,8 +102,8 @@ app solo traduce clics y arrastres en llamadas al motor y dibuja lo que este le 
   `docs/art/reference/<clip>.png` y la lista **[`docs/art/ARTE_PENDIENTE.md`](docs/art/ARTE_PENDIENTE.md)**.
 - Los clips sin arte final funcionan ya con **fotogramas de referencia** derivados de las poses
   dibujadas (`art/poses/`). Para sustituirlos, mira `ARTE_PENDIENTE.md`.
-- Las paletas retiñen pelaje y barriga de la piel naranja y dejan contorno, ojos, nariz y juguete:
-  un color nuevo es una línea en `Swip.Shared/Art/Palettes.cs`.
+- Cada gato tiene su propio dibujo (`orange`, `gray`); no hay retintado ni más variantes
+  (`Swip.Shared/Art/CatSkins.cs` decide cuál le toca a cada usuario).
 - Para revisar el motor sin abrir la app:
   `dotnet run --project tools/SimTrace -- trace.json 120` y
   `python3 tools/art/render_trace.py trace.json salida.png 10,40,70`.

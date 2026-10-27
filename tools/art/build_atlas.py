@@ -514,8 +514,8 @@ def write_pending(clips):
         "`art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia",
         "`fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.",
         "",
-        "Los colores negro, blanco, crema y chocolate se generan solos a partir de la piel naranja:",
-        "no hace falta dibujarlos. La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.",
+        "Cada gato tiene su propio dibujo (naranja y atigrado); no hay más colores ni variantes.",
+        "La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.",
         "",
         f"**Total:** {len(pending)} clips, {sum(len(c['reference']) for c in pending)} fotogramas por piel "
         f"({2 * sum(len(c['reference']) for c in pending)} contando naranja y atigrado).",

@@ -20,8 +20,8 @@ para correr o estirarse y 16 filas debajo para lo que cuelga. La guarda en letra
 `art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia
 `fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.
 
-Los colores negro, blanco, crema y chocolate se generan solos a partir de la piel naranja:
-no hace falta dibujarlos. La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
+Cada gato tiene su propio dibujo (naranja y atigrado); no hay más colores ni variantes.
+La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 
 **Total:** 34 clips, 95 fotogramas por piel (190 contando naranja y atigrado).
 

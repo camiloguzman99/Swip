@@ -507,7 +507,7 @@ public class EngineTests
             var frames = entry.GetProperty("frames");
             Assert.Equal(clip.FrameCount, frames.GetArrayLength());
             foreach (var f in frames.EnumerateArray())
-                foreach (var skin in Swip.Shared.Art.CatPalettes.Skins)
+                foreach (var skin in Swip.Shared.Art.CatSkins.All)
                     Assert.Equal(4, f.GetProperty("bounds").GetProperty(skin).GetArrayLength());
         }
     }

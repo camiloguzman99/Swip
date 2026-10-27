@@ -11,8 +11,8 @@ namespace Swip.App.Art;
 /// Hojas de sprites de los gatos (Assets/atlas, generadas por tools/art/build_atlas.py): un PNG por
 /// piel con todos los fotogramas de todos los clips, y atlas.json con la celda de cada fotograma y
 /// la caja de sus píxeles visibles. Cada celda es la CUADRÍCULA del fotograma a tamaño real
-/// (1 casilla = 1 px lógico). Cada paleta parte de una piel y se retiñe al cargar
-/// (<see cref="Recolor"/>). El espejo y la ampliación entera (<see cref="PixelScale.Prescale"/>) se
+/// (1 casilla = 1 px lógico). Cada gato tiene su propio dibujo fijo (<see cref="CatSkins"/>): no hay
+/// retintado ni variantes. El espejo y la ampliación entera (<see cref="PixelScale.Prescale"/>) se
 /// hacen aquí, sobre los píxeles, para que el dibujo siga nítido. Todo se cachea y se congela.
 /// </summary>
 public sealed class CatAtlas
@@ -23,7 +23,7 @@ public sealed class CatAtlas
     private readonly int _cellW, _cellH, _columns;
     private readonly Dictionary<string, BitmapSource> _sheets = new();
     private readonly Dictionary<string, ClipFrames> _clips = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string Palette, string Clip, int Frame, bool Mirrored, int Prescale), ImageSource> _cache = new();
+    private readonly Dictionary<(string Skin, string Clip, int Frame, bool Mirrored, int Prescale), ImageSource> _cache = new();
     private readonly Dictionary<(string Skin, string Clip), double> _headCache = new();
 
     private sealed record FrameMeta(int Cell, Dictionary<string, Rect> Bounds);
@@ -71,26 +71,25 @@ public sealed class CatAtlas
     }
 
     /// <summary>
-    /// Imagen de un fotograma con la paleta indicada (retinte incluido), espejada si mira a la
-    /// izquierda y ampliada píxel a píxel por <paramref name="prescale"/> (1 = tamaño real).
+    /// Imagen de un fotograma del gato <paramref name="skin"/>, espejada si mira a la izquierda y
+    /// ampliada píxel a píxel por <paramref name="prescale"/> (1 = tamaño real).
     /// </summary>
-    public ImageSource Frame(string paletteId, string clip, int frame, bool mirrored = false, int prescale = 1)
+    public ImageSource Frame(string skin, string clip, int frame, bool mirrored = false, int prescale = 1)
     {
-        var palette = CatPalettes.Get(paletteId);
+        skin = CatSkins.Normalize(skin);
         var meta = Meta(clip, frame);
-        if (meta is null) return Frame(palette.Id, "sleep_curl", 0, mirrored, prescale);
+        if (meta is null) return Frame(skin, "sleep_curl", 0, mirrored, prescale);
         prescale = Math.Clamp(prescale, 1, 8);
-        var key = (palette.Id, clip, frame, mirrored, prescale);
+        var key = (skin, clip, frame, mirrored, prescale);
         if (_cache.TryGetValue(key, out var cached)) return cached;
 
-        var sheet = _sheets.TryGetValue(palette.Skin, out var s) ? s : _sheets.Values.First();
+        var sheet = _sheets.TryGetValue(skin, out var s) ? s : _sheets.Values.First();
         int col = meta.Cell % _columns, row = meta.Cell / _columns;
         var crop = new CroppedBitmap(sheet, new Int32Rect(col * _cellW, row * _cellH, _cellW, _cellH));
         var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
         int stride = _cellW * 4;
         var pixels = new byte[stride * _cellH];
         bgra.CopyPixels(pixels, stride, 0);
-        if (palette.Recolors) Recolor.Apply(pixels, palette);
 
         // Espejo y ampliación entera: cada casilla pasa a ser un bloque de prescale x prescale píxeles.
         int w = _cellW * prescale, h = _cellH * prescale, outStride = w * 4;
@@ -136,11 +135,11 @@ public sealed class CatAtlas
     };
 
     /// <summary>Caja de los píxeles visibles del fotograma (0..1 sobre el lienzo, sin espejar).</summary>
-    public Rect Bounds(string paletteId, string clip, int frame)
+    public Rect Bounds(string skin, string clip, int frame)
     {
         var meta = Meta(clip, frame);
         if (meta is null) return new Rect(0, 0, 1, 1);
-        string skin = CatPalettes.Get(paletteId).Skin;
+        skin = CatSkins.Normalize(skin);
         return meta.Bounds.TryGetValue(skin, out var r) ? r : meta.Bounds.Values.First();
     }
 
@@ -148,9 +147,9 @@ public sealed class CatAtlas
     /// Altura de la cabeza en el clip (fracción 0..1 desde arriba): el punto visible más alto de
     /// todos sus fotogramas. Sirve para el rótulo del nombre y para los efectos (zzz, corazones).
     /// </summary>
-    public double HeadFraction(string paletteId, string clip)
+    public double HeadFraction(string skin, string clip)
     {
-        string skin = CatPalettes.Get(paletteId).Skin;
+        skin = CatSkins.Normalize(skin);
         if (_headCache.TryGetValue((skin, clip), out var v)) return v;
         double top = 0.3;
         if (_clips.TryGetValue(clip, out var c) && c.Frames.Length > 0)

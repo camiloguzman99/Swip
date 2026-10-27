@@ -94,7 +94,6 @@ public partial class MainWindow : Window
         _boundsDebounce.Interval = TimeSpan.FromMilliseconds(400);
         _boundsDebounce.Tick += (_, _) => { _boundsDebounce.Stop(); if (_active) ApplyStripBounds(); };
 
-        BuildColorSwatches();
 
         // Los menús se centran horizontalmente y aparecen ENCIMA del objetivo.
         InfoPopup.CustomPopupPlacementCallback = PlaceCenteredAbove;
@@ -343,7 +342,7 @@ public partial class MainWindow : Window
         // Un gato sentado en la caja no está "en el suelo": su X es la de la caja.
         var cats = _agents.Values
             .Where(a => !a.InBox)
-            .Select(a => new CatSnapshot(a.Key, a.Color, a.X))
+            .Select(a => new CatSnapshot(a.Key, a.Skin, a.X))
             .ToList();
         var known = _settings.Cats.ToDictionary(kv => kv.Key, kv => kv.Value.X);
 
@@ -379,7 +378,8 @@ public partial class MainWindow : Window
             if (!_settings.Cats.TryGetValue(key, out var pref) || !_agents.TryGetValue(key, out var agent))
                 continue; // gato aún no creado: al crearse leerá _settings
 
-            agent.Color = CatPalettes.Normalize(pref.Color ?? agent.Color);
+            // El dibujo de cada gato es fijo: solo se toma lo guardado si es válido (p. ej. lo reasignó otra sesión).
+            if (CatSkins.IsValid(pref.Color)) agent.Skin = CatSkins.Normalize(pref.Color);
             UpdateWeight(agent);
             if (_sprites.TryGetValue(key, out var sprite))
                 sprite.Render();
@@ -686,10 +686,13 @@ public partial class MainWindow : Window
                         IsCurrent = u.IsCurrent,
                     };
 
-                    // Preferencias por gato: color (por defecto, distinto por gato) y posición X.
+                    // Preferencias por gato: su dibujo (fijo, se asigna la primera vez y queda guardado para
+                    // todas las sesiones) y su posición X.
                     _settings.Cats.TryGetValue(u.UserName, out var pref);
-                    string defaultColor = CatPalettes.All[_agents.Count % CatPalettes.All.Count].Id;
-                    agent.Color = CatPalettes.Normalize(pref?.Color ?? defaultColor);
+                    var takenByOthers = _settings.Cats.Where(kv => kv.Key != u.UserName).Select(kv => kv.Value.Color)
+                        .Concat(_agents.Values.Select(a => (string?)a.Skin));
+                    agent.Skin = CatSkins.Pick(pref?.Color, takenByOthers);
+                    bool skinChanged = !string.Equals(pref?.Color, agent.Skin, StringComparison.Ordinal);
                     double x;
                     if (pref?.X is double px) x = Math.Clamp(px, 0, maxX);
                     else { x = _rng.NextDouble() * maxX; placedNewCat = true; }
@@ -697,6 +700,7 @@ public partial class MainWindow : Window
                     agent.Body = _world.AddCat(agent.Key, x, agent.Mode, facingRight: _rng.NextDouble() < 0.5);
                     UpdateWeight(agent);
                     _agents[u.UserName] = agent;
+                    if (skinChanged) SaveCatPref(agent); // queda fijo: la otra sesión lo leerá igual
 
                     var sprite = new CatSprite(agent, _atlas);
                     sprite.ShowLabel(_settings.ShowLabels);
@@ -829,16 +833,9 @@ public partial class MainWindow : Window
         InfoPopup.PlacementTarget = sprite;
         InfoPopup.HorizontalOffset = 0;
         InfoPopup.VerticalOffset = 0;
-        if (CatSettingsPanel is not null) CatSettingsPanel.Visibility = Visibility.Collapsed;
         PrepareMenuWindow(InfoPopup);
         InfoPopup.IsOpen = true;
         _ = LoadAppsAsync(sprite.Agent);
-    }
-
-    private void Gear_Click(object sender, RoutedEventArgs e)
-    {
-        CatSettingsPanel.Visibility = CatSettingsPanel.Visibility == Visibility.Visible
-            ? Visibility.Collapsed : Visibility.Visible;
     }
 
     // --- Arrastre de los menús (por el encabezado) ------------------------------
@@ -1077,48 +1074,20 @@ public partial class MainWindow : Window
         }
     }
 
-    // --- Personalización por gato (color) ---------------------------------------
-
-    /// <summary>Una muestra de color por paleta del catálogo (las retintadas no necesitan arte nuevo).</summary>
-    private void BuildColorSwatches()
-    {
-        ColorSwatches.Children.Clear();
-        foreach (var palette in CatPalettes.All)
-        {
-            var c = palette.Swatch;
-            var button = new Button
-            {
-                Style = (Style)FindResource("Swatch"),
-                Tag = palette.Id,
-                ToolTip = palette.Name,
-                Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)),
-            };
-            button.Click += Color_Click;
-            ColorSwatches.Children.Add(button);
-        }
-    }
-
-    private void Color_Click(object sender, RoutedEventArgs e)
-    {
-        if (_openAgent is null || sender is not Button { Tag: string theme }) return;
-        _openAgent.Color = CatPalettes.Normalize(theme);
-        UpdateWeight(_openAgent);
-        if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.Render();
-        SaveCatPref(_openAgent);
-    }
+    // --- Dibujo fijo de cada gato ---------------------------------------------------
 
     /// <summary>
     /// Peso del gato según su dibujo: el naranja (y las paletas que salen de él) es gordo y aplasta más
     /// la caja al subirse; el atigrado gris es delgado.
     /// </summary>
     private void UpdateWeight(CatAgent agent) =>
-        _world.SetCatHeavy(agent.Key, CatPalettes.Get(agent.Color).Skin == "orange");
+        _world.SetCatHeavy(agent.Key, agent.Skin == CatSkins.Orange);
 
-    /// <summary>Guarda el color del gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
+    /// <summary>Guarda el dibujo asignado al gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
     private void SaveCatPref(CatAgent agent)
     {
-        string color = agent.Color;
-        UpdateSettings(s => GetOrAddCat(s, agent).Color = color);
+        string skin = agent.Skin;
+        UpdateSettings(s => GetOrAddCat(s, agent).Color = skin);
     }
 
     /// <summary>Preferencias del gato; si no existen aún, se crean con su aspecto actual.</summary>
@@ -1126,7 +1095,7 @@ public partial class MainWindow : Window
     {
         if (!settings.Cats.TryGetValue(agent.Key, out var pref))
         {
-            pref = new CatPref { Color = agent.Color };
+            pref = new CatPref { Color = agent.Skin };
             settings.Cats[agent.Key] = pref;
         }
         return pref;
@@ -1159,7 +1128,7 @@ public partial class MainWindow : Window
             if (sprite.Agent.Body is not { } cat || !IsPointOver(sprite, sprite.GetHitRect(), p, dpi)) continue;
             var pose = cat.Pose;
             LoupeBack.Source = null;
-            ShowLoupe(_atlas.Frame(sprite.Agent.Color, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, LoupeZoom),
+            ShowLoupe(_atlas.Frame(sprite.Agent.Skin, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, LoupeZoom),
                 ZoneOverlay.Get("cat", _atlas.GridWidth, _atlas.GridHeight, _atlas.ExtraZones, _atlas.Main,
                     LoupeZoom, cellLines: true),
                 _atlas.GridWidth, _atlas.GridHeight, Canvas.GetLeft(sprite) + _atlas.GridWidth / 2.0, Canvas.GetTop(sprite));
