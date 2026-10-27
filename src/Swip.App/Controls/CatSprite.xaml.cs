@@ -1,15 +1,18 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Swip.App.Art;
 using Swip.App.World;
 using Swip.Shared;
+using Swip.Shared.Art;
 using Swip.Shared.Engine;
 
 namespace Swip.App.Controls;
 
 /// <summary>
 /// Vista de un gato. El motor (<see cref="SwipWorld"/>) decide todo; este control solo dibuja la
-/// pose: fotograma del atlas con la paleta del gato, efectos de movimiento, sombra y rótulo.
+/// pose: la cuadrícula del fotograma con la paleta del gato, sombra y rótulo. El dibujo siempre mide
+/// lo mismo en px lógicos (48 de alto) y se adapta a la escala de cada pantalla sin deformarse.
 /// </summary>
 public partial class CatSprite : UserControl
 {
@@ -19,6 +22,8 @@ public partial class CatSprite : UserControl
     // Lo último que se dibujó, para no reasignar propiedades iguales en cada fotograma.
     private string? _labelClip, _labelColor;
     private CatPose _lastPose;
+    private double _scale = 1;      // escala de la pantalla (1 = 100 %)
+    private int _prescale = 1;      // ampliación entera previa (PixelScale.Prescale)
 
     public CatAgent Agent { get; }
 
@@ -37,7 +42,28 @@ public partial class CatSprite : UserControl
     {
         _baseSize = size;
         ApplyFat();
+        UpdateScale();
     }
+
+    /// <summary>
+    /// Toma la escala de la pantalla en la que está la ventana y elige cómo dibujar la cuadrícula:
+    /// escala entera = vecino más cercano (nítido exacto); intermedia = ampliación entera previa y
+    /// reducción suave (ver <see cref="PixelScale"/>). Llamar al cambiar de pantalla o de escala.
+    /// </summary>
+    public void UpdateScale(double? newScale = null)
+    {
+        double scale = newScale ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
+        if (scale <= 0) scale = 1;
+        _scale = scale;
+        _prescale = PixelScale.Prescale(scale);
+        RenderOptions.SetBitmapScalingMode(Img,
+            PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
+        Img.Source = null; // se vuelve a pedir el fotograma con la ampliación nueva
+        Render();
+    }
+
+    /// <summary>Escala de pantalla con la que se dibuja (para ajustar posiciones al píxel real).</summary>
+    public double Scale => _scale;
 
     public void ApplyFat()
     {
@@ -54,16 +80,13 @@ public partial class CatSprite : UserControl
         if (Agent.Body is not { } cat) return;
         var pose = cat.Pose;
 
-        var source = _atlas.Frame(Agent.Color, pose.Clip, pose.Frame);
+        var source = _atlas.Frame(Agent.Color, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, _prescale);
         if (!ReferenceEquals(Img.Source, source)) Img.Source = source;
 
-        double flip = pose.FacingRight ? 1 : -1;
-        if (Flip.ScaleX != flip) Flip.ScaleX = flip;
-        if (Squash.ScaleX != pose.ScaleX) Squash.ScaleX = pose.ScaleX;
-        if (Squash.ScaleY != pose.ScaleY) Squash.ScaleY = pose.ScaleY;
-        if (Tilt.Angle != pose.Rotation) Tilt.Angle = pose.Rotation;
-        if (Shift.X != pose.OffsetX) Shift.X = pose.OffsetX;
-        if (Shift.Y != pose.OffsetY) Shift.Y = pose.OffsetY;
+        // Desplazamientos en píxeles reales enteros: un medio píxel emborronaría la cuadrícula.
+        double ox = PixelScale.Snap(pose.OffsetX, _scale), oy = PixelScale.Snap(pose.OffsetY, _scale);
+        if (Shift.X != ox) Shift.X = ox;
+        if (Shift.Y != oy) Shift.Y = oy;
 
         // Sombra: en la superficie (suelo o tapa de la caja), más pequeña y tenue cuanto más arriba.
         if (pose.ShadowDrop < 0)
@@ -113,8 +136,8 @@ public partial class CatSprite : UserControl
         Rect image;
         try
         {
-            // TransformBounds (y no TranslatePoint): da el rectángulo dibujado con espejo, escala,
-            // giro y desplazamientos ya aplicados.
+            // TransformBounds (y no TranslatePoint): da el rectángulo dibujado con el desplazamiento
+            // (saltos) ya aplicado.
             image = Img.TransformToAncestor(this)
                 .TransformBounds(new Rect(0, 0, Img.ActualWidth, Img.ActualHeight));
         }
@@ -127,7 +150,7 @@ public partial class CatSprite : UserControl
         var area = HitGeometry.HitArea(
             new Area(image.X, image.Y, image.Width, image.Height),
             new Area(opaque.X, opaque.Y, opaque.Width, opaque.Height),
-            mirrored: Flip.ScaleX < 0);
+            mirrored: !cat.Pose.FacingRight);
         return new Rect(area.X, area.Y, area.Width, area.Height);
     }
 

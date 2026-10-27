@@ -17,7 +17,6 @@ public sealed record Behavior(
     double Weight = 1,
     double MinTime = 0,
     double MaxTime = 0,
-    PoseStyle Style = PoseStyle.Normal,
     EffectSpec[]? Effects = null)
 {
     public IReadOnlyList<EffectSpec> EffectList => Effects ?? Array.Empty<EffectSpec>();
@@ -44,7 +43,7 @@ public static class Behaviors
     {
         // ---------------- Durmiendo (sesión cerrada): nunca se desplaza ----------------
         new("sleep_curl", "sleep_curl", S, "Duerme enroscado.", Forbids: Cond.InBox,
-            Weight: 6, MinTime: 6, MaxTime: 14, Style: PoseStyle.Breathe,
+            Weight: 6, MinTime: 6, MaxTime: 14,
             Effects: Fx(E(EffectKind.Zzz, Anchor.Head, interval: 1.6))),
         new("sleep_turn", "sleep_turn", S, "Se da la vuelta dormido.", Motion: Motion.TurnAround,
             Forbids: Cond.InBox),
@@ -55,11 +54,10 @@ public static class Behaviors
             Forbids: Cond.InBox, MinTime: 3, MaxTime: 6,
             Effects: Fx(E(EffectKind.Zzz, Anchor.Head, interval: 1.0))),
         new("sleep_in_box", "sleep_box", S, "Duerme dentro de la caja abierta.", Needs: Cond.InBox,
-            Weight: 6, MinTime: 6, MaxTime: 14, Style: PoseStyle.Breathe,
+            Weight: 6, MinTime: 6, MaxTime: 14,
             Effects: Fx(E(EffectKind.Zzz, Anchor.Head, interval: 1.8))),
         new("sleep_snuggle", "sleep_curl", S, "Se acurruca mirando a otro gato dormido.",
             Motion: Motion.FaceCat, Needs: Ground | Cond.CatNearSleeping, Weight: 3, MinTime: 8, MaxTime: 14,
-            Style: PoseStyle.Breathe,
             Effects: Fx(E(EffectKind.Heart, Anchor.Head, at: 0.6), E(EffectKind.Zzz, Anchor.Head, interval: 1.6))),
         new("sleep_petted", "sleep_petted", S, "Al acariciarlo abre un ojo, bosteza y sigue durmiendo.",
             Trigger: Trigger.Pet, Effects: Fx(E(EffectKind.Heart, Anchor.Head, at: 0))),
@@ -105,7 +103,7 @@ public static class Behaviors
         new("box_exit_in", "jump", W, "Sale de la caja de un salto.", Motion: Motion.JumpOffBox,
             Needs: Cond.InBox, MaxTime: 3),
         new("box_rub", "box_rub", W, "Se frota contra la caja.", Motion: Motion.RubBox,
-            Needs: Ground | Cond.BoxGrounded, MinTime: 2, MaxTime: 4, Style: PoseStyle.Sway,
+            Needs: Ground | Cond.BoxGrounded, MinTime: 2, MaxTime: 4,
             Effects: Fx(E(EffectKind.Heart, Anchor.Head, at: 1.2))),
         new("box_circle", "walk", W, "Rodea la caja.", Motion: Motion.CircleBox,
             Needs: Ground | Cond.BoxGrounded, Weight: 0.8, MaxTime: 10),

@@ -376,7 +376,6 @@ public class EngineTests
             {
                 Assert.True(clips.Contains(cat.Pose.Clip), cat.Pose.Clip);
                 Assert.InRange(cat.Pose.Frame, 0, clips[cat.Pose.Clip].FrameCount - 1);
-                Assert.InRange(cat.Pose.ScaleY, 0.6, 1.4);
                 Assert.True(double.IsFinite(cat.X) && double.IsFinite(cat.Y));
             }
         });

@@ -14,6 +14,11 @@ Son una guía de pose y de tiempos, no el arte final.
 3. En `art/clips.json` cambia el `status` del clip a `final`.
 4. Ejecuta `python3 tools/art/build_atlas.py`.
 
+El script reduce cada fotograma a una **cuadrícula de 34×48 casillas** (1 casilla = 1 px
+del gato en la app) y la guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en
+`art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia
+`fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.
+
 Los colores negro, blanco, crema y chocolate se generan solos a partir de la piel naranja:
 no hace falta dibujarlos. La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 

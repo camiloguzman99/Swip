@@ -9,6 +9,15 @@
       </requestedPrivileges>
     </security>
   </trustInfo>
+  <!-- Reconocimiento de DPI por monitor (PerMonitorV2): al cambiar de pantalla o de escala, Windows no
+       estira la ventana como un mapa de bits (se vería borrosa); la app recibe la escala nueva y
+       redibuja los gatos nítidos a su tamaño (48 px lógicos de alto). -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>
+    </windowsSettings>
+  </application>
   <!-- Reconocer Windows 10/11 para que el escalado por monitor funcione correctamente. -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>

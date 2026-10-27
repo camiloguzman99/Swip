@@ -46,16 +46,12 @@ def cat_frame(skin, clip, frame):
 
 
 def draw_cat(canvas, c, skin):
-    img = cat_frame(skin, c["clip"], c["frame"]).resize((CAT_W * SCALE, CAT_H * SCALE), Image.LANCZOS)
+    # El dibujo no se deforma: cuadrícula ampliada píxel a píxel, espejo y desplazamiento en casillas enteras.
+    img = cat_frame(skin, c["clip"], c["frame"]).resize((CAT_W * SCALE, CAT_H * SCALE), Image.NEAREST)
     if not c["facingRight"]:
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    # Aplastar/estirar con los pies como pivote.
-    w2, h2 = max(1, round(img.width * c["sx"])), max(1, round(img.height * c["sy"]))
-    img = img.resize((w2, h2), Image.LANCZOS)
-    if abs(c["rot"]) > 0.1:
-        img = img.rotate(-c["rot"], resample=Image.BICUBIC, expand=True)
-    cx = (c["X"] + CAT_W / 2 + c["ox"]) * SCALE
-    bottom = (c["Y"] + CAT_H + c["oy"]) * SCALE
+    cx = (round(c["X"] + c["ox"]) + CAT_W / 2) * SCALE
+    bottom = (round(c["Y"] + c["oy"]) + CAT_H) * SCALE
     canvas.alpha_composite(img, (round(cx - img.width / 2), round(bottom - img.height)))
 
 

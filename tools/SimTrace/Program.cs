@@ -33,7 +33,6 @@ for (double t = 0; t < seconds; t += dt, step++)
         {
             c.Id, c.X, c.Y, behavior = c.Current.Id, place = c.Place.ToString(),
             clip = c.Pose.Clip, frame = c.Pose.Frame, facingRight = c.Pose.FacingRight,
-            sx = c.Pose.ScaleX, sy = c.Pose.ScaleY, rot = c.Pose.Rotation,
             ox = c.Pose.OffsetX, oy = c.Pose.OffsetY, shadow = c.Pose.ShadowDrop, behind = c.Pose.BehindBox,
         }).ToList(), // ToList: capturar el estado AHORA (Select es diferido)
         particles = world.Particles.Select(p => new { kind = p.Kind.ToString(), p.X, p.Y, p.Alpha, p.Size }).ToList(),

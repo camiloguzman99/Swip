@@ -10,8 +10,10 @@ namespace Swip.App.Art;
 /// <summary>
 /// Hojas de sprites de los gatos (Assets/atlas, generadas por tools/art/build_atlas.py): un PNG por
 /// piel con todos los fotogramas de todos los clips, y atlas.json con la celda de cada fotograma y
-/// la caja de sus píxeles visibles. Cada paleta parte de una piel y se retiñe al cargar
-/// (<see cref="Recolor"/>). Todo se cachea y se congela: se calcula una vez por fotograma y paleta.
+/// la caja de sus píxeles visibles. Cada celda es la CUADRÍCULA del fotograma a tamaño real
+/// (1 casilla = 1 px lógico). Cada paleta parte de una piel y se retiñe al cargar
+/// (<see cref="Recolor"/>). El espejo y la ampliación entera (<see cref="PixelScale.Prescale"/>) se
+/// hacen aquí, sobre los píxeles, para que el dibujo siga nítido. Todo se cachea y se congela.
 /// </summary>
 public sealed class CatAtlas
 {
@@ -21,7 +23,7 @@ public sealed class CatAtlas
     private readonly int _cellW, _cellH, _columns;
     private readonly Dictionary<string, BitmapSource> _sheets = new();
     private readonly Dictionary<string, ClipFrames> _clips = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string Palette, string Clip, int Frame), ImageSource> _cache = new();
+    private readonly Dictionary<(string Palette, string Clip, int Frame, bool Mirrored, int Prescale), ImageSource> _cache = new();
     private readonly Dictionary<(string Skin, string Clip), double> _headCache = new();
 
     private sealed record FrameMeta(int Cell, Dictionary<string, Rect> Bounds);
@@ -64,33 +66,50 @@ public sealed class CatAtlas
         return new CatAtlas(doc.RootElement);
     }
 
-    /// <summary>Imagen de un fotograma con la paleta indicada (retinte incluido).</summary>
-    public ImageSource Frame(string paletteId, string clip, int frame)
+    /// <summary>
+    /// Imagen de un fotograma con la paleta indicada (retinte incluido), espejada si mira a la
+    /// izquierda y ampliada píxel a píxel por <paramref name="prescale"/> (1 = tamaño real).
+    /// </summary>
+    public ImageSource Frame(string paletteId, string clip, int frame, bool mirrored = false, int prescale = 1)
     {
         var palette = CatPalettes.Get(paletteId);
         var meta = Meta(clip, frame);
-        if (meta is null) return Frame(palette.Id, "sleep_curl", 0);
-        var key = (palette.Id, clip, frame);
+        if (meta is null) return Frame(palette.Id, "sleep_curl", 0, mirrored, prescale);
+        prescale = Math.Clamp(prescale, 1, 8);
+        var key = (palette.Id, clip, frame, mirrored, prescale);
         if (_cache.TryGetValue(key, out var cached)) return cached;
 
         var sheet = _sheets.TryGetValue(palette.Skin, out var s) ? s : _sheets.Values.First();
         int col = meta.Cell % _columns, row = meta.Cell / _columns;
         var crop = new CroppedBitmap(sheet, new Int32Rect(col * _cellW, row * _cellH, _cellW, _cellH));
+        var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
+        int stride = _cellW * 4;
+        var pixels = new byte[stride * _cellH];
+        bgra.CopyPixels(pixels, stride, 0);
+        if (palette.Recolors) Recolor.Apply(pixels, palette);
 
-        BitmapSource result = crop;
-        if (palette.Recolors)
+        // Espejo y ampliación entera: cada casilla pasa a ser un bloque de prescale x prescale píxeles.
+        int w = _cellW * prescale, h = _cellH * prescale, outStride = w * 4;
+        var output = new byte[outStride * h];
+        for (int y = 0; y < h; y++)
         {
-            var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
-            int stride = _cellW * 4;
-            var pixels = new byte[stride * _cellH];
-            bgra.CopyPixels(pixels, stride, 0);
-            Recolor.Apply(pixels, palette);
-            result = BitmapSource.Create(_cellW, _cellH, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+            int sy = y / prescale;
+            for (int x = 0; x < w; x++)
+            {
+                int sx = x / prescale;
+                if (mirrored) sx = _cellW - 1 - sx;
+                Buffer.BlockCopy(pixels, sy * stride + sx * 4, output, y * outStride + x * 4, 4);
+            }
         }
+        var result = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, output, outStride);
         result.Freeze();
         _cache[key] = result;
         return result;
     }
+
+    /// <summary>Tamaño de la cuadrícula de cada fotograma (casillas = px lógicos).</summary>
+    public int GridWidth => _cellW;
+    public int GridHeight => _cellH;
 
     /// <summary>Caja de los píxeles visibles del fotograma (0..1 sobre el lienzo, sin espejar).</summary>
     public Rect Bounds(string paletteId, string clip, int frame)

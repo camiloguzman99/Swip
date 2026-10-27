@@ -92,18 +92,6 @@ public enum Trigger
     Carry,
 }
 
-/// <summary>Estilo procedural que se suma a la pose (efectos del motor, sin arte adicional).</summary>
-public enum PoseStyle
-{
-    Normal,
-    /// <summary>Respiración: el cuerpo sube y baja muy despacio.</summary>
-    Breathe,
-    /// <summary>Escondido: la pose baja dentro de la caja.</summary>
-    Hidden,
-    /// <summary>Balanceo leve (frotarse, empujar).</summary>
-    Sway,
-}
-
 /// <summary>Efectos de partículas que dibuja la app encima de los gatos.</summary>
 public enum EffectKind
 {

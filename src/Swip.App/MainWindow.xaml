@@ -10,7 +10,8 @@
         ShowInTaskbar="False"
         ShowActivated="False"
         ResizeMode="NoResize"
-        SizeToContent="Manual">
+        SizeToContent="Manual"
+        UseLayoutRounding="True">
 
     <Grid>
         <!-- Área transparente donde merodean los gatos y vive la caja. -->

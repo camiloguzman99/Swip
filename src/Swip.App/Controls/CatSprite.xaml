@@ -15,17 +15,12 @@
             </Ellipse.RenderTransform>
         </Ellipse>
 
-        <!-- Fotograma del gato. Los efectos de movimiento del motor se aplican aquí, con los PIES como
-             pivote (RenderTransformOrigin abajo al centro): espejo, aplastar/estirar, giro y saltos. -->
-        <Image x:Name="Img" Stretch="Fill" RenderTransformOrigin="0.5,1"
-               RenderOptions.BitmapScalingMode="HighQuality">
+        <!-- Fotograma del gato: su cuadrícula (1 casilla = 1 px lógico), ya espejada y ampliada en el
+             atlas. Nunca se deforma: solo se desplaza (saltos en el sitio), en píxeles reales enteros.
+             El modo de escalado lo elige el código según la escala de la pantalla (PixelScale). -->
+        <Image x:Name="Img" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor">
             <Image.RenderTransform>
-                <TransformGroup>
-                    <ScaleTransform x:Name="Flip" />
-                    <ScaleTransform x:Name="Squash" />
-                    <RotateTransform x:Name="Tilt" />
-                    <TranslateTransform x:Name="Shift" />
-                </TransformGroup>
+                <TranslateTransform x:Name="Shift" />
             </Image.RenderTransform>
         </Image>
 

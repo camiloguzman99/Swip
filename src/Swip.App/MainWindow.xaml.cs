@@ -433,14 +433,45 @@ public partial class MainWindow : Window
 
     private void ApplyStripBounds()
     {
-        // La franja ocupa toda el ÁREA DE TRABAJO (pantalla menos la barra de tareas), fija.
-        var work = SystemParameters.WorkArea;
-        Left = work.Left;
-        Top = work.Top;
-        Width = work.Width;
-        Height = work.Height;
-        _world.Resize(Width, Height);
+        // La franja ocupa toda el ÁREA DE TRABAJO (pantalla menos la barra de tareas), fija. Se mide
+        // en píxeles reales del monitor principal: si se pasa a otra pantalla con otra escala, la
+        // ventana se recoloca ahí y el motor recibe el tamaño en px lógicos de esa pantalla.
+        if (_hwnd != IntPtr.Zero && DisplayNative.PrimaryWorkArea() is { } work)
+        {
+            DisplayNative.PlaceWindow(_hwnd, work.Pixels);
+            // Si al moverla cambió de monitor (y de escala), WPF la redimensiona a su manera:
+            // se vuelve a colocar ya con la escala nueva para que ocupe exactamente el área.
+            double scale = DisplayNative.WindowScale(_hwnd);
+            DisplayNative.PlaceWindow(_hwnd, work.Pixels);
+            Left = work.Pixels.Left / scale;
+            Top = work.Pixels.Top / scale;
+            Width = work.Pixels.Width / scale;
+            Height = work.Pixels.Height / scale;
+            _world.Resize(work.Pixels.Width / scale, work.Pixels.Height / scale);
+        }
+        else
+        {
+            var area = SystemParameters.WorkArea;
+            Left = area.Left;
+            Top = area.Top;
+            Width = area.Width;
+            Height = area.Height;
+            _world.Resize(Width, Height);
+        }
         RepositionCats();
+    }
+
+    /// <summary>
+    /// La ventana pasó a una pantalla con otra escala (o cambiaste la escala de Windows): los gatos
+    /// se redibujan nítidos con la escala nueva y la franja se reajusta al área de trabajo.
+    /// </summary>
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        AppLog.Write($"Escala de pantalla {oldDpi.DpiScaleX:0.##} -> {newDpi.DpiScaleX:0.##}");
+        foreach (var (_, sprite) in _sprites)
+            sprite.UpdateScale(newDpi.DpiScaleX); // la nueva: los hijos pueden no haberla recibido aún
+        RequestBoundsRefresh();
     }
 
     /// <summary>Ajusta el tamaño de los gatos y recoloca la caja (el motor ya ajustó el suelo).</summary>
@@ -474,8 +505,7 @@ public partial class MainWindow : Window
         foreach (var (id, sprite) in _sprites)
         {
             if (sprite.Agent.Body is not { } cat) continue;
-            Canvas.SetLeft(sprite, cat.X);
-            Canvas.SetTop(sprite, cat.Y);
+            PlaceSprite(sprite, cat);
             SetZ(sprite, cat.Pose.BehindBox ? -1 : 0); // dentro de la caja: detrás de ella
             sprite.Render();
         }
@@ -513,6 +543,16 @@ public partial class MainWindow : Window
         {
             return null; // ventana aún sin mostrar
         }
+    }
+
+    /// <summary>
+    /// Coloca el gato en píxeles reales enteros: el motor calcula posiciones continuas, pero la
+    /// cuadrícula solo se dibuja nítida si cae justo sobre los píxeles de la pantalla.
+    /// </summary>
+    private static void PlaceSprite(CatSprite sprite, Cat cat)
+    {
+        Canvas.SetLeft(sprite, PixelScale.Snap(cat.X, sprite.Scale));
+        Canvas.SetTop(sprite, PixelScale.Snap(cat.Y, sprite.Scale));
     }
 
     private static void SetZ(UIElement el, int z)
@@ -623,8 +663,7 @@ public partial class MainWindow : Window
                     var sprite = new CatSprite(agent, _atlas, CatPx);
                     sprite.ShowLabel(_settings.ShowLabels);
                     WireSprite(sprite);
-                    Canvas.SetLeft(sprite, agent.Body.X);
-                    Canvas.SetTop(sprite, agent.Body.Y);
+                    PlaceSprite(sprite, agent.Body);
                     Yard.Children.Add(sprite);
                     _sprites[u.UserName] = sprite;
                 }
@@ -709,8 +748,7 @@ public partial class MainWindow : Window
             _world.BeginCarry(cat.Id); // se baja de la caja si estaba en ella; pose "cargado"
         }
         _world.CarryTo(cat.Id, x, y);
-        Canvas.SetLeft(sprite, cat.X);
-        Canvas.SetTop(sprite, cat.Y);
+        PlaceSprite(sprite, cat);
     }
 
     private void Cat_Up(object sender, MouseButtonEventArgs e)

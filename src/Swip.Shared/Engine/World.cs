@@ -153,7 +153,6 @@ public sealed class SwipWorld
         if (Box.OccupantId is null && OverlapsBox(cat))
         {
             AttachToBox(cat, Box.Open ? CatPlace.InBox : CatPlace.OnBox);
-            cat.Squash = 0.7;
             cat.Pending = Trigger.Land;
             return true;
         }
@@ -368,7 +367,6 @@ public sealed class SwipWorld
                 cat.FacingRight = !cat.FacingRight;
                 break;
             case Motion.Hop when cat.BehaviorTime >= cat.BehaviorDuration * 0.9:
-                cat.Squash = 0.8;
                 EmitDustAt(cat.CenterX, cat.Bottom, 3);
                 break;
             case Motion.PushBox:
@@ -711,7 +709,6 @@ public sealed class SwipWorld
 
         // Aterrizaje.
         cat.Phase = 2;
-        cat.Squash = 1;
         if (cat.JumpTargetPlace == CatPlace.Ground)
         {
             cat.Place = CatPlace.Ground;
@@ -767,13 +764,10 @@ public sealed class SwipWorld
                     cat.Y = CatFloorY;
                     cat.Vy = 0;
                     cat.Place = CatPlace.Ground;
-                    cat.Squash = 1;
                     cat.Pending = Trigger.Land;
                 }
                 break;
         }
-
-        if (cat.Squash > 0) cat.Squash = Math.Max(0, cat.Squash - dt * 5.5);
     }
 
     // ======================================================================================
@@ -877,42 +871,19 @@ public sealed class SwipWorld
             frame = clip?.FrameAt(cat.ClipOverride is null ? t : cat.PhaseTime) ?? 0;
         }
 
-        double sx = 1, sy = 1, rot = 0, ox = 0, oy = 0;
-
-        // Aplastar y estirar al aterrizar.
-        if (cat.Squash > 0)
-        {
-            sy -= 0.22 * cat.Squash;
-            sx += 0.16 * cat.Squash;
-        }
-
-        switch (b.Style)
-        {
-            case PoseStyle.Breathe:
-                sy *= 1 + 0.025 * Math.Sin(t * Math.Tau / 3.2);
-                break;
-            case PoseStyle.Sway:
-                rot += 3 * Math.Sin(t * 5);
-                break;
-        }
-
+        // El dibujo no se deforma: solo desplazamientos (saltos en el sitio, temblor, escondido).
+        double ox = 0, oy = 0;
         switch (b.Motion)
         {
             case Motion.Hop:
                 double u = clip is null ? 1 : Math.Clamp(t / clip.Length, 0, 1);
                 oy -= HopHeight * 4 * u * (1 - u);
                 break;
-            case Motion.Spin:
-                rot += 6 * Math.Sin(t * 14);
-                break;
             case Motion.Jitter:
                 ox += 0.7 * Math.Sin(t * 45);
                 break;
             case Motion.Ambush when cat.Phase == 0:
                 oy += cat.Height * 0.3; // escondido: solo asoman las orejas
-                break;
-            case Motion.JumpOntoBox or Motion.JumpIntoBox or Motion.JumpOffBox when cat.Phase == 1:
-                rot += cat.FacingRight ? -8 : 8;
                 break;
         }
 
@@ -926,7 +897,7 @@ public sealed class SwipWorld
             ? -1
             : Math.Max(0, surface - (cat.Bottom + oy));
 
-        cat.Pose = new CatPose(clipId, frame, cat.FacingRight, sx, sy, rot, ox, oy, drop,
+        cat.Pose = new CatPose(clipId, frame, cat.FacingRight, ox, oy, drop,
             BehindBox: cat.Place == CatPlace.InBox);
     }
 

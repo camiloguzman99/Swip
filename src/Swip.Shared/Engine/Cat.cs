@@ -1,17 +1,16 @@
 namespace Swip.Shared.Engine;
 
 /// <summary>
-/// Lo que la app debe dibujar de un gato en este instante: clip y fotograma, más los efectos de
-/// movimiento del motor (aplastar/estirar, giro, desplazamientos, sombra).
+/// Lo que la app debe dibujar de un gato en este instante: clip y fotograma, espejo y desplazamientos.
+/// El dibujo nunca se deforma (ni aplastar, ni estirar, ni girar): todo el movimiento del cuerpo está
+/// en los fotogramas de la cuadrícula, y el gato solo se desplaza.
 /// </summary>
-/// <param name="ScaleX">Escala horizontal con los pies como pivote (aplastar/estirar).</param>
-/// <param name="Rotation">Grados, con los pies como pivote.</param>
 /// <param name="OffsetY">Desplazamiento visual (negativo = arriba), p. ej. un salto en el sitio.</param>
 /// <param name="ShadowDrop">Píxeles entre los pies (con el salto) y la superficie de debajo; -1 = sin sombra.</param>
 /// <param name="BehindBox">True si debe dibujarse detrás de la caja (dentro de ella).</param>
 public readonly record struct CatPose(
     string Clip, int Frame, bool FacingRight,
-    double ScaleX, double ScaleY, double Rotation, double OffsetX, double OffsetY,
+    double OffsetX, double OffsetY,
     double ShadowDrop, bool BehindBox);
 
 /// <summary>Un gato del mundo: cuerpo físico + cerebro (comportamiento actual) + pose a dibujar.</summary>
@@ -62,7 +61,6 @@ public sealed class Cat
     internal int Direction = 1;
     internal string? ClipOverride;   // clip de la fase (p. ej. trotar mientras se acerca a la caja)
     internal string? PartnerId;      // gato con el que interactúa
-    internal double Squash;          // 0..1, se desvanece (aterrizajes)
     internal double[] NextEmit = Array.Empty<double>();
     internal bool[] Emitted = Array.Empty<bool>();
     internal CatPlace JumpTargetPlace;
