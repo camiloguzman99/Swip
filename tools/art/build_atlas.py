@@ -41,14 +41,13 @@ FINAL = os.path.join(ROOT, "art", "final")                            # arte def
 OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "atlas")
 REF = os.path.join(ROOT, "docs", "art", "reference")
 GRID = os.path.join(ROOT, "art", "grid")
-BOX_SRC = os.path.join(ROOT, "art", "box")                           # dibujos de la caja (cerrada/abierta)
 BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadrícula para la app
 # Caja: principal de 32x32 casillas que el cuerpo de la caja llena POR COMPLETO, y un margen de 16
 # a cada lado y por encima para las solapas de la caja abierta y el tambaleo. Cuadro total 64x48,
 # la base es el borde de abajo del principal (y del cuadro).
 BOX_SIDE, BOX_TOP, BOX_MAIN = 16, 16, 32
 BOX_W, BOX_H = BOX_MAIN + 2 * BOX_SIDE, BOX_MAIN + BOX_TOP
-BOX_BODY = (58, 46, 335, 282)    # cuerpo de la caja cerrada en su dibujo (art/box): llena el principal
+# La caja la dibuja tools/art/box_art.py directamente en casillas (cuadro de BOX_W x BOX_H).
 SKINS = ["orange", "gray"]
 # Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %), en T:
 #   principal 48x48 (MAIN_X..MAIN_X+48, filas 0..47): el gato, con los pies sobre la base (fila 47);
@@ -272,7 +271,7 @@ def palette_path(skin):
     return os.path.join(GRID, skin, "paleta.txt")
 
 
-def load_or_build_palette(skin, images):
+def load_or_build_palette(skin, images, min_dist=PALETTE_MIN_DIST):
     """Paleta de la piel (lista de colores RGB, índice = letra). Si ya existe se reutiliza tal cual,
     para que las letras de los archivos editados a mano sigan significando lo mismo."""
     path = palette_path(skin)
@@ -290,7 +289,7 @@ def load_or_build_palette(skin, images):
     counts = Counter(c[:3] for im in images for c in pixels(im) if c[3])
     colors = []
     for c, _ in counts.most_common():
-        if all(color_distance(c, p) > PALETTE_MIN_DIST for p in colors):
+        if all(color_distance(c, p) > min_dist for p in colors):
             colors.append(c)
             if len(colors) == PALETTE_SIZE:
                 break
@@ -390,29 +389,23 @@ def read_grid(skin, clip_id):
 
 
 def build_box():
-    """La caja también es una cuadrícula (ver BOX_*): el cuerpo de la caja llena el principal de 32x32
-    entero y las solapas de la abierta salen al margen. Los dos dibujos usan la misma correspondencia
-    dibujo -> casillas, así el cuerpo de la abierta coincide con el de la cerrada. (El cuerpo dibujado
-    no es cuadrado: se ajusta al convertirlo, como dibujar la caja cuadrada; en pantalla la cuadrícula
-    se muestra siempre 1:1.) La app la tambalea con píxeles, dentro de este mismo cuadro."""
-    x0, y0, x1, y1 = BOX_BODY
-    sx, sy = (x1 - x0) / BOX_MAIN, (y1 - y0) / BOX_MAIN     # px del dibujo por casilla
-    cells = {}
-    for n in ("box_closed", "box_open"):
-        art = Image.open(os.path.join(BOX_SRC, f"{n}.png")).convert("RGBA")
-        # Recorte del dibujo que corresponde al cuadro entero (el margen puede salirse del dibujo).
-        region = (x0 - BOX_SIDE * sx, y0 - BOX_TOP * sy, x1 + BOX_SIDE * sx, y1)
-        canvas = Image.new("RGBA", (round(region[2] - region[0]), round(region[3] - region[1])), (0, 0, 0, 0))
-        canvas.alpha_composite(art, (round(-region[0]), round(-region[1])))
-        cells[n] = to_cells(canvas, BOX_W, BOX_H)
-    palette = load_or_build_palette("box", list(cells.values()))
+    """La caja se dibuja casilla a casilla (tools/art/box_art.py): fotogramas de apertura y de
+    aplastamiento, cada uno con su capa delantera y la trasera (el interior, detrás del gato)."""
+    import box_art
+    frames = box_art.frames()
+    # Colores exactos del generador: no se funde ninguno (min_dist=0).
+    palette = load_or_build_palette("box", [img for pair in frames.values() for img in pair], min_dist=0)
     os.makedirs(BOX_OUT, exist_ok=True)
-    for name, img in cells.items():
-        grid = snap_to_palette(img, palette)
-        grid.save(os.path.join(BOX_OUT, f"{name}.png"), optimize=True)
+    for old in os.listdir(BOX_OUT):
+        if old.endswith(".png"):
+            os.remove(os.path.join(BOX_OUT, old))
+    for name, (front, back) in frames.items():
+        for layer, img in (("", front), ("_back", back)):
+            grid = snap_to_palette(img, palette)
+            grid.save(os.path.join(BOX_OUT, f"box_{name}{layer}.png"), optimize=True)
         write_grid("box", {"id": name, "fps": 0, "loop": False,
-                           "description": "Caja " + ("abierta" if "open" in name else "cerrada") + "."},
-                   [grid], palette)
+                           "description": f"Caja: {name} (delantera y, abajo, la capa trasera)."},
+                   [snap_to_palette(front, palette), snap_to_palette(back, palette)], palette)
 
 
 def font(size):

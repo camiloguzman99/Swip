@@ -30,15 +30,21 @@ meta = json.load(open(os.path.join(ATLAS, "atlas.json"), encoding="utf-8"))
 sheets = {s: Image.open(os.path.join(ATLAS, f)).convert("RGBA") for s, f in meta["skins"].items()}
 cw, ch = meta["cell"]
 MAIN_X, MAIN_Y, CAT_W, CAT_H = meta["main"]   # para el motor el gato es su cuadro principal
-box_img = {o: Image.open(os.path.join(BOX, f"box_{'open' if o else 'closed'}.png")).convert("RGBA") for o in (False, True)}
+box_img = {f[4:-4]: Image.open(os.path.join(BOX, f)).convert("RGBA")
+           for f in os.listdir(BOX) if f.startswith("box_") and f.endswith(".png")}
 
 
-MAX_TILT = 12
+def box_frame(lid, squash):
+    """Igual que BoxSprites.FrameName en la app."""
+    return f"lid_{lid}" if lid > 0 else f"squash_{min(squash, 4)}" if squash > 0 else "lid_0"
 
 
-def tilt_box(img, degrees):
+MAX_TILT = 6
+
+
+def tilt_box(img, degrees, pivot_of=None):
     """Igual que BoxSprites.Get en la app: la caja gira DENTRO de su cuadro (cada casilla toma el color
-    que le toca) sobre la esquina de su base que queda apoyada."""
+    que le toca) sobre la esquina de su base que queda apoyada (la de la capa delantera: pivot_of)."""
     deg = round(max(-MAX_TILT, min(MAX_TILT, degrees)))
     w, h = img.size
     out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -46,7 +52,7 @@ def tilt_box(img, degrees):
     a = math.radians(deg)
     cos, sin = math.cos(a), math.sin(a)
     # Pivote: la esquina de la fila visible más baja (la base del dibujo, no las solapas).
-    alpha = img.getchannel("A").load()
+    alpha = (pivot_of or img).getchannel("A").load()
     bottom = max(y for y in range(h) for x in range(w) if alpha[x, y])
     row = [x for x in range(w) if alpha[x, bottom]]
     px, py = (row[-1] + 1 if deg >= 0 else row[0]), bottom + 1
@@ -108,8 +114,11 @@ def render(snapshot, width, height):
     d.rectangle([0, floor, W, H], fill=(32, 34, 38, 255))   # la barra de tareas, debajo del suelo
 
     box = snapshot["box"]
-    framed = tilt_box(box_img[box["Open"]], box["Wobble"])   # tambaleo con píxeles, como en la app
-    bimg = framed.resize((framed.width * SCALE, framed.height * SCALE), Image.NEAREST)
+    name = box_frame(box.get("Lid", 4 if box["Open"] else 0), box.get("Squash", 0))
+    front = tilt_box(box_img[name], box["Wobble"])            # tambaleo con píxeles, como en la app
+    back = tilt_box(box_img[name + "_back"], box["Wobble"], pivot_of=box_img[name])
+    bimg = front.resize((front.width * SCALE, front.height * SCALE), Image.NEAREST)
+    bback = back.resize((back.width * SCALE, back.height * SCALE), Image.NEAREST)
     B.draw_zones(bimg, B.box_zones(), SCALE)
     bx, by = (box["X"] - BOX_SIDE) * SCALE, (box["Y"] - BOX_TOP) * SCALE
 
@@ -117,6 +126,7 @@ def render(snapshot, width, height):
     for c in cats:
         draw_shadow(d, c)
     canvas.alpha_composite(layer)
+    canvas.alpha_composite(bback, (round(bx), round(by)))   # interior: detrás del gato que está dentro
     for c in [c for c in cats if c["behind"]]:
         draw_cat(canvas, c, SKIN_OF.get(c["Id"], "orange"))
     canvas.alpha_composite(bimg, (round(bx), round(by)))

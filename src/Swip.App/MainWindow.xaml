@@ -19,6 +19,9 @@
             <!-- Caja de configuración (arrastrable). Posición fijada en código. -->
             <!-- La caja es una cuadrícula (BoxSprites): el tambaleo se dibuja con píxeles, girándola
                  dentro de su cuadro de dibujo; las casillas nunca se inclinan ni se estiran. -->
+            <!-- Capa trasera de la caja (el interior de la abierta): detrás del gato que está dentro. -->
+            <Image x:Name="BoxBack" Stretch="Fill" IsHitTestVisible="False" Panel.ZIndex="-2"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor" />
             <Image x:Name="Box" Cursor="Hand" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="Box_Down" MouseMove="Box_Move" MouseLeftButtonUp="Box_Up"
                    MouseRightButtonUp="BoxRight_Click" />
@@ -38,6 +41,7 @@
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 Background="#E6202124" CornerRadius="6" Padding="6">
             <Grid>
+                <Image x:Name="LoupeBack" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                 <Image x:Name="LoupeImage" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                 <Image x:Name="LoupeGrid" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor" />
             </Grid>

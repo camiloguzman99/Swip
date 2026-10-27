@@ -1,8 +1,22 @@
 namespace Swip.Shared.Engine;
 
-/// <summary>La caja de cartón: objeto de referencia del mundo. Cae, se desliza al empujarla y se tambalea.</summary>
+/// <summary>
+/// La caja de cartón: objeto de referencia del mundo. Cae, se desliza al empujarla, se tambalea, abre
+/// y cierra sus solapas fotograma a fotograma y se aplasta con el peso del gato que tiene encima.
+/// </summary>
 public sealed class BoxBody
 {
+    /// <summary>Fotogramas de las solapas: 0 = cerrada ... LidFrames-1 = abierta (tools/art/box_art.py).</summary>
+    public const int LidFrames = 5;
+
+    /// <summary>Filas que se aplasta como mucho (gato gordo y rebote incluidos).</summary>
+    public const int MaxSquash = 4;
+
+    /// <summary>Filas que se aplasta con un gato delgado / con uno gordo encima.</summary>
+    public const int LightSquash = 2, HeavySquash = 4;
+
+    /// <summary>Inclinación máxima del tambaleo (grados).</summary>
+    public const double MaxWobble = 6;
     internal BoxBody(double width, double height, double topInsetClosed, double topInsetOpen)
     {
         Width = width;
@@ -17,7 +31,16 @@ public sealed class BoxBody
     public double Height { get; }
     public double Vx { get; internal set; }
     public double Vy { get; internal set; }
+    /// <summary>Estado pedido: abierta o cerrada. Las solapas llegan a él fotograma a fotograma (<see cref="Lid"/>).</summary>
     public bool Open { get; internal set; }
+
+    /// <summary>Fotograma actual de las solapas (0 = cerrada ... LidFrames-1 = abierta).</summary>
+    public int Lid { get; internal set; }
+
+    /// <summary>Filas que está aplastada ahora (0 = sin peso). Se dibuja con su propio fotograma.</summary>
+    public int Squash { get; internal set; }
+
+    internal double LidClock, SquashClock, SquashBounce;
     public bool Dragging { get; internal set; }
 
     /// <summary>Gato dentro o encima (como máximo uno).</summary>
@@ -35,9 +58,12 @@ public sealed class BoxBody
     public double Bottom => Y + Height;
     public double CenterX => X + Width / 2;
 
-    /// <summary>Borde superior VISIBLE (los PNG cerrado y abierto tienen distinto margen arriba).</summary>
-    public double VisibleTop => Y + Height * (Open ? TopInsetOpen : TopInsetClosed);
+    /// <summary>
+    /// Borde superior VISIBLE: el margen de cada estado y, cerrada, lo que esté aplastada (el gato que
+    /// está encima baja con la tapa).
+    /// </summary>
+    public double VisibleTop => Y + Height * (Open ? TopInsetOpen : TopInsetClosed) + (Open ? 0 : Squash);
 
-    /// <summary>Empujón de tambaleo (grados por segundo).</summary>
-    internal void Shake(double impulse) => WobbleVelocity += impulse;
+    /// <summary>Empujón de tambaleo (grados por segundo). Suave: la mitad del impulso.</summary>
+    internal void Shake(double impulse) => WobbleVelocity += impulse * 0.5;
 }

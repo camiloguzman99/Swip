@@ -12,6 +12,8 @@ world.PlaceBox(430);
 world.AddCat("activo", 150, CatMode.Walk);
 world.AddCat("fondo", 640, CatMode.Play, facingRight: false);
 world.AddCat("dormido", 820, CatMode.Sleep, facingRight: false);
+world.SetCatHeavy("activo", true);   // naranja: gordo
+world.SetCatHeavy("dormido", true);
 
 var log = new List<string>();
 world.BehaviorStarted += (c, b) => log.Add($"{c.Id}:{b.Id}");
@@ -28,7 +30,7 @@ for (double t = 0; t < seconds; t += dt, step++)
     frames.Add(new
     {
         t = Math.Round(t, 2),
-        box = new { world.Box.X, world.Box.Y, world.Box.Open, world.Box.Wobble },
+        box = new { world.Box.X, world.Box.Y, world.Box.Open, world.Box.Wobble, world.Box.Lid, world.Box.Squash },
         cats = world.Cats.Select(c => new
         {
             c.Id, c.X, c.Y, behavior = c.Current.Id, place = c.Place.ToString(),

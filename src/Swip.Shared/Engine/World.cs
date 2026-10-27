@@ -169,6 +169,12 @@ public sealed class SwipWorld
             cat.X = Math.Clamp(x, 0, MaxCatX);
     }
 
+    /// <summary>Gordo o delgado: cuánto aplasta la caja al subirse a ella.</summary>
+    public void SetCatHeavy(string id, bool heavy)
+    {
+        if (Find(id) is { } cat) cat.Heavy = heavy;
+    }
+
     public void SetBoxOpen(bool open)
     {
         Box.Open = open;
@@ -250,11 +256,41 @@ public sealed class SwipWorld
             }
         }
 
-        // Tambaleo: muelle amortiguado hacia 0 grados.
+        // Tambaleo: muelle amortiguado hacia 0 grados (leve: como mucho MaxWobble).
         b.WobbleVelocity += (-120 * b.Wobble - 9 * b.WobbleVelocity) * dt;
         b.Wobble += b.WobbleVelocity * dt;
         if (Math.Abs(b.Wobble) < 0.02 && Math.Abs(b.WobbleVelocity) < 0.2) { b.Wobble = 0; b.WobbleVelocity = 0; }
-        b.Wobble = Math.Clamp(b.Wobble, -12, 12);
+        b.Wobble = Math.Clamp(b.Wobble, -BoxBody.MaxWobble, BoxBody.MaxWobble);
+
+        // Solapas: un fotograma cada LidFrameTime hacia abierta o cerrada.
+        b.Lid = StepToward(b.Lid, b.Open ? BoxBody.LidFrames - 1 : 0, ref b.LidClock, LidFrameTime, dt);
+
+        // Aplastamiento: según el peso del gato que está encima (con la caja cerrada); al aterrizar,
+        // una fila más un instante (rebote). Fila a fila, como fotogramas.
+        int squash = 0;
+        if (!b.Open && b.OccupantId is { } id && Find(id) is { Place: CatPlace.OnBox } rider)
+        {
+            squash = rider.Heavy ? BoxBody.HeavySquash : BoxBody.LightSquash;
+            if (b.SquashBounce > 0) squash = Math.Min(BoxBody.MaxSquash, squash + 1);
+        }
+        if (b.SquashBounce > 0) b.SquashBounce -= dt;
+        b.Squash = StepToward(b.Squash, b.Lid == 0 ? squash : 0, ref b.SquashClock, SquashFrameTime, dt);
+    }
+
+    /// <summary>Segundos por fotograma de las solapas y del aplastamiento.</summary>
+    private const double LidFrameTime = 1 / 18.0, SquashFrameTime = 1 / 20.0;
+
+    /// <summary>Avanza un valor entero de uno en uno hacia el objetivo, un paso cada <paramref name="frameTime"/>.</summary>
+    private static int StepToward(int value, int target, ref double clock, double frameTime, double dt)
+    {
+        if (value == target) { clock = 0; return value; }
+        clock += dt;
+        while (clock >= frameTime && value != target)
+        {
+            clock -= frameTime;
+            value += Math.Sign(target - value);
+        }
+        return value;
     }
 
     // ======================================================================================
@@ -752,6 +788,7 @@ public sealed class SwipWorld
     private void AttachToBox(Cat cat, CatPlace place)
     {
         Box.OccupantId = cat.Id;
+        if (place == CatPlace.OnBox) Box.SquashBounce = 0.12; // al caer encima, se hunde una fila más un instante
         cat.Place = place;
         cat.Vy = 0;
         (cat.X, cat.Y) = BoxAnchor(cat, place);

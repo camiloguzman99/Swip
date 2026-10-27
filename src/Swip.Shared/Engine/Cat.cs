@@ -49,6 +49,9 @@ public sealed class Cat
     /// <summary>True mientras su menú está abierto (quiere atención, salvo dormido).</summary>
     public bool Attention { get; internal set; }
 
+    /// <summary>Gato gordo (aplasta más la caja al subirse) o delgado.</summary>
+    public bool Heavy { get; internal set; }
+
     // ---- estado interno del cerebro y del movimiento ----
     internal Trigger? Pending;
     internal Behavior? Last;

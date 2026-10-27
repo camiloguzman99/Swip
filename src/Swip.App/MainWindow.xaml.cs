@@ -54,7 +54,7 @@ public partial class MainWindow : Window
     private int _topmostTicks;                            // cuenta para reafirmar "siempre encima"
     private bool _loupeOn;                                // lupa de cuadrícula activada (menú de la caja)
     private const int LoupeZoom = 6;                      // aumento de la lupa (casilla = 6x6 px lógicos)
-    private (bool Open, int Degrees, int Prescale)? _boxShown; // caja dibujada por última vez
+    private (string Frame, int Degrees, int Prescale)? _boxShown; // caja dibujada por última vez
 
     // Arrastre de la caja
     private bool _boxMoved;
@@ -380,6 +380,7 @@ public partial class MainWindow : Window
                 continue; // gato aún no creado: al crearse leerá _settings
 
             agent.Color = CatPalettes.Normalize(pref.Color ?? agent.Color);
+            UpdateWeight(agent);
             if (_sprites.TryGetValue(key, out var sprite))
                 sprite.Render();
 
@@ -493,8 +494,8 @@ public partial class MainWindow : Window
     private void RepositionBox()
     {
         // El cuadro de dibujo de la caja tiene margen para la caja inclinada (BoxSprites).
-        Box.Width = BoxZones.Width = BoxSprites.FrameWidth;
-        Box.Height = BoxZones.Height = BoxSprites.FrameHeight;
+        Box.Width = BoxBack.Width = BoxZones.Width = BoxSprites.FrameWidth;
+        Box.Height = BoxBack.Height = BoxZones.Height = BoxSprites.FrameHeight;
         _world.PlaceBox(_settings.BoxLeft ?? 8); // la caja siempre descansa en el suelo
         RenderBox();
     }
@@ -542,19 +543,25 @@ public partial class MainWindow : Window
         double top = PixelScale.Snap(b.Y - BoxSprites.Main.Y, scale);
         Canvas.SetLeft(Box, left);
         Canvas.SetTop(Box, top);
+        Canvas.SetLeft(BoxBack, left);
+        Canvas.SetTop(BoxBack, top);
         Canvas.SetLeft(BoxZones, left);
         Canvas.SetTop(BoxZones, top);
         BoxZones.Source = ZoneOverlay.Get("box", BoxSprites.FrameWidth, BoxSprites.FrameHeight,
             BoxSprites.ExtraZones, BoxSprites.Main, ZoneOverlay.FactorFor(scale));
 
-        // El tambaleo se dibuja con píxeles (la caja gira dentro de su cuadrícula), a grados enteros.
-        var shown = (b.Open, (int)Math.Round(b.Wobble), PixelScale.Prescale(scale));
+        // Fotograma según las solapas y el aplastamiento; el tambaleo se dibuja con píxeles (la caja
+        // gira dentro de su cuadrícula), a grados enteros. La capa trasera (el interior) va detrás del
+        // gato que está dentro y la delantera, delante.
+        var shown = (BoxSprites.FrameName(b.Lid, b.Squash), (int)Math.Round(b.Wobble), PixelScale.Prescale(scale));
         if (_boxShown != shown)
         {
             _boxShown = shown;
-            Box.Source = BoxSprites.Get(shown.Item1, shown.Item2, shown.Item3);
-            RenderOptions.SetBitmapScalingMode(Box,
-                PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
+            Box.Source = BoxSprites.Get(shown.Item1, back: false, shown.Item2, shown.Item3);
+            BoxBack.Source = BoxSprites.Get(shown.Item1, back: true, shown.Item2, shown.Item3);
+            var mode = PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality;
+            RenderOptions.SetBitmapScalingMode(Box, mode);
+            RenderOptions.SetBitmapScalingMode(BoxBack, mode);
         }
     }
 
@@ -613,7 +620,7 @@ public partial class MainWindow : Window
 
         // La caja: solo su figura visible (la cerrada tiene margen transparente arriba), dentro de su
         // cuadro de dibujo (que deja margen para el tambaleo).
-        var area = SpriteBounds.Opaque(BoxSprites.Grid(_world.Box.Open));
+        var area = SpriteBounds.Opaque(BoxSprites.Grid(BoxSprites.FrameName(_world.Box.Lid, _world.Box.Squash)));
         var boxRect = new Rect(
             area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
             area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
@@ -688,6 +695,7 @@ public partial class MainWindow : Window
                     else { x = _rng.NextDouble() * maxX; placedNewCat = true; }
 
                     agent.Body = _world.AddCat(agent.Key, x, agent.Mode, facingRight: _rng.NextDouble() < 0.5);
+                    UpdateWeight(agent);
                     _agents[u.UserName] = agent;
 
                     var sprite = new CatSprite(agent, _atlas);
@@ -1094,9 +1102,17 @@ public partial class MainWindow : Window
     {
         if (_openAgent is null || sender is not Button { Tag: string theme }) return;
         _openAgent.Color = CatPalettes.Normalize(theme);
+        UpdateWeight(_openAgent);
         if (_sprites.TryGetValue(_openAgent.Key, out var sprite)) sprite.Render();
         SaveCatPref(_openAgent);
     }
+
+    /// <summary>
+    /// Peso del gato según su dibujo: el naranja (y las paletas que salen de él) es gordo y aplasta más
+    /// la caja al subirse; el atigrado gris es delgado.
+    /// </summary>
+    private void UpdateWeight(CatAgent agent) =>
+        _world.SetCatHeavy(agent.Key, CatPalettes.Get(agent.Color).Skin == "orange");
 
     /// <summary>Guarda el color del gato SIN tocar el resto de sus datos (p. ej. su posición).</summary>
     private void SaveCatPref(CatAgent agent)
@@ -1142,6 +1158,7 @@ public partial class MainWindow : Window
         {
             if (sprite.Agent.Body is not { } cat || !IsPointOver(sprite, sprite.GetHitRect(), p, dpi)) continue;
             var pose = cat.Pose;
+            LoupeBack.Source = null;
             ShowLoupe(_atlas.Frame(sprite.Agent.Color, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, LoupeZoom),
                 ZoneOverlay.Get("cat", _atlas.GridWidth, _atlas.GridHeight, _atlas.ExtraZones, _atlas.Main,
                     LoupeZoom, cellLines: true),
@@ -1149,12 +1166,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var area = SpriteBounds.Opaque(BoxSprites.Grid(_world.Box.Open));
+        var area = SpriteBounds.Opaque(BoxSprites.Grid(BoxSprites.FrameName(_world.Box.Lid, _world.Box.Squash)));
         var boxRect = new Rect(area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
             area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
         if (IsPointOver(Box, boxRect, p, dpi))
         {
-            ShowLoupe(BoxSprites.Get(_world.Box.Open, _world.Box.Wobble, LoupeZoom),
+            string frame = BoxSprites.FrameName(_world.Box.Lid, _world.Box.Squash);
+            LoupeBack.Source = BoxSprites.Get(frame, back: true, _world.Box.Wobble, LoupeZoom);
+            ShowLoupe(BoxSprites.Get(frame, back: false, _world.Box.Wobble, LoupeZoom),
                 ZoneOverlay.Get("box", BoxSprites.FrameWidth, BoxSprites.FrameHeight, BoxSprites.ExtraZones,
                     BoxSprites.Main, LoupeZoom, cellLines: true),
                 BoxSprites.FrameWidth, BoxSprites.FrameHeight, Canvas.GetLeft(Box) + Box.Width / 2, Canvas.GetTop(Box));
@@ -1166,8 +1185,8 @@ public partial class MainWindow : Window
     private void ShowLoupe(ImageSource image, ImageSource grid, int cols, int rows, double centerX, double top)
     {
         double w = cols * LoupeZoom, h = rows * LoupeZoom;
-        LoupeImage.Width = LoupeGrid.Width = w;
-        LoupeImage.Height = LoupeGrid.Height = h;
+        LoupeImage.Width = LoupeGrid.Width = LoupeBack.Width = w;
+        LoupeImage.Height = LoupeGrid.Height = LoupeBack.Height = h;
         if (!ReferenceEquals(LoupeImage.Source, image)) LoupeImage.Source = image;
         if (!ReferenceEquals(LoupeGrid.Source, grid)) LoupeGrid.Source = grid;
         double totalW = w + 12, totalH = h + 12;   // con el relleno del marco

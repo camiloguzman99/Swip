@@ -236,6 +236,54 @@ public class EngineTests
         Assert.Equal(w.Box.VisibleTop + visibleH * 0.5, cat.Bottom, 3); // base al 50% del alto
     }
 
+    [Theory]
+    [InlineData(false, BoxBody.LightSquash)]
+    [InlineData(true, BoxBody.HeavySquash)]
+    public void La_caja_se_aplasta_segun_el_peso_del_gato_y_recupera_su_forma(bool heavy, int expected)
+    {
+        var w = NewWorld();
+        var cat = w.AddCat("a", 100, CatMode.Play);
+        w.SetCatHeavy("a", heavy);
+        w.BeginCarry("a");
+        w.CarryTo("a", w.Box.CenterX - cat.Width / 2, w.Box.Y - 20);
+        Assert.True(w.Drop("a"));
+        var seen = new HashSet<int>();
+        Run(w, 1, () => seen.Add(w.Box.Squash));
+        Assert.Equal(expected, w.Box.Squash);
+        Assert.Equal(w.Box.VisibleTop, cat.Bottom, 3);           // el gato baja con la tapa
+        Assert.All(Enumerable.Range(0, expected + 1), k => Assert.Contains(k, seen)); // fila a fila
+
+        w.BeginCarry("a");                                       // se lo llevan: la caja recupera su forma
+        Run(w, 1);
+        Assert.Equal(0, w.Box.Squash);
+    }
+
+    [Fact]
+    public void Las_solapas_se_abren_y_cierran_pasando_por_todos_los_fotogramas()
+    {
+        var w = NewWorld();
+        var seen = new List<int> { w.Box.Lid };
+        void Record() { if (seen[^1] != w.Box.Lid) seen.Add(w.Box.Lid); }
+        w.SetBoxOpen(true);
+        Run(w, 1, Record);
+        Assert.Equal(Enumerable.Range(0, BoxBody.LidFrames), seen);   // 0, 1, 2, 3, 4
+        seen = new List<int> { w.Box.Lid };
+        w.SetBoxOpen(false);
+        Run(w, 1, Record);
+        Assert.Equal(Enumerable.Range(0, BoxBody.LidFrames).Reverse(), seen);
+    }
+
+    [Fact]
+    public void El_tambaleo_es_leve()
+    {
+        var w = NewWorld(5, boxX: 500);
+        w.AddCat("a", 200, CatMode.Walk);
+        w.AddCat("b", 800, CatMode.Walk);
+        double max = 0;
+        Run(w, 300, () => max = Math.Max(max, Math.Abs(w.Box.Wobble)));
+        Assert.InRange(max, 0, BoxBody.MaxWobble);
+    }
+
     [Fact]
     public void Si_mueves_la_caja_el_gato_que_esta_en_ella_va_con_ella()
     {
