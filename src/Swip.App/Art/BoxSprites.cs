@@ -7,9 +7,9 @@ namespace Swip.App.Art;
 
 /// <summary>
 /// La caja de cartón (cerrada / abierta) es una CUADRÍCULA, igual que los gatos (Assets/box, generada
-/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico), en T: cuadro principal de 32x32 (la caja;
-/// su borde de abajo es la base), 12 columnas a cada lado y 12 filas por encima, para las solapas y el
-/// tambaleo. El tambaleo se hace con píxeles: la caja gira DENTRO de su cuadro (cada casilla toma el
+/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico): cuadro principal de 32x32 que la caja llena
+/// entero (su borde de abajo es la base) y un margen de 16 a cada lado y por encima para las solapas y
+/// el tambaleo (cuadro de 64x48). El tambaleo se hace con píxeles: la caja gira DENTRO de su cuadro (cada casilla toma el
 /// color que le toca; las casillas nunca se inclinan ni se estiran) y se balancea sobre la esquina de
 /// su base que queda apoyada.
 /// </summary>
@@ -18,8 +18,8 @@ public static class BoxSprites
     /// <summary>Inclinación máxima del motor (grados).</summary>
     private const double MaxTilt = 12;
 
-    /// <summary>Zonas extra del cuadro: columnas a cada lado y filas por encima del principal.</summary>
-    public const int Side = 12, Top = 12;
+    /// <summary>Margen del cuadro alrededor del principal: columnas a cada lado y filas por encima.</summary>
+    public const int Side = 16, Top = 16;
 
     private static BitmapSource? _closedGrid, _openGrid;
     private static int[]? _closedPx, _openPx;
@@ -36,13 +36,8 @@ public static class BoxSprites
     /// <summary>Cuadro principal (la caja para el motor): 32x32.</summary>
     public static Int32Rect Main => new(Side, Top, FrameWidth - 2 * Side, FrameHeight - Top);
 
-    /// <summary>Zonas extra (laterales y de arriba), para los marcos.</summary>
-    public static Int32Rect[] ExtraZones => new[]
-    {
-        new Int32Rect(0, Top, Side, Main.Height),
-        new Int32Rect(Side + Main.Width, Top, Side, Main.Height),
-        new Int32Rect(Side, 0, Main.Width, Top),
-    };
+    /// <summary>Zona del margen (todo el cuadro), para los marcos: el principal va dentro.</summary>
+    public static Int32Rect[] ExtraZones => new[] { new Int32Rect(0, 0, FrameWidth, FrameHeight) };
 
     // Margen transparente superior de cada estado dentro del principal (fracción de su alto). La
     // colisión usa el borde VISIBLE (la tapa cerrada está más baja que las solapas abiertas).

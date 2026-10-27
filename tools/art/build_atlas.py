@@ -43,11 +43,12 @@ REF = os.path.join(ROOT, "docs", "art", "reference")
 GRID = os.path.join(ROOT, "art", "grid")
 BOX_SRC = os.path.join(ROOT, "art", "box")                           # dibujos de la caja (cerrada/abierta)
 BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadrícula para la app
-# Caja: principal de 32x32 casillas (el cuerpo de la caja cerrada lo llena a lo ancho), 12 a cada lado
-# y 12 por encima para las solapas y el tambaleo. Cuadro total 56x44, la base es su borde de abajo.
-BOX_SIDE, BOX_TOP, BOX_MAIN = 12, 12, 32
+# Caja: principal de 32x32 casillas que el cuerpo de la caja llena POR COMPLETO, y un margen de 16
+# a cada lado y por encima para las solapas de la caja abierta y el tambaleo. Cuadro total 64x48,
+# la base es el borde de abajo del principal (y del cuadro).
+BOX_SIDE, BOX_TOP, BOX_MAIN = 16, 16, 32
 BOX_W, BOX_H = BOX_MAIN + 2 * BOX_SIDE, BOX_MAIN + BOX_TOP
-BOX_BODY_PX = 277                # ancho en px del cuerpo de la caja cerrada en su dibujo (art/box)
+BOX_BODY = (58, 46, 335, 282)    # cuerpo de la caja cerrada en su dibujo (art/box): llena el principal
 SKINS = ["orange", "gray"]
 # Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %), en T:
 #   principal 48x48 (MAIN_X..MAIN_X+48, filas 0..47): el gato, con los pies sobre la base (fila 47);
@@ -207,9 +208,8 @@ def cat_zones():
 
 
 def box_zones():
-    side = [(0, BOX_TOP, BOX_SIDE, BOX_MAIN), (BOX_SIDE + BOX_MAIN, BOX_TOP, BOX_SIDE, BOX_MAIN),
-            (BOX_SIDE, 0, BOX_MAIN, BOX_TOP)]
-    return side, (BOX_SIDE, BOX_TOP, BOX_MAIN, BOX_MAIN)
+    """Zonas de la caja: el margen es todo el cuadro (azul) y el principal va dentro (verde)."""
+    return [(0, 0, BOX_W, BOX_H)], (BOX_SIDE, BOX_TOP, BOX_MAIN, BOX_MAIN)
 
 
 def keep_inside(img, zones):
@@ -390,17 +390,21 @@ def read_grid(skin, clip_id):
 
 
 def build_box():
-    """La caja también es una cuadrícula, en T (ver BOX_*): el cuerpo de la caja cerrada llena los 32
-    de ancho del principal, la base es el borde de abajo y las solapas de la abierta salen por los
-    lados. La app la tambalea con píxeles, dentro de este mismo cuadro."""
-    px_per_cell = BOX_BODY_PX / BOX_MAIN
+    """La caja también es una cuadrícula (ver BOX_*): el cuerpo de la caja llena el principal de 32x32
+    entero y las solapas de la abierta salen al margen. Los dos dibujos usan la misma correspondencia
+    dibujo -> casillas, así el cuerpo de la abierta coincide con el de la cerrada. (El cuerpo dibujado
+    no es cuadrado: se ajusta al convertirlo, como dibujar la caja cuadrada; en pantalla la cuadrícula
+    se muestra siempre 1:1.) La app la tambalea con píxeles, dentro de este mismo cuadro."""
+    x0, y0, x1, y1 = BOX_BODY
+    sx, sy = (x1 - x0) / BOX_MAIN, (y1 - y0) / BOX_MAIN     # px del dibujo por casilla
     cells = {}
     for n in ("box_closed", "box_open"):
         art = Image.open(os.path.join(BOX_SRC, f"{n}.png")).convert("RGBA")
-        small = to_cells(art, round(art.width / px_per_cell), round(art.height / px_per_cell))
-        frame = Image.new("RGBA", (BOX_W, BOX_H), (0, 0, 0, 0))
-        frame.alpha_composite(small, ((BOX_W - small.width) // 2, BOX_H - small.height))
-        cells[n] = keep_inside(frame, box_zones())
+        # Recorte del dibujo que corresponde al cuadro entero (el margen puede salirse del dibujo).
+        region = (x0 - BOX_SIDE * sx, y0 - BOX_TOP * sy, x1 + BOX_SIDE * sx, y1)
+        canvas = Image.new("RGBA", (round(region[2] - region[0]), round(region[3] - region[1])), (0, 0, 0, 0))
+        canvas.alpha_composite(art, (round(-region[0]), round(-region[1])))
+        cells[n] = to_cells(canvas, BOX_W, BOX_H)
     palette = load_or_build_palette("box", list(cells.values()))
     os.makedirs(BOX_OUT, exist_ok=True)
     for name, img in cells.items():
