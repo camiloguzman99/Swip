@@ -2,8 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="Transparent">
-    <!-- El control mide lo que el cuadro de dibujo (48x72 casillas = px lógicos): 48 por encima de la
-         base, donde se apoyan los pies, y 24 por debajo para lo que cuelga. -->
+    <!-- El control mide lo que el cuadro de dibujo (72x72 casillas = px lógicos), en T: principal de
+         48x48 (los pies sobre la base), 12 a cada lado y 24 por debajo del principal. -->
     <Grid>
         <!-- Sombra sobre la base: se queda en la superficie aunque el gato salte, y encoge al subir.
              Su posición vertical (la base) la fija el código. -->
@@ -28,11 +28,10 @@
                  Nunca se deforma. El modo de escalado lo elige el código según la pantalla (PixelScale). -->
             <Image x:Name="Img" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor" />
 
-            <!-- Marco del cuadro de dibujo y línea de la base, siempre visibles (1 px real): sirven para
-                 comprobar que el dibujo no se deforma con ninguna escala de pantalla. -->
-            <Rectangle x:Name="Frame" Stroke="#9900E5FF" IsHitTestVisible="False" SnapsToDevicePixels="True" />
-            <Rectangle x:Name="BaseLine" Fill="#CCFF4FD8" VerticalAlignment="Top" IsHitTestVisible="False"
-                       SnapsToDevicePixels="True" />
+            <!-- Marcos del cuadro de dibujo, siempre visibles (líneas de 1 px real): zonas extra en azul,
+                 principal en verde y base en magenta. Sirven para comprobar que nada se deforma. -->
+            <Image x:Name="Zones" Stretch="Fill" IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor" />
         </Grid>
 
         <!-- Rótulo con el nombre del usuario, ENCIMA del gato. Se coloca arriba desplazándolo con

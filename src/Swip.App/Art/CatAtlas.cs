@@ -37,6 +37,9 @@ public sealed class CatAtlas
         _columns = root.GetProperty("columns").GetInt32();
         Aspect = _cellW / (double)_cellH;
         BaseRows = root.TryGetProperty("base", out var baseRows) ? baseRows.GetInt32() : _cellH;
+        Main = root.TryGetProperty("main", out var main)
+            ? new Int32Rect(main[0].GetInt32(), main[1].GetInt32(), main[2].GetInt32(), main[3].GetInt32())
+            : new Int32Rect(0, 0, _cellW, BaseRows);
 
         foreach (var skin in root.GetProperty("skins").EnumerateObject())
             _sheets[skin.Name] = LoadBitmap($"Assets/atlas/{skin.Value.GetString()}");
@@ -117,6 +120,20 @@ public sealed class CatAtlas
     /// <c>GridHeight - BaseRows</c> filas para lo que cuelga (la cola, algo que se cae...).
     /// </summary>
     public int BaseRows { get; }
+
+    /// <summary>
+    /// Cuadro PRINCIPAL dentro de la cuadrícula (48x48, verde en los marcos): el gato para el motor.
+    /// A sus lados quedan 12 columnas (correr, estirarse) y debajo 24 filas (lo que cuelga).
+    /// </summary>
+    public Int32Rect Main { get; }
+
+    /// <summary>Zonas extra del cuadro (laterales y de abajo), para los marcos.</summary>
+    public Int32Rect[] ExtraZones => new[]
+    {
+        new Int32Rect(0, Main.Y, Main.X, Main.Height),
+        new Int32Rect(Main.X + Main.Width, Main.Y, _cellW - Main.X - Main.Width, Main.Height),
+        new Int32Rect(Main.X, Main.Y + Main.Height, Main.Width, _cellH - Main.Y - Main.Height),
+    };
 
     /// <summary>Caja de los píxeles visibles del fotograma (0..1 sobre el lienzo, sin espejar).</summary>
     public Rect Bounds(string paletteId, string clip, int frame)

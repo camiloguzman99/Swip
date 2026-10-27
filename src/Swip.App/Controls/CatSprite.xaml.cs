@@ -35,8 +35,8 @@ public partial class CatSprite : UserControl
         LabelBox.SizeChanged += (_, _) => PositionLabel(_lastPose);
 
         // El cuadro de dibujo mide lo que la cuadrícula: 1 casilla = 1 px lógico, siempre.
-        Cell.Width = Img.Width = Frame.Width = BaseLine.Width = atlas.GridWidth;
-        Cell.Height = Img.Height = Frame.Height = atlas.GridHeight;
+        Cell.Width = Img.Width = Zones.Width = atlas.GridWidth;
+        Cell.Height = Img.Height = Zones.Height = atlas.GridHeight;
         Width = atlas.GridWidth;
         Height = atlas.GridHeight;
         Shadow.Margin = new Thickness(0, atlas.BaseRows - Shadow.Height / 2, 0, 0); // sobre la base
@@ -54,9 +54,9 @@ public partial class CatSprite : UserControl
         if (scale <= 0) scale = 1;
         _scale = scale;
         _prescale = PixelScale.Prescale(scale);
-        // Marco y base de exactamente 1 píxel real, alineados con las casillas.
-        Frame.StrokeThickness = BaseLine.Height = 1 / scale;
-        BaseLine.Margin = new Thickness(0, _atlas.BaseRows - 1 / scale, 0, 0);
+        // Marcos con líneas de exactamente 1 píxel real, alineadas con las casillas.
+        Zones.Source = ZoneOverlay.Get("cat", _atlas.GridWidth, _atlas.GridHeight, _atlas.ExtraZones, _atlas.Main,
+            ZoneOverlay.FactorFor(scale));
         RenderOptions.SetBitmapScalingMode(Img,
             PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
         Img.Source = null; // se vuelve a pedir el fotograma con la ampliación nueva
@@ -65,6 +65,10 @@ public partial class CatSprite : UserControl
 
     /// <summary>Escala de pantalla con la que se dibuja (para ajustar posiciones al píxel real).</summary>
     public double Scale => _scale;
+
+    /// <summary>Dónde empieza el cuadro principal (el gato para el motor) dentro del cuadro de dibujo.</summary>
+    public double MainOffsetX => _atlas.Main.X;
+    public double MainOffsetY => _atlas.Main.Y;
 
 
     /// <summary>Dibuja la pose actual del gato (se llama en cada fotograma).</summary>

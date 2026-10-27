@@ -7,9 +7,10 @@ Para cada piel (orange, gray) y cada clip:
   - clips "placeholder": genera fotogramas de REFERENCIA aplicando la receta del clip
     (escala, giro, desplazamiento, espejo) sobre las poses ya dibujadas.
 
-Cada fotograma se convierte después a una CUADRÍCULA de GRID_W x GRID_H casillas (1 casilla = 1 px
-de la app a escala 100%; la base donde se apoyan los pies está en la fila GRID_BASE, y por debajo
-quedan 24 filas para lo que cuelga): cada casilla es un color de la paleta de la piel, escrito con una letra en
+Cada fotograma se convierte después a una CUADRÍCULA (1 casilla = 1 px de la app a escala 100%) en
+forma de T: el cuadro PRINCIPAL de 48x48 (los pies sobre la base, su borde de abajo), 12 columnas a
+cada lado para lo que necesita más ancho (correr, estirarse) y 24 filas por debajo del principal para
+lo que cuelga. Cada casilla es un color de la paleta de la piel, escrito con una letra en
   art/grid/<piel>/<clip>.txt      (fotogramas en letras; "." = transparente)
   art/grid/<piel>/paleta.txt      (letra -> color; estable entre ejecuciones)
 Los archivos con "fuente: auto" se regeneran en cada ejecución. Si editas uno a mano, cambia esa
@@ -42,15 +43,26 @@ REF = os.path.join(ROOT, "docs", "art", "reference")
 GRID = os.path.join(ROOT, "art", "grid")
 BOX_SRC = os.path.join(ROOT, "art", "box")                           # dibujos de la caja (cerrada/abierta)
 BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadrícula para la app
-BOX_GRID = (50, 36)              # casillas de la caja: 36 de alto = su alto en la app (px lógicos)
+# Caja: principal de 32x32 casillas (el cuerpo de la caja cerrada lo llena a lo ancho), 12 a cada lado
+# y 12 por encima para las solapas y el tambaleo. Cuadro total 56x44, la base es su borde de abajo.
+BOX_SIDE, BOX_TOP, BOX_MAIN = 12, 12, 32
+BOX_W, BOX_H = BOX_MAIN + 2 * BOX_SIDE, BOX_MAIN + BOX_TOP
+BOX_BODY_PX = 277                # ancho en px del cuerpo de la caja cerrada en su dibujo (art/box)
 SKINS = ["orange", "gray"]
-# Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %):
-# 48x48 encima de la BASE (la línea donde se apoyan los pies) y 24 filas más por debajo, para
-# acciones que cuelgan (la cola por debajo, algo que se le cae, buscar algo por el borde).
-GRID_W = 48
-GRID_BASE = 48                   # filas por encima de la base: los pies se apoyan en la fila 47
-GRID_H = GRID_BASE + 24
-ART_W, ART_H = 34, 48            # el arte actual (lienzo 269x379, pies abajo) ocupa 34x48 casillas
+# Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %), en T:
+#   principal 48x48 (MAIN_X..MAIN_X+48, filas 0..47): el gato, con los pies sobre la base (fila 47);
+#   12 columnas a cada lado del principal (filas 0..47): correr, estirarse...;
+#   24 filas por debajo del principal (solo bajo él): lo que cuelga (cola, algo que se cae...).
+SIDE = 12
+MAIN = 48
+BELOW = 24
+MAIN_X = SIDE
+GRID_W = MAIN + 2 * SIDE
+GRID_BASE = MAIN                 # filas por encima de la base
+GRID_H = GRID_BASE + BELOW
+# Escala del arte: píxeles del dibujo original por casilla. Con 6.4 la pose de pie más alta
+# (309 px) llena las 48 filas del principal; todas las poses usan la misma escala.
+ART_PX_PER_CELL = 6.4
 COLUMNS = 12
 ALPHA_MIN = 20
 PALETTE_SIZE = 62                # colores por piel (máximo: una letra o dígito por color)
@@ -135,7 +147,8 @@ def main():
                     img = final_frame(skin, clip["id"], i, spec, (base_w, base_h))
                 else:
                     img = render_reference(skin, spec, (base_w, base_h))
-                imgs.append(on_base(to_cells(img, ART_W, ART_H)))
+                imgs.append(on_base(to_cells(img, round(img.width / ART_PX_PER_CELL),
+                                             round(img.height / ART_PX_PER_CELL))))
             pending[skin][clip["id"]] = imgs
 
     # 2) Paleta estable por piel y escritura de las cuadrículas automáticas en letras.
@@ -149,7 +162,8 @@ def main():
 
     # 3) Atlas: una celda por fotograma, a tamaño real (1 casilla = 1 px).
     sheets = {s: Image.new("RGBA", (GRID_W * COLUMNS, GRID_H * rows), (0, 0, 0, 0)) for s in SKINS}
-    meta = {"cell": [GRID_W, GRID_H], "base": GRID_BASE, "columns": COLUMNS, "grid": True,
+    meta = {"cell": [GRID_W, GRID_H], "base": GRID_BASE, "main": [MAIN_X, 0, MAIN, MAIN],
+            "columns": COLUMNS, "grid": True,
             "skins": {s: f"cats_{s}.png" for s in SKINS}, "clips": {}}
     cell = 0
     for clip in clips:
@@ -186,11 +200,44 @@ def luminance(c):
     return 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]
 
 
-def on_base(cells):
-    """Coloca el dibujo (pies abajo) centrado en el cuadro GRID_W x GRID_H con los pies sobre la base."""
-    out = Image.new("RGBA", (GRID_W, GRID_H), (0, 0, 0, 0))
-    out.alpha_composite(cells, ((GRID_W - cells.width) // 2, GRID_BASE - cells.height))
+def cat_zones():
+    """Zonas del cuadro del gato (x, y, ancho, alto): laterales y de abajo (azul), principal (verde)."""
+    side = [(0, 0, SIDE, MAIN), (MAIN_X + MAIN, 0, SIDE, MAIN), (MAIN_X, MAIN, MAIN, BELOW)]
+    return side, (MAIN_X, 0, MAIN, MAIN)
+
+
+def box_zones():
+    side = [(0, BOX_TOP, BOX_SIDE, BOX_MAIN), (BOX_SIDE + BOX_MAIN, BOX_TOP, BOX_SIDE, BOX_MAIN),
+            (BOX_SIDE, 0, BOX_MAIN, BOX_TOP)]
+    return side, (BOX_SIDE, BOX_TOP, BOX_MAIN, BOX_MAIN)
+
+
+def keep_inside(img, zones):
+    """Borra lo que caiga fuera de la T (las esquinas del cuadro no son zona de dibujo)."""
+    side, main = zones
+    allowed = Image.new("L", img.size, 0)
+    d = ImageDraw.Draw(allowed)
+    for x, y, w, h in side + [main]:
+        d.rectangle([x, y, x + w - 1, y + h - 1], fill=255)
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.paste(img, mask=Image.composite(img.getchannel("A"), Image.new("L", img.size, 0), allowed))
     return out
+
+
+def on_base(cells):
+    """Coloca el dibujo (lienzo original, pies abajo) centrado sobre el principal, con los pies en la
+    base. Si lo visible no cabe por encima de la base (p. ej. colgando del cursor), baja lo justo y
+    cuelga en la zona de abajo en vez de cortarse."""
+    out = Image.new("RGBA", (GRID_W, GRID_H), (0, 0, 0, 0))
+    top = GRID_BASE - cells.height
+    box = cells.getchannel("A").getbbox()
+    if box and top + box[1] < 0:
+        top = -box[1]
+    if top < 0:   # el margen vacío de arriba del lienzo sobra
+        cells = cells.crop((0, -top, cells.width, cells.height))
+        top = 0
+    out.alpha_composite(cells, (MAIN_X + (MAIN - cells.width) // 2, top))
+    return keep_inside(out, cat_zones())
 
 
 def to_cells(img, grid_w, grid_h):
@@ -343,11 +390,17 @@ def read_grid(skin, clip_id):
 
 
 def build_box():
-    """La caja también es una cuadrícula (BOX_GRID casillas, misma densidad que los gatos). La app
-    la dibuja como cuadrados: al tambalearse gira entera y cada casilla sigue siendo un cuadrado."""
-    gw, gh = BOX_GRID
-    cells = {n: to_cells(Image.open(os.path.join(BOX_SRC, f"{n}.png")).convert("RGBA"), gw, gh)
-             for n in ("box_closed", "box_open")}
+    """La caja también es una cuadrícula, en T (ver BOX_*): el cuerpo de la caja cerrada llena los 32
+    de ancho del principal, la base es el borde de abajo y las solapas de la abierta salen por los
+    lados. La app la tambalea con píxeles, dentro de este mismo cuadro."""
+    px_per_cell = BOX_BODY_PX / BOX_MAIN
+    cells = {}
+    for n in ("box_closed", "box_open"):
+        art = Image.open(os.path.join(BOX_SRC, f"{n}.png")).convert("RGBA")
+        small = to_cells(art, round(art.width / px_per_cell), round(art.height / px_per_cell))
+        frame = Image.new("RGBA", (BOX_W, BOX_H), (0, 0, 0, 0))
+        frame.alpha_composite(small, ((BOX_W - small.width) // 2, BOX_H - small.height))
+        cells[n] = keep_inside(frame, box_zones())
     palette = load_or_build_palette("box", list(cells.values()))
     os.makedirs(BOX_OUT, exist_ok=True)
     for name, img in cells.items():
@@ -387,10 +440,28 @@ def write_reference_sheets(clips, grids):
                 x = 10 + i * fw
                 d.rectangle([x, y, x + fw - 4, y + fh], outline=(90, 94, 102))
                 big = img.resize((GRID_W * zoom, GRID_H * zoom), Image.NEAREST)
+                draw_zones(big, cat_zones(), zoom)
                 sheet.alpha_composite(big, (x, y))
-                d.line([x, y + GRID_BASE * zoom, x + fw - 4, y + GRID_BASE * zoom], fill=(255, 80, 200))
                 d.text((x + 4, y + fh + 4), f"{skin} #{i}", fill=(170, 170, 170), font=small_font)
         sheet.convert("RGB").save(os.path.join(REF, f"{clip['id']}.png"), optimize=True)
+
+
+ZONE_BLUE, ZONE_GREEN, ZONE_MAGENTA = (0, 150, 255, 255), (40, 200, 70, 255), (255, 60, 220, 255)
+
+
+def draw_zones(img, zones, zoom):
+    """Marcos del cuadro de dibujo, como en la app: zonas en azul, principal en verde, base en magenta."""
+    # Igual que ZoneOverlay en la app: un borde en la casilla B va en el píxel B*zoom, así las zonas
+    # vecinas comparten una sola línea; el verde y el magenta quedan encima del azul.
+    d = ImageDraw.Draw(img)
+    col = lambda b: min(b * zoom, img.width - 1)
+    row = lambda b: min(b * zoom, img.height - 1)
+    side, main = zones
+    for x, y, w, h in side:
+        d.rectangle([col(x), row(y), col(x + w), row(y + h)], outline=ZONE_BLUE)
+    x, y, w, h = main
+    d.rectangle([col(x), row(y), col(x + w), row(y + h)], outline=ZONE_GREEN)
+    d.line([col(x), row(y + h), col(x + w), row(y + h)], fill=ZONE_MAGENTA)
 
 
 def describe(spec):
@@ -425,9 +496,9 @@ def write_pending(clips):
         "3. En `art/clips.json` cambia el `status` del clip a `final`.",
         "4. Ejecuta `python3 tools/art/build_atlas.py`.",
         "",
-        f"El script reduce cada fotograma a una **cuadrícula de {GRID_W}×{GRID_H} casillas** (1 casilla = 1 px",
-        f"del gato en la app; los pies se apoyan en la base, fila {GRID_BASE}, y las {GRID_H - GRID_BASE} filas de debajo",
-        "son para lo que cuelga) y la guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en",
+        f"El script reduce cada fotograma a una **cuadrícula de {GRID_W}×{GRID_H} casillas** en T (1 casilla = 1 px",
+        f"del gato en la app): principal de {MAIN}×{MAIN} con los pies sobre la base, {SIDE} columnas a cada lado",
+        f"para correr o estirarse y {BELOW} filas debajo para lo que cuelga. La guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en",
         "`art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia",
         "`fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.",
         "",

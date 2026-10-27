@@ -18,43 +18,44 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 ATLAS = os.path.join(ROOT, "src", "Swip.App", "Assets", "atlas")
 BOX = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")
-BOX_H, BOX_W = 36, 50
-BELOW = 24      # filas del cuadro por debajo de la base (sobre la barra de tareas)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import build_atlas as B   # mismas zonas y marcos que el generador y la app
+
+BOX_MAIN, BOX_SIDE, BOX_TOP = B.BOX_MAIN, B.BOX_SIDE, B.BOX_TOP
+BELOW = B.BELOW      # filas del cuadro por debajo de la base (sobre la barra de tareas)
 SCALE = 2  # dibujar al doble para que se vea
 SKIN_OF = {"activo": "orange", "fondo": "gray", "dormido": "orange"}
 
 meta = json.load(open(os.path.join(ATLAS, "atlas.json"), encoding="utf-8"))
 sheets = {s: Image.open(os.path.join(ATLAS, f)).convert("RGBA") for s, f in meta["skins"].items()}
 cw, ch = meta["cell"]
-CAT_W, CAT_H = cw, meta.get("base", ch)   # para el motor el gato es su cuadro por encima de la base
+MAIN_X, MAIN_Y, CAT_W, CAT_H = meta["main"]   # para el motor el gato es su cuadro principal
 box_img = {o: Image.open(os.path.join(BOX, f"box_{'open' if o else 'closed'}.png")).convert("RGBA") for o in (False, True)}
 
 
 MAX_TILT = 12
-PAD_X = math.ceil(BOX_H * math.sin(math.radians(MAX_TILT)))
-PAD_TOP = math.ceil(BOX_W * math.sin(math.radians(MAX_TILT)))
 
 
 def tilt_box(img, degrees):
-    """Igual que BoxSprites.Get en la app: la caja gira DENTRO de su cuadrícula (cada casilla toma el
-    color que le toca) sobre la esquina de abajo que queda apoyada. Devuelve el cuadro con margen."""
+    """Igual que BoxSprites.Get en la app: la caja gira DENTRO de su cuadro (cada casilla toma el color
+    que le toca) sobre la esquina de su base que queda apoyada."""
     deg = round(max(-MAX_TILT, min(MAX_TILT, degrees)))
-    w, h = BOX_W + 2 * PAD_X, BOX_H + PAD_TOP
+    w, h = img.size
     out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     src, o = img.load(), out.load()
     a = math.radians(deg)
     cos, sin = math.cos(a), math.sin(a)
     # Pivote: la esquina de la fila visible más baja (la base del dibujo, no las solapas).
     alpha = img.getchannel("A").load()
-    bottom = max(y for y in range(BOX_H) for x in range(BOX_W) if alpha[x, y])
-    row = [x for x in range(BOX_W) if alpha[x, bottom]]
+    bottom = max(y for y in range(h) for x in range(w) if alpha[x, y])
+    row = [x for x in range(w) if alpha[x, bottom]]
     px, py = (row[-1] + 1 if deg >= 0 else row[0]), bottom + 1
     for y in range(h):
         for x in range(w):
-            dx, dy = x + 0.5 - PAD_X - px, y + 0.5 - PAD_TOP - py
+            dx, dy = x + 0.5 - px, y + 0.5 - py
             sx, sy = dx * cos + dy * sin + px, -dx * sin + dy * cos + py
             ix, iy = math.floor(sx), math.floor(sy)
-            if 0 <= ix < BOX_W and 0 <= iy < BOX_H:
+            if 0 <= ix < w and 0 <= iy < h:
                 o[x, y] = src[ix, iy]
     return out
 
@@ -82,13 +83,10 @@ def draw_cat(canvas, c, skin):
     img = cat_frame(skin, c["clip"], c["frame"]).resize((cw * SCALE, ch * SCALE), Image.NEAREST)
     if not c["facingRight"]:
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    # Marco del cuadro de dibujo y su base, como en la app.
-    fd = ImageDraw.Draw(img)
-    fd.rectangle([0, 0, img.width - 1, img.height - 1], outline=(0, 229, 255, 150))
-    fd.line([0, CAT_H * SCALE - 1, img.width, CAT_H * SCALE - 1], fill=(255, 79, 216, 200))
-    cx = (round(c["X"] + c["ox"]) + cw / 2) * SCALE
-    bottom = (round(c["Y"] + c["oy"]) + ch) * SCALE
-    canvas.alpha_composite(img, (round(cx - img.width / 2), round(bottom - img.height)))
+    B.draw_zones(img, B.cat_zones(), SCALE)   # marcos, como en la app
+    left = (round(c["X"] + c["ox"]) - MAIN_X) * SCALE
+    top = (round(c["Y"] + c["oy"]) - MAIN_Y) * SCALE
+    canvas.alpha_composite(img, (round(left), round(top)))
 
 
 def draw_shadow(d, c):
@@ -112,7 +110,8 @@ def render(snapshot, width, height):
     box = snapshot["box"]
     framed = tilt_box(box_img[box["Open"]], box["Wobble"])   # tambaleo con píxeles, como en la app
     bimg = framed.resize((framed.width * SCALE, framed.height * SCALE), Image.NEAREST)
-    bx, by = (box["X"] - PAD_X) * SCALE, (box["Y"] - PAD_TOP) * SCALE
+    B.draw_zones(bimg, B.box_zones(), SCALE)
+    bx, by = (box["X"] - BOX_SIDE) * SCALE, (box["Y"] - BOX_TOP) * SCALE
 
     cats = snapshot["cats"]
     for c in cats:

@@ -6,7 +6,7 @@ string output = args.Length > 0 ? args[0] : "trace.json";
 double seconds = args.Length > 1 ? double.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 120;
 int seed = args.Length > 2 ? int.Parse(args[2]) : 4;
 
-var world = new SwipWorld(new WorldConfig(48, 48, 50, 36, 6.0 / 36, 1.0 / 36), seed: seed); // gato 48x48 sobre la base, caja 50x36
+var world = new SwipWorld(new WorldConfig(48, 48, 32, 32, 4.0 / 32, 0), seed: seed); // principal del gato 48x48 y de la caja 32x32
 world.Resize(900, 230);
 world.PlaceBox(430);
 world.AddCat("activo", 150, CatMode.Walk);

@@ -7,45 +7,59 @@ namespace Swip.App.Art;
 
 /// <summary>
 /// La caja de cartón (cerrada / abierta) es una CUADRÍCULA, igual que los gatos (Assets/box, generada
-/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico). El tambaleo también se hace con píxeles:
-/// la caja se gira DENTRO de su cuadrícula (cada casilla toma el color que le toca, las casillas nunca
-/// se inclinan ni se estiran) y se balancea sobre la esquina de abajo que queda apoyada.
-/// El cuadro de dibujo tiene margen alrededor para que quepa la caja inclinada.
+/// por tools/art/build_atlas.py: 1 casilla = 1 px lógico), en T: cuadro principal de 32x32 (la caja;
+/// su borde de abajo es la base), 12 columnas a cada lado y 12 filas por encima, para las solapas y el
+/// tambaleo. El tambaleo se hace con píxeles: la caja gira DENTRO de su cuadro (cada casilla toma el
+/// color que le toca; las casillas nunca se inclinan ni se estiran) y se balancea sobre la esquina de
+/// su base que queda apoyada.
 /// </summary>
 public static class BoxSprites
 {
-    /// <summary>Inclinación máxima del motor (grados): define el margen del cuadro de dibujo.</summary>
+    /// <summary>Inclinación máxima del motor (grados).</summary>
     private const double MaxTilt = 12;
+
+    /// <summary>Zonas extra del cuadro: columnas a cada lado y filas por encima del principal.</summary>
+    public const int Side = 12, Top = 12;
 
     private static BitmapSource? _closedGrid, _openGrid;
     private static int[]? _closedPx, _openPx;
     private static readonly Dictionary<(bool Open, int Degrees, int Prescale), BitmapSource> Cache = new();
 
-    /// <summary>Cuadrícula de la caja recta (para medidas y zona clicable).</summary>
+    /// <summary>Cuadro de la caja sin inclinar (para medidas y zona clicable).</summary>
     public static BitmapSource Grid(bool open) =>
         open ? _openGrid ??= Load("Assets/box/box_open.png") : _closedGrid ??= Load("Assets/box/box_closed.png");
 
-    /// <summary>Casillas de la caja (ancho y alto de la caja recta).</summary>
-    public static int Columns => Grid(false).PixelWidth;
-    public static int Rows => Grid(false).PixelHeight;
+    /// <summary>Cuadro de dibujo completo (casillas = px lógicos).</summary>
+    public static int FrameWidth => Grid(false).PixelWidth;
+    public static int FrameHeight => Grid(false).PixelHeight;
 
-    /// <summary>Margen del cuadro de dibujo a cada lado y por encima, para la caja inclinada.</summary>
-    public static int PadX => (int)Math.Ceiling(Rows * Math.Sin(MaxTilt * Math.PI / 180));
-    public static int PadTop => (int)Math.Ceiling(Columns * Math.Sin(MaxTilt * Math.PI / 180));
+    /// <summary>Cuadro principal (la caja para el motor): 32x32.</summary>
+    public static Int32Rect Main => new(Side, Top, FrameWidth - 2 * Side, FrameHeight - Top);
 
-    /// <summary>Cuadro de dibujo completo de la caja (casillas = px lógicos).</summary>
-    public static int FrameWidth => Columns + 2 * PadX;
-    public static int FrameHeight => Rows + PadTop;
+    /// <summary>Zonas extra (laterales y de arriba), para los marcos.</summary>
+    public static Int32Rect[] ExtraZones => new[]
+    {
+        new Int32Rect(0, Top, Side, Main.Height),
+        new Int32Rect(Side + Main.Width, Top, Side, Main.Height),
+        new Int32Rect(Side, 0, Main.Width, Top),
+    };
 
-    // Margen transparente superior de cada estado (fracción del alto). La colisión debe usar el borde
-    // VISIBLE (la tapa cerrada está más baja que las solapas abiertas) o el gato flota sobre la caja.
-    public static double TopInsetClosed => SpriteBounds.Opaque(Grid(false)).Y;
-    public static double TopInsetOpen => SpriteBounds.Opaque(Grid(true)).Y;
+    // Margen transparente superior de cada estado dentro del principal (fracción de su alto). La
+    // colisión usa el borde VISIBLE (la tapa cerrada está más baja que las solapas abiertas).
+    public static double TopInsetClosed => TopInset(false);
+    public static double TopInsetOpen => TopInset(true);
+
+    private static double TopInset(bool open)
+    {
+        var area = SpriteBounds.Opaque(Grid(open));
+        double topRow = area.Y * FrameHeight;
+        return Math.Clamp((topRow - Top) / Main.Height, 0, 1);
+    }
 
     /// <summary>
     /// La caja inclinada <paramref name="degrees"/> grados (positivo = horario, se levanta el lado
-    /// izquierdo), dibujada en su cuadro de <see cref="FrameWidth"/>x<see cref="FrameHeight"/> casillas
-    /// y ampliada píxel a píxel por <paramref name="prescale"/> (ver <see cref="PixelScale"/>).
+    /// izquierdo) en su cuadro, ampliada píxel a píxel por <paramref name="prescale"/> (ver
+    /// <see cref="PixelScale"/>).
     /// </summary>
     public static BitmapSource Get(bool open, double degrees, int prescale = 1)
     {
@@ -55,30 +69,26 @@ public static class BoxSprites
         if (Cache.TryGetValue(key, out var cached)) return cached;
 
         int[] src = Pixels(open);
-        int cols = Columns, rows = Rows, w = FrameWidth, h = FrameHeight;
+        int w = FrameWidth, h = FrameHeight;
         var cells = new int[w * h];
 
-        // Giro en el espacio de las casillas: para cada casilla del cuadro se busca de qué casilla de la
-        // caja recta viene (giro inverso) y se copia su color tal cual. Pivote: la esquina de abajo que
-        // se queda en el suelo (la derecha si se levanta la izquierda, y al revés).
-        // El pivote es la esquina de la BASE del dibujo: la fila de abajo, de su primera a su última
-        // casilla visible (los dibujos tienen margen transparente, y la caja abierta es más ancha
-        // arriba por las solapas que abajo).
-        var (footLeft, footRight, footRow) = Foot(src, cols, rows);
+        // Giro en el espacio de las casillas: para cada casilla del cuadro se busca de qué casilla del
+        // cuadro sin inclinar viene (giro inverso) y se copia su color tal cual. El pivote es la esquina
+        // de la BASE del dibujo (la fila visible más baja; la caja abierta es más ancha arriba por las
+        // solapas que abajo).
+        var (footLeft, footRight, footRow) = Foot(src, w, h);
         double a = deg * Math.PI / 180, cos = Math.Cos(a), sin = Math.Sin(a);
-        double pivotX = deg >= 0 ? footRight : footLeft;   // en coordenadas de la caja recta
-        double pivotY = footRow;
+        double pivotX = deg >= 0 ? footRight : footLeft, pivotY = footRow;
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
             {
-                // Centro de la casilla del cuadro, en coordenadas de la caja recta respecto al pivote.
-                double dx = x + 0.5 - PadX - pivotX, dy = y + 0.5 - PadTop - pivotY;
+                double dx = x + 0.5 - pivotX, dy = y + 0.5 - pivotY;
                 double sx = dx * cos + dy * sin + pivotX;   // giro inverso
                 double sy = -dx * sin + dy * cos + pivotY;
                 int ix = (int)Math.Floor(sx), iy = (int)Math.Floor(sy);
-                if (ix >= 0 && ix < cols && iy >= 0 && iy < rows)
-                    cells[y * w + x] = src[iy * cols + ix];
+                if (ix >= 0 && ix < w && iy >= 0 && iy < h)
+                    cells[y * w + x] = src[iy * w + ix];
             }
         }
 
@@ -95,20 +105,20 @@ public static class BoxSprites
     }
 
     /// <summary>Extremos izquierdo y derecho (bordes de casilla) de la fila visible más baja, y su borde inferior.</summary>
-    private static (double Left, double Right, double Bottom) Foot(int[] px, int cols, int rows)
+    private static (double Left, double Right, double Bottom) Foot(int[] px, int w, int h)
     {
-        for (int y = rows - 1; y >= 0; y--)
+        for (int y = h - 1; y >= 0; y--)
         {
             int first = -1, last = -1;
-            for (int x = 0; x < cols; x++)
+            for (int x = 0; x < w; x++)
             {
-                if ((px[y * cols + x] >>> 24) == 0) continue;
+                if ((px[y * w + x] >>> 24) == 0) continue;
                 if (first < 0) first = x;
                 last = x;
             }
             if (first >= 0) return (first, last + 1, y + 1);
         }
-        return (0, cols, rows);
+        return (0, w, h);
     }
 
     private static int[] Pixels(bool open)

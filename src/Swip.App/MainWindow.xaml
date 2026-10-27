@@ -22,8 +22,10 @@
             <Image x:Name="Box" Cursor="Hand" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="Box_Down" MouseMove="Box_Move" MouseLeftButtonUp="Box_Up"
                    MouseRightButtonUp="BoxRight_Click" />
-            <!-- Marco del cuadro de dibujo de la caja (siempre visible). -->
-            <Rectangle x:Name="BoxFrame" Stroke="#9900E5FF" IsHitTestVisible="False" />
+            <!-- Marcos del cuadro de dibujo de la caja (siempre visibles): zonas en azul, principal en
+                 verde, base en magenta. -->
+            <Image x:Name="BoxZones" Stretch="Fill" IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor" />
         </Canvas>
 
         <!-- Partículas del motor (zzz, corazones, polvo...). Encima de todo y sin recibir clics. -->
