@@ -52,6 +52,8 @@ public partial class MainWindow : Window
     private SwipWorld _world = null!;
     private CatAtlas _atlas = null!;
     private int _topmostTicks;                            // cuenta para reafirmar "siempre encima"
+    private bool _loupeOn;                                // lupa de cuadrícula activada (menú de la caja)
+    private const int LoupeZoom = 6;                      // aumento de la lupa (casilla = 6x6 px lógicos)
     private (bool Open, int Degrees, int Prescale)? _boxShown; // caja dibujada por última vez
 
     // Arrastre de la caja
@@ -222,6 +224,7 @@ public partial class MainWindow : Window
 
         InfoPopup.IsOpen = false;
         ConfigPopup.IsOpen = false;
+        Loupe.Visibility = Visibility.Collapsed;
         Effects.Clear();
         if (!_clickThrough)
         {
@@ -518,6 +521,7 @@ public partial class MainWindow : Window
         RenderBox();
         Effects.Sync(_world.Particles);
         UpdateClickThrough();
+        UpdateLoupe();
 
         // Cada segundo, volver a ponerse por encima de la barra de tareas (al pulsarla se pone delante
         // y taparía lo que cuelga por debajo de la base). No con un menú abierto: quedaría detrás.
@@ -1113,6 +1117,65 @@ public partial class MainWindow : Window
     }
 
     // --- Opciones ---------------------------------------------------------------
+
+    private void ToggleLoupe_Click(object sender, RoutedEventArgs e)
+    {
+        _loupeOn = !_loupeOn;
+        if (!_loupeOn) Loupe.Visibility = Visibility.Collapsed;
+        ConfigPopup.IsOpen = false;
+    }
+
+    /// <summary>
+    /// Con la lupa activada, muestra encima del gato (o de la caja) que hay bajo el cursor su fotograma
+    /// actual ampliado, con la cuadrícula interior y los marcos: para ver cómo se rellena cada casilla.
+    /// </summary>
+    private void UpdateLoupe()
+    {
+        if (!_loupeOn || !InteropNative.GetCursorPos(out var p))
+        {
+            Loupe.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var dpi = VisualTreeHelper.GetDpi(this);
+
+        foreach (var sprite in _sprites.Values)
+        {
+            if (sprite.Agent.Body is not { } cat || !IsPointOver(sprite, sprite.GetHitRect(), p, dpi)) continue;
+            var pose = cat.Pose;
+            ShowLoupe(_atlas.Frame(sprite.Agent.Color, pose.Clip, pose.Frame, mirrored: !pose.FacingRight, LoupeZoom),
+                ZoneOverlay.Get("cat", _atlas.GridWidth, _atlas.GridHeight, _atlas.ExtraZones, _atlas.Main,
+                    LoupeZoom, cellLines: true),
+                _atlas.GridWidth, _atlas.GridHeight, Canvas.GetLeft(sprite) + _atlas.GridWidth / 2.0, Canvas.GetTop(sprite));
+            return;
+        }
+
+        var area = SpriteBounds.Opaque(BoxSprites.Grid(_world.Box.Open));
+        var boxRect = new Rect(area.X * Box.ActualWidth, area.Y * Box.ActualHeight,
+            area.Width * Box.ActualWidth, area.Height * Box.ActualHeight);
+        if (IsPointOver(Box, boxRect, p, dpi))
+        {
+            ShowLoupe(BoxSprites.Get(_world.Box.Open, _world.Box.Wobble, LoupeZoom),
+                ZoneOverlay.Get("box", BoxSprites.FrameWidth, BoxSprites.FrameHeight, BoxSprites.ExtraZones,
+                    BoxSprites.Main, LoupeZoom, cellLines: true),
+                BoxSprites.FrameWidth, BoxSprites.FrameHeight, Canvas.GetLeft(Box) + Box.Width / 2, Canvas.GetTop(Box));
+            return;
+        }
+        Loupe.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowLoupe(ImageSource image, ImageSource grid, int cols, int rows, double centerX, double top)
+    {
+        double w = cols * LoupeZoom, h = rows * LoupeZoom;
+        LoupeImage.Width = LoupeGrid.Width = w;
+        LoupeImage.Height = LoupeGrid.Height = h;
+        if (!ReferenceEquals(LoupeImage.Source, image)) LoupeImage.Source = image;
+        if (!ReferenceEquals(LoupeGrid.Source, grid)) LoupeGrid.Source = grid;
+        double totalW = w + 12, totalH = h + 12;   // con el relleno del marco
+        double x = Math.Clamp(centerX - totalW / 2, 0, Math.Max(0, ActualWidth - totalW));
+        double y = Math.Max(0, top - totalH - 6);   // encima de lo que se mira
+        Loupe.Margin = new Thickness(x, y, 0, 0);
+        Loupe.Visibility = Visibility.Visible;
+    }
 
     private void ToggleLabels_Click(object sender, RoutedEventArgs e)
     {

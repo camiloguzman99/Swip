@@ -8,8 +8,8 @@ Para cada piel (orange, gray) y cada clip:
     (escala, giro, desplazamiento, espejo) sobre las poses ya dibujadas.
 
 Cada fotograma se convierte después a una CUADRÍCULA (1 casilla = 1 px de la app a escala 100%) en
-forma de T: el cuadro PRINCIPAL de 48x48 (los pies sobre la base, su borde de abajo), 12 columnas a
-cada lado para lo que necesita más ancho (correr, estirarse) y 24 filas por debajo del principal para
+forma de T: el cuadro PRINCIPAL de 48x48 (los pies sobre la base, su borde de abajo), 16 columnas a
+cada lado para lo que necesita más ancho (correr, estirarse) y 16 filas por debajo del principal para
 lo que cuelga. Cada casilla es un color de la paleta de la piel, escrito con una letra en
   art/grid/<piel>/<clip>.txt      (fotogramas en letras; "." = transparente)
   art/grid/<piel>/paleta.txt      (letra -> color; estable entre ejecuciones)
@@ -52,11 +52,11 @@ BOX_BODY = (58, 46, 335, 282)    # cuerpo de la caja cerrada en su dibujo (art/b
 SKINS = ["orange", "gray"]
 # Cuadro de dibujo de cada fotograma (1 casilla = 1 px lógico de la app a escala 100 %), en T:
 #   principal 48x48 (MAIN_X..MAIN_X+48, filas 0..47): el gato, con los pies sobre la base (fila 47);
-#   12 columnas a cada lado del principal (filas 0..47): correr, estirarse...;
-#   24 filas por debajo del principal (solo bajo él): lo que cuelga (cola, algo que se cae...).
-SIDE = 12
+#   16 columnas a cada lado del principal (filas 0..47): correr, estirarse...;
+#   16 filas por debajo del principal (solo bajo él): lo que cuelga (cola, algo que se cae...).
+SIDE = 16
 MAIN = 48
-BELOW = 24
+BELOW = 16
 MAIN_X = SIDE
 GRID_W = MAIN + 2 * SIDE
 GRID_BASE = MAIN                 # filas por encima de la base
@@ -444,22 +444,37 @@ def write_reference_sheets(clips, grids):
                 x = 10 + i * fw
                 d.rectangle([x, y, x + fw - 4, y + fh], outline=(90, 94, 102))
                 big = img.resize((GRID_W * zoom, GRID_H * zoom), Image.NEAREST)
-                draw_zones(big, cat_zones(), zoom)
+                draw_zones(big, cat_zones(), zoom, cells=True)
                 sheet.alpha_composite(big, (x, y))
                 d.text((x + 4, y + fh + 4), f"{skin} #{i}", fill=(170, 170, 170), font=small_font)
         sheet.convert("RGB").save(os.path.join(REF, f"{clip['id']}.png"), optimize=True)
 
 
 ZONE_BLUE, ZONE_GREEN, ZONE_MAGENTA = (0, 150, 255, 255), (40, 200, 70, 255), (255, 60, 220, 255)
+CELL_LINE = (128, 128, 128, 90)  # cuadrícula interior (gris translúcido: se ve sobre claro y oscuro)
 
 
-def draw_zones(img, zones, zoom):
-    """Marcos del cuadro de dibujo, como en la app: zonas en azul, principal en verde, base en magenta."""
+def draw_zones(img, zones, zoom, cells=False):
+    """Marcos del cuadro de dibujo, como en la app: zonas en azul, principal en verde, base en magenta.
+    Con cells=True dibuja también la cuadrícula interior (una línea fina entre cada casilla)."""
     # Igual que ZoneOverlay en la app: un borde en la casilla B va en el píxel B*zoom, así las zonas
     # vecinas comparten una sola línea; el verde y el magenta quedan encima del azul.
     d = ImageDraw.Draw(img)
     col = lambda b: min(b * zoom, img.width - 1)
     row = lambda b: min(b * zoom, img.height - 1)
+    if cells:
+        grid = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        g = ImageDraw.Draw(grid)
+        for b in range(img.width // zoom + 1):
+            g.line([col(b), 0, col(b), img.height], fill=CELL_LINE)
+        for b in range(img.height // zoom + 1):
+            g.line([0, row(b), img.width, row(b)], fill=CELL_LINE)
+        inside = Image.new("L", img.size, 0)          # solo dentro de las zonas de dibujo
+        m = ImageDraw.Draw(inside)
+        for x, y, w, h in zones[0] + [zones[1]]:
+            m.rectangle([col(x), row(y), col(x + w), row(y + h)], fill=255)
+        grid.putalpha(Image.composite(grid.getchannel("A"), Image.new("L", img.size, 0), inside))
+        img.alpha_composite(grid)
     side, main = zones
     for x, y, w, h in side:
         d.rectangle([col(x), row(y), col(x + w), row(y + h)], outline=ZONE_BLUE)
