@@ -10,9 +10,9 @@ namespace Swip.App.Art;
 /// La caja de cartón, dibujada casilla a casilla (tools/art/box_art.py; Assets/box, 1 casilla = 1 px
 /// lógico). Cuadro de 64x48: principal de 32x32 que la caja llena (su borde de abajo es la base) y un
 /// margen de 16 a cada lado y por encima para las solapas, el aplastamiento y el tambaleo.
-/// Fotogramas: <c>lid_0..lid_4</c> (abrir las solapas) y <c>squash_1..squash_4</c> (aplastada por el
-/// peso), cada uno con su capa delantera y la trasera (el interior: se dibuja DETRÁS del gato que está
-/// dentro). El tambaleo se hace con píxeles: la caja gira dentro de su cuadro (cada casilla toma el
+/// Fotogramas: <c>lid_0..lid_6</c> (abrir las cuatro solapas) y <c>squash_1..squash_4</c> (aplastada
+/// por el peso), cada uno con su capa delantera y la trasera (la solapa trasera: se dibuja DETRÁS del
+/// gato que está dentro). El tambaleo se hace con píxeles: la caja gira dentro de su cuadro (cada casilla toma el
 /// color que le toca; las casillas nunca se inclinan ni se estiran) sobre la esquina de su base que
 /// queda apoyada.
 /// </summary>

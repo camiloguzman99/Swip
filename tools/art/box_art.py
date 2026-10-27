@@ -7,15 +7,21 @@ reposo y su borde de abajo es la base. El margen de 16 casillas a cada lado y po
 solapas, el aplastamiento y el tambaleo.
 
 Luz desde arriba a la izquierda en todos los fotogramas: borde izquierdo y superior claros, lado
-derecho y base en sombra, la cara de dentro más oscura junto a la pared delantera, la solapa izquierda
-iluminada y la derecha en penumbra.
+derecho y base en sombra; las caras interiores de las solapas son de un café más oscuro que las de
+fuera, y la solapa delantera proyecta su sombra sobre la caja mientras se abre.
+
+Cuatro solapas: dos laterales, la trasera (se levanta por detrás) y la delantera (gira hacia quien
+mira, pasa por la vertical y cae por delante). La cinta cruza la tapa por fuera y baja por el frente:
+al abrir se corta en la junta; la tira del frente se queda en la pared y se ve sobre la cara de fuera
+de la delantera mientras sube.
 
 Fotogramas (nombre -> capa delantera y capa trasera):
-  lid_0 .. lid_4   abrir: solapas a 0, 45, 90, 125 y 150 grados (lid_0 = cerrada, lid_4 = abierta)
+  lid_0 .. lid_6   abrir (lid_0 = cerrada, lid_6 = abierta): laterales y trasera hasta 150 grados,
+                   delantera hasta 225
   squash_1 .. _4   cerrada con peso encima: baja 1..4 filas y se ensancha, con los lados abombados y
                    la tapa hundida en el centro cuando el peso es mayor
-La capa trasera es el interior de la caja abierta: la app la dibuja DETRÁS del gato que está dentro
-y la delantera (pared delantera, solapas) delante, así el gato queda dentro de verdad.
+La capa trasera (la solapa trasera) la dibuja la app DETRÁS del gato que está dentro, y la delantera
+(cuerpo y demás solapas) delante: el gato queda dentro de verdad.
 """
 import math
 
@@ -23,7 +29,6 @@ from PIL import Image
 
 W, H = 64, 48                     # cuadro de dibujo
 MAIN_X, MAIN_Y, MAIN = 16, 16, 32  # cuadro principal
-LID_ANGLES = [0, 45, 90, 125, 150]
 MAX_SQUASH = 4
 
 # Paleta (luz arriba a la izquierda).
@@ -34,8 +39,6 @@ MID = (197, 138, 77)
 SH = (170, 114, 62)
 DK = (140, 90, 47)
 DK2 = (110, 68, 35)
-IN_BACK = (124, 80, 42)           # pared de dentro del fondo (le llega algo de luz)
-IN_DK = (80, 50, 26)              # sombra de la pared delantera sobre el interior
 TAPE = (226, 204, 150)
 TAPE_HI = (242, 226, 184)
 TAPE_SH = (194, 170, 116)
@@ -91,14 +94,11 @@ def draw_body(cv, squash, open_):
             mask.discard((x, top))
     ring = outline_of(mask)
     bottom = MAIN_Y + MAIN - 1
-    rim = top + 4 if open_ else None              # borde de la pared delantera (caja abierta)
     for (x, y) in mask:
         if (x, y) in ring:
             cv.set(x, y, OUT)
             continue
         l, r = rows[y]
-        if open_ and y < rim:
-            continue                              # el hueco: lo dibuja la capa trasera
         c = MID
         if x <= l + 1:
             c = HI if x == l + 1 else c
@@ -125,10 +125,9 @@ def draw_body(cv, squash, open_):
         for y in (top + 1, top + 2):
             cv.set(cx, y, SH)                     # junta entre solapas
     else:
-        l, r = rows[rim]
+        l, r = rows[top + 1]
         for x in range(l + 1, r):
-            cv.set(x, rim, OUT)                   # borde superior de la pared delantera
-            cv.set(x, rim + 1, HI)                # el canto le da la luz
+            cv.set(x, top + 1, HI)                # abierta: el canto de la pared delantera, iluminado
     return rows, top, ring
 
 
@@ -136,17 +135,17 @@ def draw_details(cv, rows, top, squash, open_):
     bottom = MAIN_Y + MAIN - 1
     l, r = rows[bottom - 4]
     cx = (l + r) // 2
-    if not open_:
-        # Cinta de embalar: cruza la tapa y baja por el frente, con el final rasgado.
-        end = top + 10
-        for y in range(top + 1, end + 1):
-            for x in range(cx - 2, cx + 2):
-                if y == end and (x - cx) % 2 == 0:
-                    continue                      # final rasgado
-                c = TAPE_HI if x == cx - 2 else TAPE_SH if x == cx + 1 else TAPE
-                cv.set(x, y, c)
+    # Cinta de embalar: cruza la tapa y baja por el frente, con el final rasgado. Al abrir se corta en
+    # la junta: la tira del frente se queda en la pared (su otra mitad va en el canto de las solapas).
+    start, end = (top + 1, top + 10) if not open_ else (top + 2, top + 10)
+    for y in range(start, end + 1):
+        for x in range(cx - 2, cx + 2):
+            if (y == end or (open_ and y == start)) and (x - cx) % 2 == 0:
+                continue                          # bordes rasgados
+            c = TAPE_HI if x == cx - 2 else TAPE_SH if x == cx + 1 else TAPE
+            cv.set(x, y, c)
     # Flechas impresas de "este lado arriba" (arriba a la derecha): punta de 5 casillas y asta.
-    ay = top + 12 if not open_ else top + 11
+    ay = top + 12
     arrow = ((2, 0), (1, 1), (2, 1), (3, 1), (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (2, 3), (2, 4))
     for ax in (r - 14, r - 8):
         for dx, dy in arrow:
@@ -169,69 +168,133 @@ def draw_details(cv, rows, top, squash, open_):
             cv.set(x, y, SCUFF)
 
 
-def draw_interior(cv, rows, top):
-    """Capa trasera de la caja abierta: el hueco entre el borde de atrás y la pared delantera."""
-    rim = top + 4
-    for y in range(top, rim):
-        l, r = rows[y]
-        for x in range(l, r + 1):
-            if x in (l, r) or y == top:
-                cv.set(x, y, OUT)                 # borde de atrás
-            else:
-                cv.set(x, y, IN_BACK if y <= top + 1 else IN_DK)
+# Apertura en 7 fotogramas. Ángulos de cada solapa (0 = cerrada, tumbada sobre la caja):
+#   laterales y trasera hasta 150 grados (abiertas hacia fuera y hacia arriba);
+#   delantera hasta 225 grados: gira hacia quien mira, pasa por la vertical y cae por delante
+#   45 grados por debajo del borde, sin tapar la abertura.
+LID_STEPS = 7
+SIDE_MAX, BACK_MAX, FRONT_MAX = 150, 150, 225
+FLAP_LEN = 9                      # fondo de las solapas delantera/trasera (filas, de canto)
+PERSPECTIVE = 0.35                # cuánto se ve hacia abajo lo que apunta hacia quien mira
+FLAP_IN = (150, 98, 52)           # cara interior del cartón: café más oscuro que la de fuera
+FLAP_IN_SH = (126, 80, 42)
+SHADE = 0.78                      # sombra de la solapa delantera sobre la caja
 
 
-def flap_cells(hinge, angle, length, flip):
-    """Casillas de una solapa: un listón de `length` casillas y 5 de grueso que gira en `hinge`."""
+def flap_reach(angle, toward_viewer_when_closed):
+    """Filas que se extiende la punta de una solapa delantera/trasera respecto a su bisagra en
+    pantalla (negativo = por encima del borde). Giro real proyectado: la parte vertical sube y la que
+    apunta hacia quien mira se ve un poco más abajo."""
     a = math.radians(angle)
-    dx, dy = math.cos(a), -math.sin(a)
-    if flip:
-        dx = -dx
-    nx, ny = -dy, dx                              # perpendicular
-    hx, hy = hinge
-    cells = set()
-    for y in range(H):
-        for x in range(W):
-            px, py = x + 0.5 - hx, y + 0.5 - hy
-            along = px * dx + py * dy
-            across = px * nx + py * ny
-            if -0.5 <= along <= length and -2.5 <= across <= 2.5:
-                cells.add((x, y))
-    return cells, (dx, dy)
+    depth = FLAP_LEN * math.cos(a) * (1 if toward_viewer_when_closed else -1)
+    return -FLAP_LEN * math.sin(a) + PERSPECTIVE * depth
 
 
-def draw_flaps(cv, rows, top, angle):
+def cast_front_shadow(cv, rows, top, angle, reach):
+    """Sombra de la solapa delantera sobre la propia caja (luz arriba a la izquierda: cae hacia abajo y
+    a la derecha). De pie apenas sombrea el canto; al bajar hacia quien mira, la sombra crece bajo su
+    borde. Oscurece lo ya dibujado (pared, cinta, flechas), no el contorno."""
+    if angle <= 0:
+        return
     l, r = rows[top]
-    length = MAIN // 2                            # cada solapa mide la mitad del ancho de la caja
-    for side, hinge, face in (("izq", (l + 0.5, top + 0.5), (HI, LT)), ("der", (r + 0.5, top + 0.5), (LT, MID))):
-        cells, (dx, dy) = flap_cells(hinge, angle, length, flip=side == "der")
+    if angle <= 90:
+        rows_shaded = range(top + 1, top + 2)                         # el canto, bajo la solapa de pie
+    else:
+        t = (angle - 90) / (FRONT_MAX - 90)
+        rows_shaded = range(top + 1, top + max(0, round(reach)) + 1 + round(1 + 3 * t))
+    for y in rows_shaded:
+        for x in range(l + 2, r):                                     # una casilla corrida a la derecha
+            c = cv.px.get((x, y))
+            if c and c != OUT:
+                cv.set(x, y, tuple(int(v * SHADE) for v in c))
+
+
+def draw_panel(cv, rows, top, reach, face, lit_edge, tape=None):
+    """Solapa delantera o trasera vista de frente: un panel del ancho de la caja que sale del borde
+    de arriba hacia arriba (reach < 0) o hacia abajo (reach > 0).
+    tape: "full" = se ve su cara de fuera, con la cinta a lo largo de toda la solapa (cruzaba la
+    tapa); "edge" = se ve la de dentro, y de la cinta solo el trozo que dobla por el canto."""
+    n = round(abs(reach))
+    if n < 1:
+        return
+    l, r = rows[top]
+    ys = range(top - n, top + 1) if reach < 0 else range(top, top + n + 1)
+    mask = {(x, y) for y in ys for x in range(l, r + 1)}
+    ring = outline_of(mask)
+    far = top - n if reach < 0 else top + n           # el canto libre
+    cx = (l + r) // 2
+    for (x, y) in mask:
+        if (x, y) in ring:
+            cv.set(x, y, OUT)
+            continue
+        c = face[0] if x < r - 3 else face[1]          # sombra a la derecha, como la caja
+        if x <= l + 1:
+            c = LT
+        if abs(y - far) == 1:
+            c = lit_edge                               # canto libre
+        cv.set(x, y, c)
+    if tape:
+        step = -1 if reach < 0 else 1
+        ys = [y for y in ys if (cx, y) in mask and (cx, y) not in ring] if tape == "full" \
+            else [far - step, far - 2 * step]
+        for y in ys:
+            if (cx, y) in mask and (cx, y) not in ring:
+                for x in range(cx - 2, cx + 2):
+                    cv.set(x, y, TAPE_HI if x == cx - 2 else TAPE_SH if x == cx + 1 else TAPE)
+
+
+def draw_side_flaps(cv, rows, top, angle):
+    """Solapas laterales: listones de 3 casillas de grueso, del color del cartón, con la bisagra en la
+    esquina de arriba (empiezan dentro del contorno de la caja: salen del borde, no del aire)."""
+    if angle <= 0:
+        return
+    l, r = rows[top]
+    length = MAIN // 2 - 2
+    for side, hinge, face in (("izq", (l + 1.0, top + 1.0), (LT, MID)), ("der", (r, top + 1.0), (MID, SH))):
+        a = math.radians(angle)
+        dx, dy = math.cos(a), -math.sin(a)
+        if side == "der":
+            dx = -dx
+        nx, ny = -dy, dx
+        cells = set()
+        for y in range(H):
+            for x in range(W):
+                px, py = x + 0.5 - hinge[0], y + 0.5 - hinge[1]
+                along, across = px * dx + py * dy, px * nx + py * ny
+                if -1.0 <= along <= length and -1.5 <= across <= 1.5:
+                    cells.add((x, y))
         ring = outline_of(cells)
         for (x, y) in cells:
             if (x, y) in ring:
                 cv.set(x, y, OUT)
-                continue
-            along = (x + 0.5 - hinge[0]) * dx + (y + 0.5 - hinge[1]) * dy
-            c = face[0] if along > length * 0.45 else face[1]
-            if along > length - 3:                # media cinta en la punta de cada solapa
-                c = TAPE_HI if side == "izq" else TAPE_SH
-            cv.set(x, y, c)
+            else:
+                along = (x + 0.5 - hinge[0]) * dx + (y + 0.5 - hinge[1]) * dy
+                cv.set(x, y, face[0] if along > length / 2 else face[1])
 
 
 def frame(lid, squash):
-    """(delantera, trasera) de un fotograma."""
+    """(delantera, trasera) de un fotograma. La trasera es lo que va DETRÁS del gato que está dentro."""
     open_ = lid > 0
     front, back = Canvas(), Canvas()
     rows, top, _ = draw_body(front, squash if not open_ else 0, open_)
     draw_details(front, rows, top, squash, open_)
     if open_:
-        draw_interior(back, rows, top)
-        draw_flaps(front, rows, top, LID_ANGLES[lid])
+        p = lid / (LID_STEPS - 1)
+        draw_panel(back, rows, top, flap_reach(BACK_MAX * p, True), (FLAP_IN, FLAP_IN_SH), LT, tape="edge")
+        # Las laterales van detrás de la delantera mientras esta sube (como en una caja de verdad).
+        draw_side_flaps(front, rows, top, SIDE_MAX * p)
+        fa = FRONT_MAX * p
+        # Mientras sube se ve su cara de fuera; al pasar de la vertical, la de dentro.
+        face = (MID, SH) if fa < 90 else (FLAP_IN, FLAP_IN_SH)
+        reach = flap_reach(fa, False)
+        cast_front_shadow(front, rows, top, fa, reach)
+        draw_panel(front, rows, top, reach, face, LT if fa < 180 else SH, tape="full" if fa < 90 else "edge")
     return front.image(), back.image()
 
 
 def frames():
     out = {}
-    for k in range(len(LID_ANGLES)):
+    for k in range(LID_STEPS):
         out[f"lid_{k}"] = frame(k, 0)
     for s in range(1, MAX_SQUASH + 1):
         out[f"squash_{s}"] = frame(0, s)

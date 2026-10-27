@@ -7,7 +7,7 @@ namespace Swip.Shared.Engine;
 public sealed class BoxBody
 {
     /// <summary>Fotogramas de las solapas: 0 = cerrada ... LidFrames-1 = abierta (tools/art/box_art.py).</summary>
-    public const int LidFrames = 5;
+    public const int LidFrames = 7;
 
     /// <summary>Filas que se aplasta como mucho (gato gordo y rebote incluidos).</summary>
     public const int MaxSquash = 4;
