@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visor de movimientos del gato</title>
+<style>
+  :root {
+    --bg: #1d2026; --panel: #262a32; --panel2: #2e333d; --line: #3a404c; --text: #e8eaee; --muted: #9aa1ae;
+    --accent: #ffb454; --ok: #5fd08a; --warn: #ffcc4d; --bad: #ff7b72; --blue: #0096ff; --green: #28c846; --magenta: #ff3cdc;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #eef0f4; --panel: #fff; --panel2: #f3f5f8; --line: #d4d9e1; --text: #1c2027; --muted: #5d6675; --accent: #c46a00; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  header { padding: 10px 16px; display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sum span { margin-right: 12px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 48px); }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  aside { border-right: 1px solid var(--line); background: var(--panel); padding: 10px; overflow: auto; max-height: calc(100vh - 48px); }
+  @media (max-width: 860px) { aside { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line); } }
+  main { padding: 12px 16px; min-width: 0; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  button, select, input[type=text], input[type=number] { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font: inherit; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #1b1b1b; border-color: var(--accent); }
+  input[type=text] { width: 100%; margin-bottom: 8px; }
+  .group { margin: 12px 0 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .item:hover { background: var(--panel2); }
+  .item.sel { border-color: var(--accent); background: var(--panel2); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--ok); } .dot.prestada { background: var(--warn); } .dot.falta { background: var(--bad); }
+  .item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 0 6px; }
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  canvas { display: block; max-width: 100%; image-rendering: pixelated; background: #3a3e46; border-radius: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 8px 0; }
+  .row label { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); }
+  .readout { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .readout b { color: var(--text); font-weight: 600; }
+  input[type=range] { accent-color: var(--accent); }
+  .strip { display: flex; gap: 4px; overflow-x: auto; padding: 6px 0; }
+  .thumb { flex: none; border: 2px solid transparent; border-radius: 4px; background: #3a3e46; cursor: pointer; position: relative; }
+  .thumb.cur { border-color: var(--accent); }
+  .thumb canvas { background: transparent; border-radius: 0; }
+  .thumb i { position: absolute; left: 2px; top: 0; font-size: 10px; color: #fff; font-style: normal; text-shadow: 0 0 2px #000; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 12px; }
+  .panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 2px 4px 2px 10px; display: inline-flex; gap: 6px; align-items: center; }
+  .chip.now { border-color: var(--accent); }
+  .chip button { padding: 0 6px; border-radius: 10px; line-height: 1.2; }
+  .note { color: var(--muted); font-size: 13px; }
+  textarea { width: 100%; min-height: 90px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 12px/1.4 ui-monospace, monospace; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; margin-right: 6px; }
+  .badge.ok { background: rgba(95,208,138,.2); color: var(--ok); } .badge.prestada { background: rgba(255,204,77,.2); color: var(--warn); } .badge.falta { background: rgba(255,123,114,.2); color: var(--bad); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Visor de movimientos del gato</h1>
+  <div class="sum" id="sum"></div>
+  <div class="note">Todo en este archivo: no necesita nada más. Selecciona un movimiento de la lista para verlo.</div>
+</header>
+<div class="layout">
+  <aside>
+    <input type="text" id="search" placeholder="Buscar movimiento…">
+    <div class="filters" id="filters"></div>
+    <div id="list"></div>
+  </aside>
+  <main>
+    <div id="viewer">
+      <div class="stage">
+        <div class="row" style="margin-top:0">
+          <div><span id="badge"></span><b id="title" style="font-size:16px"></b></div>
+          <div class="note" id="desc"></div>
+        </div>
+        <canvas id="cv"></canvas>
+        <div class="row">
+          <button id="play" class="on">⏸ Pausa</button>
+          <button id="restart">⟲ Reiniciar</button>
+          <button id="prev">◀</button><button id="next">▶</button>
+          <input type="range" id="scrub" min="0" max="0" value="0" style="flex:1;min-width:140px">
+          <span class="readout" id="readout"></span>
+        </div>
+        <div class="row">
+          <label>fps <input type="number" id="fps" min="0.5" max="60" step="0.5" style="width:70px"></label>
+          <label>avance por cuadro <input type="text" id="adv" style="width:150px;margin:0" title="casillas que avanza el gato al mostrar cada cuadro, separadas por comas"></label>
+          <label>velocidad <select id="speed"><option value="0.25">×0,25</option><option value="0.5">×0,5</option><option value="1" selected>×1</option><option value="2">×2</option></select></label>
+          <label>zoom <select id="zoom"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select></label>
+          <label>gato <select id="skin"></select></label>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="mov" checked> el suelo avanza (comprueba que los pies no resbalen)</label>
+          <label><input type="checkbox" id="zones"> marcos (azul/verde/magenta)</label>
+          <label><input type="checkbox" id="cells"> cuadrícula de casillas</label>
+          <label><input type="checkbox" id="mirror"> espejo</label>
+          <label><input type="checkbox" id="rep" checked> repetir</label>
+          <button id="copy">Copiar ajustes (fps y avance)</button>
+        </div>
+        <div class="strip" id="strip"></div>
+      </div>
+      <div class="panel">
+        <h2>Secuencia (prueba de transiciones)</h2>
+        <div class="row" style="margin-top:0">
+          <select id="preset"></select>
+          <button id="seqPlay">▶ Reproducir secuencia</button>
+          <button id="seqAdd">+ Añadir el movimiento actual</button>
+          <button id="seqClear">Vaciar</button>
+          <label>vueltas de los que se repiten <input type="number" id="loops" min="1" max="10" value="2" style="width:60px"></label>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="note">Pasa de un movimiento al siguiente como lo haría el motor: el gato avanza solo cuando cambia el cuadro.</div>
+      </div>
+      <div class="panel" id="info"></div>
+    </div>
+    <div id="missing" class="hidden">
+      <div class="panel" style="margin-top:0">
+        <h2 id="mTitle"></h2>
+        <p id="mDesc"></p>
+        <p class="note">Texto para pedirlo a Gemini:</p>
+        <textarea id="mPrompt" readonly></textarea>
+        <div class="row"><button id="mCopy">Copiar texto</button></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Lista de lo que falta (para pedir a Gemini)</h2>
+      <textarea id="allMissing" readonly></textarea>
+      <div class="row"><button id="copyMissing">Copiar la lista</button></div>
+    </div>
+  </main>
+</div>
+<script>
+const DATA = /*DATA*/null;
+const meta = DATA.meta, clips = DATA.clips, needed = DATA.needed;
+const CW = meta.cell[0], CH = meta.cell[1], BASE = meta.base, MAIN = meta.main, COLS = meta.columns;
+const $ = id => document.getElementById(id);
+const imgs = {};
+let loaded = 0;
+const skinNames = Object.keys(DATA.skins);
+skinNames.forEach(s => { const im = new Image(); im.onload = () => { if (++loaded === skinNames.length) boot(); }; im.src = DATA.skins[s]; imgs[s] = im; });
+
+const QL = { ok: 'Listo', prestada: 'Pose prestada', falta: 'Falta' };
+let filter = 'todos', query = '';
+let cur = null, curMissing = null;
+const S = { t: 0, tick: -1, camX: 0, playing: true, seq: null, seqIdx: 0, doneAt: 0, holdUntil: 0 };
+let seqList = [];
+
+function boot() {
+  skinNames.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s === 'orange' ? 'naranja (nuevo)' : 'gris (arte antiguo)'; $('skin').appendChild(o); });
+  const q = { ok: 0, prestada: 0, falta: needed.length };
+  clips.forEach(c => q[c.quality]++);
+  $('sum').innerHTML = `<span><span class="dot ok" style="display:inline-block"></span> ${q.ok} listos</span><span><span class="dot prestada" style="display:inline-block"></span> ${q.prestada} con pose prestada</span><span><span class="dot falta" style="display:inline-block"></span> ${q.falta} sin arte</span>`;
+  const fl = [['todos', 'Todos'], ['ok', 'Listos'], ['prestada', 'Prestadas'], ['falta', 'Faltan'], ['sinmotor', 'Sin comportamiento']];
+  fl.forEach(([k, label]) => { const b = document.createElement('button'); b.textContent = label; b.dataset.k = k; b.onclick = () => { filter = k; renderList(); }; $('filters').appendChild(b); });
+  $('search').oninput = e => { query = e.target.value.toLowerCase(); renderList(); };
+  DATA.presets.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; $('preset').appendChild(o); });
+  $('preset').onchange = () => { seqList = DATA.presets[$('preset').value].clips.slice(); renderChips(); };
+  seqList = DATA.presets[0].clips.slice();
+  $('allMissing').value = missingText();
+  wire(); renderList(); renderChips();
+  select(clips.find(c => c.id === 'walk') || clips[0]);
+  requestAnimationFrame(loop);
+}
+
+function matches(item, isClip) {
+  if (query && !(item.id || item.name).toLowerCase().includes(query) && !(item.desc || item.detail || '').toLowerCase().includes(query)) return false;
+  if (filter === 'todos') return true;
+  if (filter === 'sinmotor') return isClip && !item.wired;
+  if (filter === 'falta') return !isClip;
+  return isClip && item.quality === filter;
+}
+function renderList() {
+  [...$('filters').children].forEach(b => b.classList.toggle('on', b.dataset.k === filter));
+  const L = $('list'); L.innerHTML = '';
+  const nm = needed.filter(n => matches(n, false));
+  if (nm.length) {
+    L.insertAdjacentHTML('beforeend', `<div class="group">Faltan (sin arte)</div>`);
+    nm.forEach(n => L.appendChild(itemEl(n.name, 'falta', n.group, () => selectMissing(n), curMissing === n)));
+  }
+  [['ok', 'Listos'], ['prestada', 'Con pose prestada (mejorables)']].forEach(([q, label]) => {
+    const cs = clips.filter(c => c.quality === q && matches(c, true));
+    if (!cs.length) return;
+    L.insertAdjacentHTML('beforeend', `<div class="group">${label} · ${cs.length}</div>`);
+    cs.forEach(c => L.appendChild(itemEl(c.id, q, c.wired ? '' : 'sin motor', () => select(c), cur === c)));
+  });
+}
+function itemEl(name, q, tag, onclick, sel) {
+  const d = document.createElement('div'); d.className = 'item' + (sel ? ' sel' : ''); d.onclick = onclick;
+  d.innerHTML = `<span class="dot ${q}"></span><span class="name">${name}</span>${tag ? `<span class="tag">${tag}</span>` : ''}`;
+  return d;
+}
+
+function select(c) {
+  cur = c; curMissing = null;
+  $('viewer').classList.remove('hidden'); $('missing').classList.add('hidden');
+  S.seq = null; resetPlayback();
+  $('title').textContent = c.id;
+  $('badge').innerHTML = `<span class="badge ${c.quality}">${QL[c.quality]}</span>`;
+  $('desc').textContent = c.desc;
+  $('fps').value = c.fps; $('adv').value = (c.advance || [0]).join(',');
+  $('scrub').max = c.frames.length - 1;
+  buildStrip();
+  $('info').innerHTML = `<h2>Ficha</h2>
+    <div><b>Cuadros:</b> ${c.frames.length} · <b>${c.loop ? 'bucle' : 'una vez'}</b> · <b>fps:</b> ${c.fps} · <b>duración:</b> ${(c.frames.length / c.fps).toFixed(2)} s</div>
+    <div><b>Origen del arte:</b> ${c.origin}</div>
+    <div><b>Motor:</b> ${c.wired ? 'lo usa el comportamiento «' + c.wired + '»' : 'tiene arte pero ningún comportamiento lo usa todavía'}</div>
+    ${c.note ? `<div><b>Qué mejorar:</b> ${c.note}</div>` : ''}`;
+  renderList();
+}
+function selectMissing(n) {
+  curMissing = n; cur = null;
+  $('viewer').classList.add('hidden'); $('missing').classList.remove('hidden');
+  $('mTitle').textContent = n.name + ' · ' + n.group;
+  $('mDesc').textContent = n.detail;
+  $('mPrompt').value = promptFor(n);
+  renderList();
+}
+function promptFor(n) {
+  return `Same cat, same flat 2D pixel-art style, same palette, same scale and same baseline as the attached sheet.\nOne row, ${n.frames} frames side by side, magenta #FF00FF background, no grid lines, no shadows, no text, at least 12% empty margin around every frame (tail, ears and paws never touch the cell edge).\nSmooth animation: consecutive frames differ by a SMALL change; where the motion is big add intermediate frames.\nStrict profile facing RIGHT unless said otherwise. Black outline only on the outer silhouette. Collar with red heart tag visible when the neck is visible.\nAction: ${n.name}. ${n.detail}`;
+}
+function missingText() {
+  const byGroup = {};
+  needed.forEach(n => (byGroup[n.group] = byGroup[n.group] || []).push(n));
+  const weak = clips.filter(c => c.quality === 'prestada');
+  let s = 'ACCIONES QUE FALTAN (sin arte propio)\n';
+  Object.keys(byGroup).forEach(g => { s += `\n${g}\n`; byGroup[g].forEach(n => s += `  - ${n.name} (${n.frames} cuadros): ${n.detail}\n`); });
+  s += '\nMOVIMIENTOS QUE USAN UNA POSE PRESTADA (conviene dibujarlos)\n';
+  weak.forEach(c => s += `  - ${c.id}: ${c.note}\n`);
+  return s;
+}
+
+function buildStrip() {
+  const st = $('strip'); st.innerHTML = '';
+  cur.frames.forEach((cell, i) => {
+    const d = document.createElement('div'); d.className = 'thumb'; d.dataset.i = i;
+    const k = 0.9, cv = document.createElement('canvas'); cv.width = Math.round(CW * k); cv.height = Math.round(CH * k);
+    const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+    drawCell(x, imgs[$('skin').value], cell, 0, 0, k, false);
+    d.appendChild(cv); d.insertAdjacentHTML('beforeend', `<i>${i + 1}</i>`);
+    d.onclick = () => { S.playing = false; setFrame(i); };
+    st.appendChild(d);
+  });
+}
+function drawCell(ctx, im, cell, x, y, z, mirror) {
+  const sx = (cell % COLS) * CW, sy = Math.floor(cell / COLS) * CH;
+  ctx.save();
+  if (mirror) { ctx.translate(x + CW * z, y); ctx.scale(-1, 1); ctx.drawImage(im, sx, sy, CW, CH, 0, 0, CW * z, CH * z); }
+  else ctx.drawImage(im, sx, sy, CW, CH, x, y, CW * z, CH * z);
+  ctx.restore();
+}
+
+function advArr() {
+  const a = $('adv').value.split(',').map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v));
+  return a.length ? a : [0];
+}
+function frameOfTick(t) {
+  const n = cur.frames.length;
+  if (n <= 1 || t <= 0) return 0;
+  return cur.loop ? t % n : Math.min(t, n - 1);
+}
+function resetPlayback() { S.t = 0; S.tick = -1; S.holdUntil = 0; }
+function setFrame(i) {
+  const fps = +$('fps').value || cur.fps;
+  S.t = (i + 0.01) / fps; S.tick = i; S.frame = i;
+  $('scrub').value = i; markThumb(i);
+}
+function markThumb(i) { [...$('strip').children].forEach(t => t.classList.toggle('cur', +t.dataset.i === i)); }
+
+function wire() {
+  $('play').onclick = () => { S.playing = !S.playing; };
+  $('restart').onclick = () => { resetPlayback(); S.playing = true; if (S.seq) { S.seqIdx = 0; startSeqClip(); } };
+  $('prev').onclick = () => { S.playing = false; setFrame((S.frame - 1 + cur.frames.length) % cur.frames.length); };
+  $('next').onclick = () => { S.playing = false; setFrame((S.frame + 1) % cur.frames.length); };
+  $('scrub').oninput = e => { S.playing = false; setFrame(+e.target.value); };
+  $('skin').onchange = () => { if (cur) buildStrip(); };
+  $('copy').onclick = () => copyText(JSON.stringify({ id: cur.id, fps: +$('fps').value, advance: advArr() }), 'Ajustes copiados');
+  $('mCopy').onclick = () => copyText($('mPrompt').value, 'Texto copiado');
+  $('copyMissing').onclick = () => copyText($('allMissing').value, 'Lista copiada');
+  $('seqAdd').onclick = () => { if (cur) { seqList.push(cur.id); renderChips(); } };
+  $('seqClear').onclick = () => { seqList = []; S.seq = null; renderChips(); };
+  $('seqPlay').onclick = () => { if (!seqList.length) return; S.seq = true; S.seqIdx = 0; S.playing = true; startSeqClip(); };
+}
+function copyText(text, msg) {
+  const done = () => { const b = document.activeElement; if (b && b.tagName === 'BUTTON') { const o = b.textContent; b.textContent = '✓ ' + msg; setTimeout(() => b.textContent = o, 1400); } };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select();
+  try { document.execCommand('copy'); done(); } catch (e) { window.prompt('Copia el texto:', text); }
+  t.remove();
+}
+
+function renderChips() {
+  const c = $('chips'); c.innerHTML = '';
+  seqList.forEach((id, i) => {
+    const d = document.createElement('span'); d.className = 'chip' + (S.seq && S.seqIdx === i ? ' now' : '');
+    d.innerHTML = `${i + 1}. ${id}`;
+    const b = document.createElement('button'); b.textContent = '×'; b.onclick = () => { seqList.splice(i, 1); renderChips(); };
+    d.appendChild(b); c.appendChild(d);
+  });
+  if (!seqList.length) c.innerHTML = '<span class="note">Vacía: añade movimientos o elige una secuencia de ejemplo.</span>';
+}
+function startSeqClip() {
+  const id = seqList[S.seqIdx];
+  const c = clips.find(x => x.id === id);
+  if (!c) { S.seqIdx = (S.seqIdx + 1) % seqList.length; return; }
+  const keepX = S.camX;
+  const prevSel = cur;
+  cur = c; curMissing = null;
+  $('viewer').classList.remove('hidden'); $('missing').classList.add('hidden');
+  $('title').textContent = c.id; $('badge').innerHTML = `<span class="badge ${c.quality}">${QL[c.quality]}</span>`;
+  $('desc').textContent = c.desc; $('fps').value = c.fps; $('adv').value = (c.advance || [0]).join(',');
+  $('scrub').max = c.frames.length - 1;
+  if (prevSel !== c) buildStrip();
+  resetPlayback(); S.camX = keepX;
+  const loops = Math.max(1, +$('loops').value || 1);
+  S.doneAt = c.loop ? c.frames.length * loops : c.frames.length;
+  renderChips(); renderList();
+}
+
+let last = 0;
+function loop(ts) {
+  const dt = Math.min(0.1, (ts - last) / 1000 || 0); last = ts;
+  if (cur) {
+    const fps = +$('fps').value || cur.fps;
+    if (S.playing && ts > S.holdUntil) {
+      S.t += dt * (+$('speed').value);
+      const tick = Math.floor(S.t * fps);
+      const adv = advArr();
+      while (S.tick < tick) {
+        S.tick++;
+        const f = frameOfTick(S.tick);
+        if ($('mov').checked && S.tick > 0) S.camX += adv[f % adv.length];
+        if (S.seq && S.tick >= S.doneAt) {
+          S.seqIdx = (S.seqIdx + 1) % seqList.length;
+          if (S.seqIdx === 0 && !$('rep').checked) { S.seq = null; S.playing = false; renderChips(); break; }
+          startSeqClip(); break;
+        }
+        if (!S.seq && !cur.loop && S.tick >= cur.frames.length) {
+          if ($('rep').checked) { S.holdUntil = ts + 600; resetPlayback(); break; } else { S.playing = false; break; }
+        }
+      }
+    }
+    S.frame = frameOfTick(Math.max(0, S.tick));
+    $('play').textContent = S.playing ? '⏸ Pausa' : '▶ Reproducir';
+    $('play').classList.toggle('on', S.playing);
+    $('scrub').value = S.frame; markThumb(S.frame);
+    const adv = advArr();
+    const speed = adv.reduce((a, b) => a + b, 0) / adv.length * fps;
+    $('readout').innerHTML = `cuadro <b>${S.frame + 1}/${cur.frames.length}</b> · avance <b>${adv[S.frame % adv.length]}</b> · velocidad <b>${speed.toFixed(0)}</b> casillas/s`;
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+
+function draw() {
+  const z = +$('zoom').value, cv = $('cv');
+  const w = Math.max(CW * z, Math.min(1000, CW * z * 2)), h = CH * z + 22;
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.clearRect(0, 0, w, h);
+  const gy = BASE * z;
+  // suelo con marcas cada 20 casillas (se desplazan al avance del motor) y cifras cada 100
+  x.strokeStyle = 'rgba(255,255,255,.35)'; x.fillStyle = 'rgba(255,255,255,.55)'; x.font = '11px sans-serif';
+  x.beginPath(); x.moveTo(0, gy + .5); x.lineTo(w, gy + .5); x.stroke();
+  const cx = (w - CW * z) / 2;
+  for (let k = Math.floor((S.camX - cx / z) / 20) - 1; k < (S.camX + w / z) / 20 + 1; k++) {
+    const px = Math.round(cx + (k * 20 - S.camX) * z + CW * z / 2);
+    if (px < 0 || px > w) continue;
+    const big = k % 5 === 0;
+    x.beginPath(); x.moveTo(px + .5, gy); x.lineTo(px + .5, gy + (big ? 12 : 6)); x.stroke();
+    if (big) x.fillText(String(k * 20), px + 3, gy + 20);
+  }
+  const cell = cur.frames[S.frame] != null ? cur.frames[S.frame] : cur.frames[0];
+  drawCell(x, imgs[$('skin').value], cell, cx, 0, z, $('mirror').checked);
+  if ($('cells').checked && z >= 4) {
+    x.strokeStyle = 'rgba(128,128,128,.28)'; x.beginPath();
+    for (let i = 0; i <= CW; i++) { x.moveTo(cx + i * z + .5, 0); x.lineTo(cx + i * z + .5, CH * z); }
+    for (let j = 0; j <= CH; j++) { x.moveTo(cx, j * z + .5); x.lineTo(cx + CW * z, j * z + .5); }
+    x.stroke();
+  }
+  if ($('zones').checked) {
+    const side = [[0, 0, MAIN[0], MAIN[3]], [MAIN[0] + MAIN[2], 0, CW - MAIN[0] - MAIN[2], MAIN[3]], [MAIN[0], MAIN[3], MAIN[2], CH - MAIN[3]]];
+    x.lineWidth = 1; x.strokeStyle = 'rgb(0,150,255)';
+    side.forEach(r => x.strokeRect(cx + r[0] * z + .5, r[1] * z + .5, r[2] * z, r[3] * z));
+    x.strokeStyle = 'rgb(40,200,70)'; x.strokeRect(cx + MAIN[0] * z + .5, MAIN[1] * z + .5, MAIN[2] * z, MAIN[3] * z);
+    x.strokeStyle = 'rgb(255,60,220)'; x.beginPath(); x.moveTo(cx + MAIN[0] * z, gy + .5); x.lineTo(cx + (MAIN[0] + MAIN[2]) * z, gy + .5); x.stroke();
+  }
+}
+</script>
+</body>
+</html>

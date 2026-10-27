@@ -121,8 +121,8 @@ public sealed class CatAtlas
     public int BaseRows { get; }
 
     /// <summary>
-    /// Cuadro PRINCIPAL dentro de la cuadrícula (48x48, verde en los marcos): el gato para el motor.
-    /// A sus lados quedan 12 columnas (correr, estirarse) y debajo 24 filas (lo que cuelga).
+    /// Cuadro PRINCIPAL dentro de la cuadrícula (100x100, verde en los marcos): el gato para el motor.
+    /// A sus lados quedan 40 columnas (correr, estirarse) y debajo 30 filas (lo que cuelga).
     /// </summary>
     public Int32Rect Main { get; }
 

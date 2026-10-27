@@ -1,0 +1,562 @@
+{
+ "clips": {
+  "sleep_curl": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6",
+   "wired": "sleep_curl",
+   "desc": "Dormido enroscado, respiración lenta (base del estado)."
+  },
+  "sleep_turn": {
+   "quality": "prestada",
+   "note": "Girarse dormido a otro lado; ahora espeja la bolita.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6, r5c8",
+   "wired": "sleep_turn",
+   "desc": "Se da la vuelta dormido: se encoge, gira y queda mirando al otro lado."
+  },
+  "sleep_stretch": {
+   "quality": "prestada",
+   "note": "Estirarse acostado; ahora alterna bolita y pan.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c2, r5c1",
+   "wired": "sleep_stretch",
+   "desc": "Estira patas delanteras y traseras sin despertar."
+  },
+  "sleep_ear": {
+   "quality": "prestada",
+   "note": "Mover la oreja dormido; ahora es la bolita sin cambios visibles.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6",
+   "wired": "sleep_ear",
+   "desc": "Mueve una oreja dormido."
+  },
+  "sleep_tail": {
+   "quality": "prestada",
+   "note": "Mover la cola dormido; ahora es la bolita sin cambios visibles.",
+   "origin": "Gemini · hoja de poses · cuadros r5c6, r5c7",
+   "wired": "sleep_tail",
+   "desc": "Sacude la punta de la cola dormido."
+  },
+  "sleep_dream": {
+   "quality": "prestada",
+   "note": "Soñar: patas y bigotes que se mueven; ahora son dos cuadros de la bolita.",
+   "origin": "Gemini · hoja de poses · cuadros r5c7, r5c8",
+   "wired": "sleep_dream",
+   "desc": "Sueña: patitas que tiemblan, bigotes que se mueven."
+  },
+  "sleep_petted": {
+   "quality": "prestada",
+   "note": "Dormido recibiendo caricias (se estira y ronronea); ahora son cuadros de la bolita.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6, r5c7, r5c8",
+   "wired": "sleep_petted",
+   "desc": "Al acariciarlo abre un ojo, bosteza y vuelve a dormir."
+  },
+  "sleep_box": {
+   "quality": "prestada",
+   "note": "Dormido dentro de la caja, apoyado en el borde; ahora es la bolita normal.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6",
+   "wired": "sleep_in_box",
+   "desc": "Dormido dentro de la caja abierta, asomando orejas."
+  },
+  "play_yarn": {
+   "quality": "prestada",
+   "note": "Manotear un ovillo con ambas patas; ahora reutiliza lamerse la pata.",
+   "origin": "Gemini · hoja de giros · cuadros g5c2, g5c3",
+   "wired": "play_yarn",
+   "desc": "Juega con el ovillo en su sitio (base del estado)."
+  },
+  "play_tail_chase": {
+   "quality": "prestada",
+   "note": "Perseguirse la cola dando vueltas; ahora son cuadros sentado y de frente.",
+   "origin": "Gemini · hoja de giros · cuadros g1c3, g1c4",
+   "wired": "play_tail_chase",
+   "desc": "Persigue su cola dando vueltas en el sitio."
+  },
+  "play_hunt_fly": {
+   "quality": "prestada",
+   "note": "Saltar y atrapar con las patas delanteras; ahora son cuadros del salto alto.",
+   "origin": "Gemini · hoja de giros · cuadros g7c3, g7c5, g7c6",
+   "wired": "play_hunt_fly",
+   "desc": "Sigue con la mirada una mosca y le lanza zarpazos."
+  },
+  "play_hop": {
+   "quality": "prestada",
+   "note": "Brincos de juego con cuerpo arqueado; ahora son cuadros del salto.",
+   "origin": "Gemini · hoja de giros · cuadros g7c1, g7c3, g7c5, g7c8",
+   "wired": "play_hop",
+   "desc": "Se agacha y salta en el sitio."
+  },
+  "play_roll": {
+   "quality": "prestada",
+   "note": "Rodar panza arriba; ahora espeja la bolita.",
+   "origin": "Gemini · hoja de poses · cuadros r5c5, r5c6",
+   "wired": "play_roll",
+   "desc": "Se tumba y se revuelca panza arriba."
+  },
+  "groom_paw": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g5c1, g5c2, g5c3, g5c4, g5c5, g5c6, g5c7, g5c8",
+   "wired": "groom_paw",
+   "desc": "Se lame la pata delantera."
+  },
+  "groom_face": {
+   "quality": "prestada",
+   "note": "Lavarse la cara con las dos patas; ahora repite la pose de lamerse la pata.",
+   "origin": "Gemini · hoja de giros · cuadros g5c2, g5c5",
+   "wired": "groom_face",
+   "desc": "Se limpia la cara con la pata."
+  },
+  "sit_look": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g1c3, g1c4",
+   "wired": "sit_look",
+   "desc": "Sentado, mirando alrededor."
+  },
+  "yawn": {
+   "quality": "prestada",
+   "note": "Bostezo con la boca abierta; ahora es el gato sentado con los ojos cerrados.",
+   "origin": "Gemini · hoja de giros, hoja de poses · cuadros g1c3, r6c5",
+   "wired": "yawn",
+   "desc": "Bosteza con la boca muy abierta."
+  },
+  "knead": {
+   "quality": "prestada",
+   "note": "Amasar alternando las patas delanteras; ahora son dos cuadros de acostado en pan.",
+   "origin": "Gemini · hoja de giros · cuadros g3c3, g3c4",
+   "wired": "knead",
+   "desc": "Amasa con las patas delanteras."
+  },
+  "walk": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini (g4c4) con las patas animadas por el generador (tools/art/walk_cycle.py)",
+   "wired": "walk",
+   "desc": "Camina despacio (base del estado). Ciclo de 8 fotogramas armado por piezas (tools/art/pieces.py)."
+  },
+  "trot": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini (g4c4) con las patas animadas por el generador (tools/art/walk_cycle.py)",
+   "wired": "trot",
+   "desc": "Trota."
+  },
+  "run": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t6c1, t6c2, t6c3, t6c4, t6c5, t6c6, t6c7",
+   "wired": "run",
+   "desc": "Corre una ráfaga corta, cuerpo estirado."
+  },
+  "sniff": {
+   "quality": "prestada",
+   "note": "Caminar con la nariz pegada al suelo; ahora son cuadros de caminar y sentado.",
+   "origin": "Gemini · hoja de giros · cuadros g4c1, g4c5",
+   "wired": "sniff",
+   "desc": "Se para a olfatear el suelo."
+  },
+  "stretch_yoga": {
+   "quality": "prestada",
+   "note": "Estirarse hacia delante con el trasero en alto; ahora mezcla poses de pie y saltando.",
+   "origin": "Gemini · hoja de giros · cuadros g7c1, g7c2, g2c3",
+   "wired": "stretch_yoga",
+   "desc": "Se estira: patas delante, trasero arriba."
+  },
+  "turn_around": {
+   "quality": "prestada",
+   "note": "Giro de 180° con los pasos intermedios; ahora salta de perfil a frente.",
+   "origin": "Gemini · hoja de giros · cuadros g1c3, g1c5",
+   "wired": "turn_around",
+   "desc": "Media vuelta rápida."
+  },
+  "box_push": {
+   "quality": "prestada",
+   "note": "Empujar con la cabeza y el pecho, patas traseras empujando; ahora son cuadros de caminar.",
+   "origin": "Gemini · hoja de giros · cuadros g4c2, g4c3",
+   "wired": "box_push",
+   "desc": "Empuja la caja con la cabeza, inclinado hacia delante."
+  },
+  "jump": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g6c1, g6c2, g6c3, g6c4, g6c5, g6c6, g6c7, g6c8",
+   "wired": "box_jump_on",
+   "desc": "Salto: se agacha, vuela estirado, aterriza."
+  },
+  "box_rub": {
+   "quality": "prestada",
+   "note": "Frotarse contra la caja con el costado; ahora son cuadros sentado.",
+   "origin": "Gemini · hoja de giros · cuadros g5c1, g5c8",
+   "wired": "box_rub",
+   "desc": "Se frota contra la caja."
+  },
+  "box_scratch": {
+   "quality": "prestada",
+   "note": "Arañar la pared de la caja de pie; ahora reutiliza lamerse la pata.",
+   "origin": "Gemini · hoja de giros · cuadros g5c3, g5c4, g5c5",
+   "wired": "box_scratch",
+   "desc": "Araña el cartón, estirado hacia arriba."
+  },
+  "box_peek": {
+   "quality": "prestada",
+   "note": "Asomarse con solo cabeza y patas delanteras sobre el borde; ahora es el gato sentado hundido.",
+   "origin": "Gemini · hoja de giros · cuadros g1c5, g1c4",
+   "wired": "box_peek",
+   "desc": "Dentro de la caja: se asoma y se esconde."
+  },
+  "box_paw_out": {
+   "quality": "prestada",
+   "note": "Sacar una pata por encima del borde; ahora es el gato lamiéndose, hundido.",
+   "origin": "Gemini · hoja de giros · cuadros g5c2, g5c3",
+   "wired": "box_paw_out",
+   "desc": "Dentro de la caja: saca una pata por el borde."
+  },
+  "ambush_pop": {
+   "quality": "prestada",
+   "note": "Saltar de golpe desde dentro de la caja; ahora mezcla pose sentada y agachada.",
+   "origin": "Gemini · hoja de giros · cuadros g1c5, g6c1",
+   "wired": "box_ambush",
+   "desc": "Emboscada: sale de golpe de la caja."
+  },
+  "cursor_swat": {
+   "quality": "prestada",
+   "note": "Zarpazo hacia arriba y hacia delante; ahora reutiliza lamerse la pata.",
+   "origin": "Gemini · hoja de giros · cuadros g5c2, g5c3, g5c4",
+   "wired": "cursor_swat",
+   "desc": "Zarpazo al cursor."
+  },
+  "petted_happy": {
+   "quality": "prestada",
+   "note": "Cabeza hacia la mano, ojos entrecerrados; ahora son poses sentado.",
+   "origin": "Gemini · hoja de giros, hoja de poses · cuadros r6c5, g1c3",
+   "wired": "petted_happy",
+   "desc": "Contento al acariciarlo: se estira hacia la mano."
+  },
+  "wake_up": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t1c1, t1c2, t1c3, t1c4, t1c5, t1c6, t1c7, t1c8, t1c9, t1c10",
+   "wired": "wake_up",
+   "desc": "Pasa de acostado a sentado (10 fotogramas)."
+  },
+  "to_sit": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t4c1, t4c2, t4c3, t4c4, t4c5, t4c6, t4c7, t4c8, t4c9, t4c10",
+   "wired": "to_sit",
+   "desc": "Pasa de caminar a sentarse (de pie -> sentado en 10 fotogramas)."
+  },
+  "to_sleep": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t2c1, t2c2, t2c3, t2c4, t2c5, t2c6, t2c7, t2c8, t2c9, t2c10",
+   "wired": "to_sleep",
+   "desc": "Pasa de sentado a acostado (10 fotogramas); después se enrosca."
+  },
+  "land": {
+   "quality": "prestada",
+   "note": "Aterrizaje amortiguado de verdad (agachado, patas dobladas); ahora usa el final del salto.",
+   "origin": "Gemini · hoja de giros, hoja de transiciones · cuadros g7c8, t4c5",
+   "wired": "land",
+   "desc": "Aterriza tras caer: se aplasta y se sacude."
+  },
+  "carry": {
+   "quality": "prestada",
+   "note": "Colgando de la nuca con las patas encogidas; ahora es el gato de pie.",
+   "origin": "Gemini · hoja de giros · cuadros g2c3, g7c2",
+   "wired": "carry",
+   "desc": "Colgando mientras lo arrastras."
+  },
+  "sit_to_stand": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t3c1, t3c2, t3c3, t3c4, t3c5, t3c6, t3c7, t3c8, t3c9, t3c10",
+   "wired": "",
+   "desc": "Se levanta: de sentado a de pie (10 fotogramas)."
+  },
+  "walk_start_stop": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t5c1, t5c2, t5c3, t5c4, t5c5, t5c6, t5c7, t5c8, t5c9, t5c10",
+   "wired": "",
+   "desc": "De pie, echa a andar y se detiene (10 fotogramas)."
+  },
+  "walk_to_run": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t7c1, t7c2, t7c3, t7c4, t7c5, t7c6, t7c7, t7c8, t7c9",
+   "wired": "",
+   "desc": "Pasa de caminar a correr (9 fotogramas)."
+  },
+  "stand_to_run": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de transiciones · cuadros t8c1, t8c2, t8c3, t8c4, t8c5, t8c6, t8c7, t8c8",
+   "wired": "",
+   "desc": "De pie, arranca a correr (8 fotogramas)."
+  },
+  "jump_high": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g7c1, g7c2, g7c3, g7c4, g7c5, g7c6, g7c7, g7c8",
+   "wired": "",
+   "desc": "Salto a distinta altura: se agacha, sube con las patas delanteras y cae (8 fotogramas)."
+  },
+  "turn_sit8": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g1c1, g1c2, g1c3, g1c4, g1c5, g1c6, g1c7, g1c8",
+   "wired": "",
+   "desc": "Sentado girando por las 8 direcciones (espalda, 3/4, perfil, frente...)."
+  },
+  "turn_stand8": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g2c1, g2c2, g2c3, g2c4, g2c5, g2c6, g2c7, g2c8",
+   "wired": "",
+   "desc": "De pie girando por las 8 direcciones."
+  },
+  "turn_loaf8": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g3c1, g3c2, g3c3, g3c4, g3c5, g3c6, g3c7, g3c8",
+   "wired": "",
+   "desc": "Acostado girando por las 8 direcciones."
+  }
+ },
+ "needed": [
+  {
+   "group": "Dormir",
+   "name": "Dormir de lado",
+   "frames": 6,
+   "detail": "Acostado de lado con las patas estiradas, respirando despacio."
+  },
+  {
+   "group": "Dormir",
+   "name": "Dormir estirado (panza arriba)",
+   "frames": 6,
+   "detail": "Boca arriba con las patas en el aire; respira y mueve una pata."
+  },
+  {
+   "group": "Dormir",
+   "name": "Respirar acostado en pan",
+   "frames": 6,
+   "detail": "Acostado con las patas escondidas; el pecho sube y baja, la cola se mueve."
+  },
+  {
+   "group": "Aseo",
+   "name": "Lamerse el pecho",
+   "frames": 6,
+   "detail": "Sentado, baja la cabeza y lame el pecho."
+  },
+  {
+   "group": "Aseo",
+   "name": "Lamerse la pata trasera",
+   "frames": 6,
+   "detail": "Sentado, levanta una pata trasera y la lame."
+  },
+  {
+   "group": "Aseo",
+   "name": "Rascarse la oreja con la pata trasera",
+   "frames": 6,
+   "detail": "Sentado, rasca la oreja rápidamente con la pata trasera."
+  },
+  {
+   "group": "Aseo",
+   "name": "Lavarse la cara con las dos patas",
+   "frames": 6,
+   "detail": "Sentado, se frota la cara con las patas delanteras."
+  },
+  {
+   "group": "Quieto",
+   "name": "Mover la punta de la cola",
+   "frames": 6,
+   "detail": "Sentado o de pie, la cola ondula suavemente."
+  },
+  {
+   "group": "Quieto",
+   "name": "Mover las orejas y parpadear",
+   "frames": 6,
+   "detail": "Las orejas giran y los ojos se cierran un instante."
+  },
+  {
+   "group": "Quieto",
+   "name": "Mirar arriba y abajo",
+   "frames": 6,
+   "detail": "Gira la cabeza hacia arriba y hacia abajo sin mover el cuerpo."
+  },
+  {
+   "group": "Quieto",
+   "name": "Bostezar",
+   "frames": 8,
+   "detail": "Sentado, abre la boca del todo y la cierra."
+  },
+  {
+   "group": "Quieto",
+   "name": "Estirarse y arquear la espalda",
+   "frames": 8,
+   "detail": "De pie, se estira hacia delante y luego arquea la espalda."
+  },
+  {
+   "group": "Juego",
+   "name": "Acechar y menear el trasero",
+   "frames": 8,
+   "detail": "Agachado, con el trasero que se menea antes de saltar."
+  },
+  {
+   "group": "Juego",
+   "name": "Manotear",
+   "frames": 6,
+   "detail": "De pie o sentado, lanza una pata delantera hacia delante."
+  },
+  {
+   "group": "Juego",
+   "name": "Rodar panza arriba",
+   "frames": 8,
+   "detail": "Se tumba de costado y se revuelve boca arriba."
+  },
+  {
+   "group": "Juego",
+   "name": "Perseguirse la cola",
+   "frames": 8,
+   "detail": "Gira sobre sí mismo intentando alcanzar la cola."
+  },
+  {
+   "group": "Juego",
+   "name": "Saltar a atrapar",
+   "frames": 8,
+   "detail": "Salta con las patas delanteras extendidas hacia arriba."
+  },
+  {
+   "group": "Caja",
+   "name": "Asomarse a la caja",
+   "frames": 6,
+   "detail": "Solo cabeza y patas delanteras sobre el borde."
+  },
+  {
+   "group": "Caja",
+   "name": "Sacar una pata de la caja",
+   "frames": 6,
+   "detail": "Una pata por encima del borde, explorando."
+  },
+  {
+   "group": "Caja",
+   "name": "Saltar dentro de la caja",
+   "frames": 8,
+   "detail": "Salto con aterrizaje dentro; se ve de lado."
+  },
+  {
+   "group": "Caja",
+   "name": "De pie dentro de la caja",
+   "frames": 6,
+   "detail": "Gato de pie con solo la parte alta sobre el borde."
+  },
+  {
+   "group": "Caja",
+   "name": "Amasar",
+   "frames": 6,
+   "detail": "Acostado en pan, alterna las patas delanteras."
+  },
+  {
+   "group": "Caja",
+   "name": "Frotarse contra la caja",
+   "frames": 8,
+   "detail": "Camina pegado, frotando costado y cabeza."
+  },
+  {
+   "group": "Moverse",
+   "name": "Caminar de frente y de espaldas",
+   "frames": 8,
+   "detail": "Dos filas de 8 cuadros: hacia la cámara y alejándose."
+  },
+  {
+   "group": "Moverse",
+   "name": "Girar en el sitio",
+   "frames": 6,
+   "detail": "Perfil derecho → frente → perfil izquierdo."
+  },
+  {
+   "group": "Moverse",
+   "name": "Olfatear caminando",
+   "frames": 8,
+   "detail": "Camina con la cabeza baja, nariz al suelo."
+  },
+  {
+   "group": "Moverse",
+   "name": "De pie a acostado directo",
+   "frames": 8,
+   "detail": "De pie, se agacha y se acuesta sin pasar por sentado."
+  },
+  {
+   "group": "Especiales",
+   "name": "Colgando por debajo de la base",
+   "frames": 6,
+   "detail": "Sentado en el borde con la cola y las patas colgando por debajo."
+  },
+  {
+   "group": "Especiales",
+   "name": "Cargado de la nuca",
+   "frames": 4,
+   "detail": "Colgado de la nuca, patas encogidas, cola caída."
+  },
+  {
+   "group": "Especiales",
+   "name": "Recibir caricias",
+   "frames": 6,
+   "detail": "Sentado con los ojos cerrados y la cabeza hacia la mano."
+  }
+ ],
+ "presets": [
+  {
+   "name": "Paseo: arrancar, caminar, trotar y correr",
+   "clips": [
+    "walk_start_stop",
+    "walk",
+    "walk",
+    "trot",
+    "walk_to_run",
+    "run",
+    "run",
+    "walk"
+   ]
+  },
+  {
+   "name": "Arrancar a correr desde parado",
+   "clips": [
+    "stand_to_run",
+    "run",
+    "run",
+    "walk_to_run"
+   ]
+  },
+  {
+   "name": "Sentarse, dormir y despertar",
+   "clips": [
+    "to_sit",
+    "sit_look",
+    "to_sleep",
+    "sleep_curl",
+    "wake_up",
+    "sit_to_stand",
+    "walk"
+   ]
+  },
+  {
+   "name": "Saltos",
+   "clips": [
+    "jump",
+    "land",
+    "jump_high",
+    "land"
+   ]
+  },
+  {
+   "name": "Aseo",
+   "clips": [
+    "to_sit",
+    "groom_paw",
+    "groom_paw",
+    "sit_to_stand"
+   ]
+  }
+ ]
+}

@@ -322,7 +322,7 @@
   },
   {
    "id": "groom_paw",
-   "fps": 3,
+   "fps": 4,
    "loop": true,
    "status": "placeholder",
    "description": "Se lame la pata delantera.",
@@ -330,6 +330,36 @@
     {
      "base": "play",
      "frame": 0,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 1,
+     "rot": -6
+    },
+    {
+     "base": "play",
+     "frame": 1,
      "rot": -6
     },
     {
@@ -426,17 +456,17 @@
   },
   {
    "id": "walk",
-   "fps": 12,
+   "fps": 10,
    "loop": true,
    "advance": [
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    0
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    5
    ],
    "status": "final",
    "description": "Camina despacio (base del estado). Ciclo de 8 fotogramas armado por piezas (tools/art/pieces.py).",
@@ -477,11 +507,13 @@
   },
   {
    "id": "trot",
-   "fps": 7,
+   "fps": 9,
    "loop": true,
    "advance": [
-    5,
-    4
+    11,
+    11,
+    11,
+    11
    ],
    "status": "placeholder",
    "description": "Trota.",
@@ -489,6 +521,16 @@
     {
      "base": "walk",
      "frame": 0,
+     "sx": 1.05
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.05
+    },
+    {
+     "base": "walk",
+     "frame": 1,
      "sx": 1.05
     },
     {
@@ -503,8 +545,13 @@
    "fps": 12,
    "loop": true,
    "advance": [
-    6,
-    6
+    18,
+    18,
+    18,
+    18,
+    18,
+    18,
+    18
    ],
    "status": "placeholder",
    "description": "Corre una ráfaga corta, cuerpo estirado.",
@@ -512,6 +559,36 @@
     {
      "base": "walk",
      "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.12,
+     "sy": 0.92
+    },
+    {
+     "base": "walk",
+     "frame": 1,
      "sx": 1.12,
      "sy": 0.92
     },
@@ -598,8 +675,8 @@
    "fps": 6,
    "loop": true,
    "advance": [
-    6,
-    6
+    8,
+    8
    ],
    "status": "placeholder",
    "description": "Empuja la caja con la cabeza, inclinado hacia delante.",
@@ -620,7 +697,7 @@
   },
   {
    "id": "jump",
-   "fps": 7,
+   "fps": 12,
    "loop": false,
    "status": "placeholder",
    "description": "Salto: se agacha, vuela estirado, aterriza.",
@@ -633,10 +710,42 @@
     },
     {
      "base": "walk",
+     "frame": 0,
+     "sx": 1.1,
+     "sy": 0.8
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.1,
+     "sy": 0.8
+    },
+    {
+     "base": "walk",
      "frame": 1,
      "sx": 1.15,
      "sy": 0.9,
      "rot": -15
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.15,
+     "sy": 0.9,
+     "rot": -15
+    },
+    {
+     "base": "walk",
+     "frame": 1,
+     "sx": 1.15,
+     "sy": 0.9,
+     "rot": -15
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sx": 1.05,
+     "sy": 0.85
     },
     {
      "base": "walk",
@@ -798,14 +907,28 @@
   },
   {
    "id": "wake_up",
-   "fps": 4,
+   "fps": 6,
    "loop": false,
    "status": "placeholder",
-   "description": "Se despierta: abre los ojos, se estira y bosteza.",
+   "description": "Pasa de acostado a sentado (10 fotogramas).",
    "reference": [
     {
      "base": "sleep",
      "frame": 1
+    },
+    {
+     "base": "sleep",
+     "frame": 1
+    },
+    {
+     "base": "sleep",
+     "frame": 1
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.15,
+     "sy": 0.9
     },
     {
      "base": "sleep",
@@ -820,21 +943,71 @@
     },
     {
      "base": "play",
+     "frame": 0,
+     "sy": 1.05
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 1.05
+    },
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
      "frame": 0
     }
    ]
   },
   {
    "id": "to_sit",
-   "fps": 5,
+   "fps": 8,
    "loop": false,
    "status": "placeholder",
-   "description": "Pasa de caminar a sentarse.",
+   "description": "Pasa de caminar a sentarse (de pie -> sentado en 10 fotogramas).",
    "reference": [
     {
      "base": "walk",
      "frame": 0,
      "sy": 0.9
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "walk",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0
+    },
+    {
+     "base": "play",
+     "frame": 0
     },
     {
      "base": "play",
@@ -844,11 +1017,21 @@
   },
   {
    "id": "to_sleep",
-   "fps": 3,
+   "fps": 6,
    "loop": false,
    "status": "placeholder",
-   "description": "Bosteza, da una vuelta y se enrosca para dormir.",
+   "description": "Pasa de sentado a acostado (10 fotogramas); después se enrosca.",
    "reference": [
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.95
+    },
+    {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.95
+    },
     {
      "base": "play",
      "frame": 0,
@@ -860,10 +1043,31 @@
      "sy": 0.9
     },
     {
+     "base": "play",
+     "frame": 0,
+     "sy": 0.9
+    },
+    {
      "base": "sleep",
      "frame": 1,
      "sx": 1.1,
      "sy": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.1,
+     "sy": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 1,
+     "sx": 1.1,
+     "sy": 0.9
+    },
+    {
+     "base": "sleep",
+     "frame": 0
     },
     {
      "base": "sleep",
@@ -906,6 +1110,364 @@
     {
      "base": "carry",
      "frame": 1
+    }
+   ]
+  },
+  {
+   "id": "sit_to_stand",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Se levanta: de sentado a de pie (10 fotogramas).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "walk_start_stop",
+   "fps": 8,
+   "loop": false,
+   "status": "placeholder",
+   "description": "De pie, echa a andar y se detiene (10 fotogramas).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "walk_to_run",
+   "fps": 10,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Pasa de caminar a correr (9 fotogramas).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "stand_to_run",
+   "fps": 10,
+   "loop": false,
+   "status": "placeholder",
+   "description": "De pie, arranca a correr (8 fotogramas).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ],
+   "advance": [
+    0,
+    0,
+    10,
+    14,
+    16,
+    18,
+    18,
+    18
+   ]
+  },
+  {
+   "id": "jump_high",
+   "fps": 12,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Salto a distinta altura: se agacha, sube con las patas delanteras y cae (8 fotogramas).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "turn_sit8",
+   "fps": 6,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Sentado girando por las 8 direcciones (espalda, 3/4, perfil, frente...).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "turn_stand8",
+   "fps": 6,
+   "loop": false,
+   "status": "placeholder",
+   "description": "De pie girando por las 8 direcciones.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "turn_loaf8",
+   "fps": 6,
+   "loop": false,
+   "status": "placeholder",
+   "description": "Acostado girando por las 8 direcciones.",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
     }
    ]
   }

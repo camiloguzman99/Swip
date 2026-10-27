@@ -8,8 +8,8 @@ namespace Swip.App.Art;
 
 /// <summary>
 /// La caja de cartón, dibujada casilla a casilla (tools/art/box_art.py; Assets/box, 1 casilla = 1 px
-/// lógico). Cuadro de 64x48: principal de 32x32 que la caja llena (su borde de abajo es la base) y un
-/// margen de 16 a cada lado y por encima para las solapas, el aplastamiento y el tambaleo.
+/// lógico). Cuadro de 106x86: principal de 66x66 que la caja llena (su borde de abajo es la base) y un
+/// margen de 20 a cada lado y por encima para las solapas, el aplastamiento y el tambaleo.
 /// Fotogramas: <c>lid_0..lid_6</c> (abrir las cuatro solapas) y <c>squash_1..squash_4</c> (aplastada
 /// por el peso), cada uno con su capa delantera y la trasera (la solapa trasera: se dibuja DETRÁS del
 /// gato que está dentro). El tambaleo se hace con píxeles: la caja gira dentro de su cuadro (cada casilla toma el
@@ -19,7 +19,7 @@ namespace Swip.App.Art;
 public static class BoxSprites
 {
     /// <summary>Margen del cuadro alrededor del principal: columnas a cada lado y filas por encima.</summary>
-    public const int Side = 16, Top = 16;
+    public const int Side = 20, Top = 20;
 
     private static readonly Dictionary<string, BitmapSource> Grids = new();
     private static readonly Dictionary<string, int[]> Pixels = new();
@@ -41,7 +41,7 @@ public static class BoxSprites
     public static int FrameWidth => Grid("lid_0").PixelWidth;
     public static int FrameHeight => Grid("lid_0").PixelHeight;
 
-    /// <summary>Cuadro principal (la caja para el motor): 32x32.</summary>
+    /// <summary>Cuadro principal (la caja para el motor): 44x44.</summary>
     public static Int32Rect Main => new(Side, Top, FrameWidth - 2 * Side, FrameHeight - Top);
 
     /// <summary>Zona del margen (todo el cuadro), para los marcos: el principal va dentro.</summary>

@@ -2,8 +2,8 @@
 """
 La caja de cartón dibujada casilla a casilla (pixel art generado, no reducido de un dibujo).
 
-Cuadro de 64x48 casillas; el cuadro principal (32x32, columnas 16..47, filas 16..47) es la caja en
-reposo y su borde de abajo es la base. El margen de 16 casillas a cada lado y por encima es para las
+Cuadro de 106x86 casillas; el cuadro principal (66x66, columnas 20..85, filas 20..85) es la caja en
+reposo y su borde de abajo es la base. El margen de 20 casillas a cada lado y por encima es para las
 solapas, el aplastamiento y el tambaleo.
 
 Luz desde arriba a la izquierda en todos los fotogramas: borde izquierdo y superior claros, lado
@@ -27,8 +27,8 @@ import math
 
 from PIL import Image
 
-W, H = 64, 48                     # cuadro de dibujo
-MAIN_X, MAIN_Y, MAIN = 16, 16, 32  # cuadro principal
+W, H = 106, 86                    # cuadro de dibujo
+MAIN_X, MAIN_Y, MAIN = 20, 20, 66  # cuadro principal
 MAX_SQUASH = 4
 
 # Paleta (luz arriba a la izquierda).
@@ -174,7 +174,7 @@ def draw_details(cv, rows, top, squash, open_):
 #   45 grados por debajo del borde, sin tapar la abertura.
 LID_STEPS = 7
 SIDE_MAX, BACK_MAX, FRONT_MAX = 150, 150, 225
-FLAP_LEN = 9                      # fondo de las solapas delantera/trasera (filas, de canto)
+FLAP_LEN = 18                     # fondo de las solapas delantera/trasera (filas, de canto)
 PERSPECTIVE = 0.35                # cuánto se ve hacia abajo lo que apunta hacia quien mira
 FLAP_IN = (150, 98, 52)           # cara interior del cartón: café más oscuro que la de fuera
 FLAP_IN_SH = (126, 80, 42)

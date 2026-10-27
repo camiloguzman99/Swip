@@ -12,7 +12,7 @@ namespace Swip.App.Controls;
 /// <summary>
 /// Vista de un gato. El motor (<see cref="SwipWorld"/>) decide todo; este control solo dibuja la
 /// pose: la cuadrícula del fotograma con la paleta del gato, sombra y rótulo. El dibujo siempre mide
-/// lo mismo en px lógicos (48 de alto) y se adapta a la escala de cada pantalla sin deformarse.
+/// lo mismo en px lógicos (100 de alto) y se adapta a la escala de cada pantalla sin deformarse.
 /// </summary>
 public partial class CatSprite : UserControl
 {

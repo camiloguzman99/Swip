@@ -49,7 +49,10 @@ public class EngineTests
     public void Cada_clip_tiene_al_menos_un_comportamiento_que_lo_usa()
     {
         // Los clips que solo se usan como fase de otro movimiento (trotar al acercarse, etc.) también cuentan.
-        var phaseClips = new[] { "trot", "walk", "sit_look", "box_peek", "sniff", "carry" };
+        // Y los de arte ya dibujado que aún esperan su comportamiento (transiciones, giros, salto alto).
+        var phaseClips = new[] { "trot", "walk", "sit_look", "box_peek", "sniff", "carry",
+            "sit_to_stand", "walk_start_stop", "walk_to_run", "stand_to_run", "jump_high",
+            "turn_sit8", "turn_stand8", "turn_loaf8" };
         var used = Behaviors.All.Select(b => b.Clip).Concat(phaseClips).ToHashSet();
         foreach (var c in ClipLibrary.Default.All)
             Assert.True(used.Contains(c.Id), $"El clip '{c.Id}' no lo usa ningún comportamiento");
@@ -205,9 +208,9 @@ public class EngineTests
         double startBox = w.Box.X;
         bool pushed = false;
         w.BehaviorStarted += (_, b) => { if (b.Id == "box_push") pushed = true; };
-        for (int i = 0; i < 40 && !pushed; i++) Run(w, 15);
+        // Un intento puede no llegar a la caja (el gato empieza lejos y se rinde a los 5 s): se espera a uno que sí.
+        for (int i = 0; i < 40 && w.Box.X == startBox; i++) Run(w, 15);
         Assert.True(pushed, "nunca eligió empujar");
-        Run(w, 10);
         Assert.NotEqual(startBox, w.Box.X);
 
         // Sin gatos empujando, la caja acaba quieta.

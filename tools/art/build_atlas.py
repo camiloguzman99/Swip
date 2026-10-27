@@ -45,7 +45,7 @@ BOX_OUT = os.path.join(ROOT, "src", "Swip.App", "Assets", "box")     # su cuadr�
 # Caja: principal de 32x32 casillas que el cuerpo de la caja llena POR COMPLETO, y un margen de 16
 # a cada lado y por encima para las solapas de la caja abierta y el tambaleo. Cuadro total 64x48,
 # la base es el borde de abajo del principal (y del cuadro).
-BOX_SIDE, BOX_TOP, BOX_MAIN = 16, 16, 32
+BOX_SIDE, BOX_TOP, BOX_MAIN = 20, 20, 66
 BOX_W, BOX_H = BOX_MAIN + 2 * BOX_SIDE, BOX_MAIN + BOX_TOP
 # La caja la dibuja tools/art/box_art.py directamente en casillas (cuadro de BOX_W x BOX_H).
 SKINS = ["orange", "gray"]
@@ -53,16 +53,16 @@ SKINS = ["orange", "gray"]
 #   principal 48x48 (MAIN_X..MAIN_X+48, filas 0..47): el gato, con los pies sobre la base (fila 47);
 #   16 columnas a cada lado del principal (filas 0..47): correr, estirarse...;
 #   16 filas por debajo del principal (solo bajo él): lo que cuelga (cola, algo que se cae...).
-SIDE = 16
-MAIN = 48
-BELOW = 16
+SIDE = 40
+MAIN = 100
+BELOW = 30
 MAIN_X = SIDE
 GRID_W = MAIN + 2 * SIDE
 GRID_BASE = MAIN                 # filas por encima de la base
 GRID_H = GRID_BASE + BELOW
 # Escala del arte: píxeles del dibujo original por casilla. Con 6.4 la pose de pie más alta
 # (309 px) llena las 48 filas del principal; todas las poses usan la misma escala.
-ART_PX_PER_CELL = 6.4
+ART_PX_PER_CELL = 3.09
 COLUMNS = 12
 ALPHA_MIN = 20
 PALETTE_SIZE = 62                # colores por piel (máximo: una letra o dígito por color)
@@ -332,13 +332,13 @@ def grid_path(skin, clip_id):
     return os.path.join(GRID, skin, f"{clip_id}.txt")
 
 
-def write_grid(skin, clip, frames, palette):
+def write_grid(skin, clip, frames, palette, source="auto", note=None):
     index = {c: k for k, c in enumerate(palette)}
     gw, gh = frames[0].size
     lines = [f"# {clip['id']} · piel {skin} · {gw}x{gh} casillas · {len(frames)} fotogramas · "
              f"{clip['fps']} fps · {'bucle' if clip['loop'] else 'una vez'}",
-             f"# {clip['description']}",
-             "# fuente: auto",
+             f"# {note or clip['description']}",
+             f"# fuente: {source}",
              "# (Si editas este archivo, cambia la línea anterior a 'fuente: mano' para que no se regenere.)"]
     for i, g in enumerate(frames):
         lines.append(f"--- {i}")
@@ -357,7 +357,7 @@ def read_grid(skin, clip_id):
         return None
     with open(path, encoding="utf-8") as f:
         text = f.read().splitlines()
-    if not any(l.startswith("#") and "fuente:" in l and "mano" in l.split("fuente:")[1] for l in text):
+    if not any(l.startswith("# fuente:") and "mano" in l for l in text):
         return None
     palette = load_or_build_palette(skin, [])
     frames, rows = [], None

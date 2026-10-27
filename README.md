@@ -25,6 +25,10 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   gustan más las cajas que las casas.
 - 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
   dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
+- 🔍 **Visor** (opción de la caja): una ventana emergente con el estilo de los menús donde se ve cada movimiento del
+  gato como lo anima el motor (fps y avance editables, secuencias para probar transiciones), cuáles están listos, cuáles
+  usan una pose prestada y cuáles aún no tienen arte (con el texto para pedirlos a Gemini). Los datos salen de
+  `src/Swip.App/Assets/atlas/visor.json` (`tools/art/build_viewer.py`).
 - 🏷️ **Etiquetas** (opción de la caja): el nombre del usuario **sobre** cada gato, en el color de
   énfasis de Windows; si tiene dos palabras, en dos filas centradas. No se puede seleccionar ni
   estorba al clic.
@@ -39,7 +43,7 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
 | Clic izquierdo MANTENIDO en un gato  | Lo cargas y arrastras; al soltar cae por gravedad                   |
 | Clic derecho en un gato              | Menú de ese usuario (ver abajo)                                     |
 | Clic izquierdo en la caja            | Se abre / se cierra, nada más                                       |
-| Clic derecho en la caja              | Menú de Swip: **Etiquetas**, **Actualizar**, **Salir**              |
+| Clic derecho en la caja              | Menú de Swip: **Etiquetas**, **Visor**, **Actualizar**, **Salir**   |
 | Arrastrar la caja                    | La mueves; también cae por gravedad                                 |
 | Soltar un gato sobre la caja         | Caja cerrada: se sienta **encima**. Caja abierta: se mete **dentro** |
 

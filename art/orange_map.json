@@ -1,0 +1,444 @@
+{
+ "walk": {
+  "proc": {
+   "base": "g4c4",
+   "n": 8,
+   "stride": 20
+  },
+  "note": "Caminar: cuerpo de g4c4 con las patas balanceadas (tools/art/walk_cycle.py)."
+ },
+ "trot": {
+  "proc": {
+   "base": "g4c4",
+   "n": 4,
+   "stride": 26,
+   "phases": [
+    0,
+    0.25,
+    0.5,
+    0.75
+   ]
+  },
+  "note": "Trote: igual que caminar, zancada mayor."
+ },
+ "run": {
+  "frames": [
+   "t6c1",
+   "t6c2",
+   "t6c3",
+   "t6c4",
+   "t6c5",
+   "t6c6",
+   "t6c7"
+  ],
+  "reorder": true
+ },
+ "jump": {
+  "frames": [
+   "g6c1",
+   "g6c2",
+   "g6c3",
+   "g6c4",
+   "g6c5",
+   "g6c6",
+   "g6c7",
+   "g6c8"
+  ]
+ },
+ "land": {
+  "frames": [
+   "g7c8",
+   "t4c5"
+  ]
+ },
+ "to_sit": {
+  "frames": [
+   "t4c1",
+   "t4c2",
+   "t4c3",
+   "t4c4",
+   "t4c5",
+   "t4c6",
+   "t4c7",
+   "t4c8",
+   "t4c9",
+   "t4c10"
+  ]
+ },
+ "to_sleep": {
+  "frames": [
+   "t2c1",
+   "t2c2",
+   "t2c3",
+   "t2c4",
+   "t2c5",
+   "t2c6",
+   "t2c7",
+   "t2c8",
+   "t2c9",
+   "t2c10"
+  ]
+ },
+ "wake_up": {
+  "frames": [
+   "t1c1",
+   "t1c2",
+   "t1c3",
+   "t1c4",
+   "t1c5",
+   "t1c6",
+   "t1c7",
+   "t1c8",
+   "t1c9",
+   "t1c10"
+  ]
+ },
+ "groom_paw": {
+  "frames": [
+   "g5c1",
+   "g5c2",
+   "g5c3",
+   "g5c4",
+   "g5c5",
+   "g5c6",
+   "g5c7",
+   "g5c8"
+  ]
+ },
+ "groom_face": {
+  "frames": [
+   "g5c2",
+   "g5c5"
+  ]
+ },
+ "sit_look": {
+  "frames": [
+   "g1c3",
+   "g1c4"
+  ]
+ },
+ "turn_around": {
+  "frames": [
+   "g1c3",
+   "g1c5"
+  ]
+ },
+ "play_yarn": {
+  "frames": [
+   "g5c2",
+   "g5c3"
+  ]
+ },
+ "cursor_swat": {
+  "frames": [
+   "g5c2",
+   "g5c3",
+   "g5c4"
+  ]
+ },
+ "box_scratch": {
+  "frames": [
+   "g5c3",
+   "g5c4",
+   "g5c5"
+  ]
+ },
+ "box_peek": {
+  "frames": [
+   {
+    "f": "g1c5",
+    "dy": 16
+   },
+   {
+    "f": "g1c5",
+    "dy": 12
+   },
+   {
+    "f": "g1c4",
+    "dy": 16
+   }
+  ]
+ },
+ "box_paw_out": {
+  "frames": [
+   {
+    "f": "g5c2",
+    "dy": 12
+   },
+   {
+    "f": "g5c3",
+    "dy": 12
+   }
+  ]
+ },
+ "ambush_pop": {
+  "frames": [
+   {
+    "f": "g1c5",
+    "dy": 26
+   },
+   {
+    "f": "g1c5",
+    "dy": 10
+   },
+   "g6c1"
+  ]
+ },
+ "box_push": {
+  "frames": [
+   "g4c2",
+   "g4c3"
+  ]
+ },
+ "play_hop": {
+  "frames": [
+   "g7c1",
+   "g7c3",
+   "g7c5",
+   "g7c8"
+  ]
+ },
+ "play_hunt_fly": {
+  "frames": [
+   "g7c3",
+   "g7c5",
+   "g7c6"
+  ]
+ },
+ "sit_to_stand": {
+  "frames": [
+   "t3c1",
+   "t3c2",
+   "t3c3",
+   "t3c4",
+   "t3c5",
+   "t3c6",
+   "t3c7",
+   "t3c8",
+   "t3c9",
+   "t3c10"
+  ]
+ },
+ "walk_start_stop": {
+  "frames": [
+   "t5c1",
+   "t5c2",
+   "t5c3",
+   "t5c4",
+   "t5c5",
+   "t5c6",
+   "t5c7",
+   "t5c8",
+   "t5c9",
+   "t5c10"
+  ]
+ },
+ "walk_to_run": {
+  "frames": [
+   "t7c1",
+   "t7c2",
+   "t7c3",
+   "t7c4",
+   "t7c5",
+   "t7c6",
+   "t7c7",
+   "t7c8",
+   "t7c9"
+  ]
+ },
+ "stand_to_run": {
+  "frames": [
+   "t8c1",
+   "t8c2",
+   "t8c3",
+   "t8c4",
+   "t8c5",
+   "t8c6",
+   "t8c7",
+   "t8c8"
+  ]
+ },
+ "jump_high": {
+  "frames": [
+   "g7c1",
+   "g7c2",
+   "g7c3",
+   "g7c4",
+   "g7c5",
+   "g7c6",
+   "g7c7",
+   "g7c8"
+  ]
+ },
+ "turn_sit8": {
+  "frames": [
+   "g1c1",
+   "g1c2",
+   "g1c3",
+   "g1c4",
+   "g1c5",
+   "g1c6",
+   "g1c7",
+   "g1c8"
+  ]
+ },
+ "turn_stand8": {
+  "frames": [
+   "g2c1",
+   "g2c2",
+   "g2c3",
+   "g2c4",
+   "g2c5",
+   "g2c6",
+   "g2c7",
+   "g2c8"
+  ]
+ },
+ "turn_loaf8": {
+  "frames": [
+   "g3c1",
+   "g3c2",
+   "g3c3",
+   "g3c4",
+   "g3c5",
+   "g3c6",
+   "g3c7",
+   "g3c8"
+  ]
+ },
+ "sleep_curl": {
+  "frames": [
+   "r5c5",
+   "r5c6"
+  ]
+ },
+ "sleep_turn": {
+  "frames": [
+   "r5c5",
+   {
+    "f": "r5c6",
+    "flip": 1
+   },
+   {
+    "f": "r5c8",
+    "flip": 1
+   }
+  ]
+ },
+ "sleep_stretch": {
+  "frames": [
+   "r5c5",
+   "r5c2",
+   "r5c1"
+  ]
+ },
+ "sleep_ear": {
+  "frames": [
+   "r5c5",
+   "r5c6",
+   "r5c5"
+  ]
+ },
+ "sleep_tail": {
+  "frames": [
+   "r5c6",
+   "r5c7",
+   "r5c6"
+  ]
+ },
+ "sleep_dream": {
+  "frames": [
+   "r5c7",
+   "r5c8"
+  ]
+ },
+ "sleep_petted": {
+  "frames": [
+   "r5c5",
+   "r5c6",
+   "r5c7",
+   "r5c8"
+  ]
+ },
+ "sleep_box": {
+  "frames": [
+   "r5c5",
+   "r5c6"
+  ]
+ },
+ "play_tail_chase": {
+  "frames": [
+   "g1c3",
+   "g1c4",
+   {
+    "f": "g1c3",
+    "flip": 1
+   },
+   {
+    "f": "g1c4",
+    "flip": 1
+   }
+  ]
+ },
+ "play_roll": {
+  "frames": [
+   "r5c5",
+   "r5c6",
+   {
+    "f": "r5c5",
+    "flip": 1
+   },
+   {
+    "f": "r5c6",
+    "flip": 1
+   }
+  ]
+ },
+ "yawn": {
+  "frames": [
+   "g1c3",
+   "r6c5",
+   "r6c5",
+   "g1c3"
+  ]
+ },
+ "knead": {
+  "frames": [
+   "g3c3",
+   "g3c4"
+  ]
+ },
+ "sniff": {
+  "frames": [
+   "g4c1",
+   "g4c5"
+  ]
+ },
+ "stretch_yoga": {
+  "frames": [
+   "g7c1",
+   "g7c2",
+   "g2c3",
+   "g7c2"
+  ]
+ },
+ "box_rub": {
+  "frames": [
+   "g5c1",
+   "g5c8"
+  ]
+ },
+ "petted_happy": {
+  "frames": [
+   "r6c5",
+   "g1c3",
+   "r6c5"
+  ]
+ },
+ "carry": {
+  "frames": [
+   "g2c3",
+   "g7c2"
+  ]
+ }
+}

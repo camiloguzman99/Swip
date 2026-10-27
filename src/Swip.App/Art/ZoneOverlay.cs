@@ -26,7 +26,7 @@ public static class ZoneOverlay
     /// <param name="main">Cuadro principal (verde); su borde de abajo es la base (magenta).</param>
     /// <param name="cellLines">
     /// Dibujar también la cuadrícula interior (una línea entre cada casilla, dentro de las zonas). Solo
-    /// tiene sentido ampliado (la lupa): a tamaño real cada casilla es un píxel y las líneas lo taparían.
+    /// tiene sentido ampliado (el Visor): a tamaño real cada casilla es un píxel y las líneas lo taparían.
     /// </param>
     public static BitmapSource Get(string key, int width, int height, Int32Rect[] extra, Int32Rect main, int factor,
         bool cellLines = false)

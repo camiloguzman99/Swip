@@ -14,16 +14,16 @@ Son una guía de pose y de tiempos, no el arte final.
 3. En `art/clips.json` cambia el `status` del clip a `final`.
 4. Ejecuta `python3 tools/art/build_atlas.py`.
 
-El script reduce cada fotograma a una **cuadrícula de 80×64 casillas** en T (1 casilla = 1 px
-del gato en la app): principal de 48×48 con los pies sobre la base, 16 columnas a cada lado
-para correr o estirarse y 16 filas debajo para lo que cuelga. La guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en
+El script reduce cada fotograma a una **cuadrícula de 180×130 casillas** en T (1 casilla = 1 px
+del gato en la app): principal de 100×100 con los pies sobre la base, 40 columnas a cada lado
+para correr o estirarse y 30 filas debajo para lo que cuelga. La guarda en letras en `art/grid/<piel>/<clip>.txt` (paleta en
 `art/grid/<piel>/paleta.txt`). Esas cuadrículas también se pueden retocar a mano: cambia
 `fuente: auto` por `fuente: mano` en el archivo y ya no se regenerará.
 
 Cada gato tiene su propio dibujo (naranja y atigrado); no hay más colores ni variantes.
 La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 
-**Total:** 34 clips, 95 fotogramas por piel (190 contando naranja y atigrado).
+**Total:** 42 clips, 202 fotogramas por piel (404 contando naranja y atigrado).
 
 | Clip | Fotogramas | Velocidad | Qué debe mostrar | Referencia actual |
 |---|---|---|---|---|
@@ -38,18 +38,18 @@ La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 | `play_hunt_fly` | 3 | 5 fps, bucle | Sigue con la mirada una mosca y le lanza zarpazos. | #0: pose play #0, escala 1×1.05<br>#1: pose play #1, giro -10°<br>#2: pose play #0, giro 6° |
 | `play_hop` | 4 | 8 fps, una vez | Se agacha y salta en el sitio. | #0: pose play #0, escala 1.1×0.85<br>#1: pose play #0, escala 0.92×1.12<br>#2: pose play #1, escala 0.95×1.08<br>#3: pose play #0, escala 1.08×0.9 |
 | `play_roll` | 4 | 5 fps, una vez | Se tumba y se revuelca panza arriba. | #0: pose sleep #0<br>#1: pose sleep #0, giro 60°<br>#2: pose sleep #1, giro 170°<br>#3: pose sleep #1, escala 1×0.95, giro 175° |
-| `groom_paw` | 2 | 3 fps, bucle | Se lame la pata delantera. | #0: pose play #0, giro -6°<br>#1: pose play #1, giro -6° |
+| `groom_paw` | 8 | 4 fps, bucle | Se lame la pata delantera. | #0: pose play #0, giro -6°<br>#1: pose play #0, giro -6°<br>#2: pose play #0, giro -6°<br>#3: pose play #0, giro -6°<br>#4: pose play #1, giro -6°<br>#5: pose play #1, giro -6°<br>#6: pose play #1, giro -6°<br>#7: pose play #1, giro -6° |
 | `groom_face` | 2 | 3 fps, bucle | Se limpia la cara con la pata. | #0: pose play #0, giro 6°<br>#1: pose play #1, giro 6° |
 | `sit_look` | 2 | 1.2 fps, bucle | Sentado, mirando alrededor. | #0: pose play #0<br>#1: pose play #0, escala 1×1.015 |
 | `yawn` | 4 | 4 fps, una vez | Bosteza con la boca muy abierta. | #0: pose play #0<br>#1: pose play #0, escala 0.95×1.08<br>#2: pose play #0, escala 0.95×1.08<br>#3: pose play #0 |
 | `knead` | 2 | 4 fps, bucle | Amasa con las patas delanteras. | #0: pose play #0, escala 1×0.97<br>#1: pose play #1 |
-| `trot` | 2 | 7 fps, bucle | Trota. | #0: pose walk #0, escala 1.05×1<br>#1: pose walk #1, escala 1.05×1 |
-| `run` | 2 | 12 fps, bucle | Corre una ráfaga corta, cuerpo estirado. | #0: pose walk #0, escala 1.12×0.92<br>#1: pose walk #1, escala 1.12×0.92 |
+| `trot` | 4 | 9 fps, bucle | Trota. | #0: pose walk #0, escala 1.05×1<br>#1: pose walk #0, escala 1.05×1<br>#2: pose walk #1, escala 1.05×1<br>#3: pose walk #1, escala 1.05×1 |
+| `run` | 7 | 12 fps, bucle | Corre una ráfaga corta, cuerpo estirado. | #0: pose walk #0, escala 1.12×0.92<br>#1: pose walk #0, escala 1.12×0.92<br>#2: pose walk #0, escala 1.12×0.92<br>#3: pose walk #0, escala 1.12×0.92<br>#4: pose walk #1, escala 1.12×0.92<br>#5: pose walk #1, escala 1.12×0.92<br>#6: pose walk #1, escala 1.12×0.92 |
 | `sniff` | 2 | 3 fps, bucle | Se para a olfatear el suelo. | #0: pose walk #0, giro 8°<br>#1: pose walk #1, giro 8° |
 | `stretch_yoga` | 4 | 3 fps, una vez | Se estira: patas delante, trasero arriba. | #0: pose walk #0, escala 1.2×0.8<br>#1: pose walk #0, escala 1.3×0.74<br>#2: pose walk #0, escala 1.3×0.74<br>#3: pose walk #1 |
 | `turn_around` | 2 | 8 fps, una vez | Media vuelta rápida. | #0: pose walk #0, escala 0.7×1<br>#1: pose walk #0, escala 0.55×1, espejado |
 | `box_push` | 2 | 6 fps, bucle | Empuja la caja con la cabeza, inclinado hacia delante. | #0: pose walk #0, escala 1.1×1, giro 10°<br>#1: pose walk #1, escala 1.1×1, giro 10° |
-| `jump` | 3 | 7 fps, una vez | Salto: se agacha, vuela estirado, aterriza. | #0: pose walk #0, escala 1.1×0.8<br>#1: pose walk #1, escala 1.15×0.9, giro -15°<br>#2: pose walk #0, escala 1.05×0.85 |
+| `jump` | 8 | 12 fps, una vez | Salto: se agacha, vuela estirado, aterriza. | #0: pose walk #0, escala 1.1×0.8<br>#1: pose walk #0, escala 1.1×0.8<br>#2: pose walk #0, escala 1.1×0.8<br>#3: pose walk #1, escala 1.15×0.9, giro -15°<br>#4: pose walk #1, escala 1.15×0.9, giro -15°<br>#5: pose walk #1, escala 1.15×0.9, giro -15°<br>#6: pose walk #0, escala 1.05×0.85<br>#7: pose walk #0, escala 1.05×0.85 |
 | `box_rub` | 2 | 4 fps, bucle | Se frota contra la caja. | #0: pose walk #0, giro -5°<br>#1: pose walk #1, giro 5° |
 | `box_scratch` | 3 | 6 fps, bucle | Araña el cartón, estirado hacia arriba. | #0: pose walk #0, giro -14°<br>#1: pose walk #1, giro -14°<br>#2: pose walk #0, giro -9° |
 | `box_peek` | 3 | 2 fps, bucle | Dentro de la caja: se asoma y se esconde. | #0: pose play #0, desplazado 0,40<br>#1: pose play #0<br>#2: pose play #0, desplazado 0,40 |
@@ -57,10 +57,18 @@ La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 | `ambush_pop` | 3 | 8 fps, una vez | Emboscada: sale de golpe de la caja. | #0: pose play #0, desplazado 0,60<br>#1: pose play #0, escala 1×1.15<br>#2: pose play #0 |
 | `cursor_swat` | 3 | 8 fps, una vez | Zarpazo al cursor. | #0: pose play #0<br>#1: pose play #1, giro -15°<br>#2: pose play #0 |
 | `petted_happy` | 3 | 6 fps, una vez | Contento al acariciarlo: se estira hacia la mano. | #0: pose play #0<br>#1: pose play #0, escala 1×1.08<br>#2: pose play #1 |
-| `wake_up` | 4 | 4 fps, una vez | Se despierta: abre los ojos, se estira y bosteza. | #0: pose sleep #1<br>#1: pose sleep #1, escala 1.15×0.9<br>#2: pose play #0, escala 1×1.05<br>#3: pose play #0 |
-| `to_sit` | 2 | 5 fps, una vez | Pasa de caminar a sentarse. | #0: pose walk #0, escala 1×0.9<br>#1: pose play #0 |
-| `to_sleep` | 4 | 3 fps, una vez | Bosteza, da una vuelta y se enrosca para dormir. | #0: pose play #0, escala 1×0.95<br>#1: pose play #0, escala 1×0.9<br>#2: pose sleep #1, escala 1.1×0.9<br>#3: pose sleep #0 |
+| `wake_up` | 10 | 6 fps, una vez | Pasa de acostado a sentado (10 fotogramas). | #0: pose sleep #1<br>#1: pose sleep #1<br>#2: pose sleep #1<br>#3: pose sleep #1, escala 1.15×0.9<br>#4: pose sleep #1, escala 1.15×0.9<br>#5: pose play #0, escala 1×1.05<br>#6: pose play #0, escala 1×1.05<br>#7: pose play #0, escala 1×1.05<br>#8: pose play #0<br>#9: pose play #0 |
+| `to_sit` | 10 | 8 fps, una vez | Pasa de caminar a sentarse (de pie -> sentado en 10 fotogramas). | #0: pose walk #0, escala 1×0.9<br>#1: pose walk #0, escala 1×0.9<br>#2: pose walk #0, escala 1×0.9<br>#3: pose walk #0, escala 1×0.9<br>#4: pose walk #0, escala 1×0.9<br>#5: pose play #0<br>#6: pose play #0<br>#7: pose play #0<br>#8: pose play #0<br>#9: pose play #0 |
+| `to_sleep` | 10 | 6 fps, una vez | Pasa de sentado a acostado (10 fotogramas); después se enrosca. | #0: pose play #0, escala 1×0.95<br>#1: pose play #0, escala 1×0.95<br>#2: pose play #0, escala 1×0.95<br>#3: pose play #0, escala 1×0.9<br>#4: pose play #0, escala 1×0.9<br>#5: pose sleep #1, escala 1.1×0.9<br>#6: pose sleep #1, escala 1.1×0.9<br>#7: pose sleep #1, escala 1.1×0.9<br>#8: pose sleep #0<br>#9: pose sleep #0 |
 | `land` | 2 | 8 fps, una vez | Aterriza tras caer: se aplasta y se sacude. | #0: pose carry #0, escala 1.15×0.8<br>#1: pose walk #0, escala 1.05×0.9 |
+| `sit_to_stand` | 10 | 8 fps, una vez | Se levanta: de sentado a de pie (10 fotogramas). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0<br>#8: pose walk #0<br>#9: pose walk #0 |
+| `walk_start_stop` | 10 | 8 fps, una vez | De pie, echa a andar y se detiene (10 fotogramas). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0<br>#8: pose walk #0<br>#9: pose walk #0 |
+| `walk_to_run` | 9 | 10 fps, una vez | Pasa de caminar a correr (9 fotogramas). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0<br>#8: pose walk #0 |
+| `stand_to_run` | 8 | 10 fps, una vez | De pie, arranca a correr (8 fotogramas). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
+| `jump_high` | 8 | 12 fps, una vez | Salto a distinta altura: se agacha, sube con las patas delanteras y cae (8 fotogramas). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
+| `turn_sit8` | 8 | 6 fps, una vez | Sentado girando por las 8 direcciones (espalda, 3/4, perfil, frente...). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
+| `turn_stand8` | 8 | 6 fps, una vez | De pie girando por las 8 direcciones. | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
+| `turn_loaf8` | 8 | 6 fps, una vez | Acostado girando por las 8 direcciones. | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
 
 ## Ya con arte final
 

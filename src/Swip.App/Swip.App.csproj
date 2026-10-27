@@ -20,6 +20,7 @@
     <!-- Hojas de sprites generadas por tools/art/build_atlas.py (el arte de origen vive en art/). -->
     <Resource Include="Assets\atlas\*.png" />
     <Resource Include="Assets\atlas\atlas.json" />
+    <Resource Include="Assets\atlas\visor.json" />
     <Resource Include="Assets\box\*.png" />
   </ItemGroup>
 
