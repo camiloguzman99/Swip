@@ -376,7 +376,7 @@ public sealed partial class VisorWindow : Window
     {
         _selectorFace = new Border { Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) };
         _selectorName = new TextBlock { Foreground = Text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var chevron = new TextBlock { Text = "⌃", Foreground = Muted, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+        var chevron = new TextBlock { Text = "▲", Foreground = Muted, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -391,28 +391,33 @@ public sealed partial class VisorWindow : Window
         button.MouseLeave += (_, _) => button.Background = Transparent;
 
         var options = new StackPanel { Margin = new Thickness(4) };
-        foreach (string skin in new[] { CatSkins.Orange, CatSkins.Gray })
+        var panel = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), Child = options, Margin = new Thickness(0, 0, 0, 4) };
+        _selectorPopup = new System.Windows.Controls.Primitives.Popup
         {
-            string target = skin;
-            var item = new Border { Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(8), Background = Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 2) };
+            PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, StaysOpen = false,
+            AllowsTransparency = true, Child = panel,
+        };
+
+        // Solo ofrece el cambio: el otro gato (el elegido ya está en el botón). Tiene el ancho del botón.
+        void Open()
+        {
+            options.Children.Clear();
+            string target = _skin == CatSkins.Gray ? CatSkins.Orange : CatSkins.Gray;
+            var item = new Border { Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(8), Background = Transparent, Cursor = Cursors.Hand };
             var line = new StackPanel { Orientation = Orientation.Horizontal };
-            var face = Face(skin, 28);
+            var face = Face(target, 30);
             face.Margin = new Thickness(0, 0, 10, 0);
             line.Children.Add(face);
-            line.Children.Add(new TextBlock { Text = SkinName(skin), Foreground = Text, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Width = 150 });
+            line.Children.Add(new TextBlock { Text = SkinName(target), Foreground = Text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             item.Child = line;
             item.MouseEnter += (_, _) => item.Background = Hover;
             item.MouseLeave += (_, _) => item.Background = Transparent;
             item.MouseLeftButtonUp += (_, _) => { _selectorPopup.IsOpen = false; SelectSkin(target); };
             options.Children.Add(item);
+            panel.Width = button.ActualWidth;
+            _selectorPopup.IsOpen = true;
         }
-        _selectorPopup = new System.Windows.Controls.Primitives.Popup
-        {
-            PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, StaysOpen = false,
-            AllowsTransparency = true,
-            Child = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Child = options, Margin = new Thickness(0, 0, 0, 4) },
-        };
-        button.MouseLeftButtonUp += (_, _) => _selectorPopup.IsOpen = !_selectorPopup.IsOpen;
+        button.MouseLeftButtonUp += (_, _) => { if (_selectorPopup.IsOpen) _selectorPopup.IsOpen = false; else Open(); };
         RefreshSelector();
         return button;
     }
@@ -420,18 +425,23 @@ public sealed partial class VisorWindow : Window
     /// <summary>La lista de la izquierda sobre fondo claro u oscuro (según Windows) y, abajo, el selector de gato.</summary>
     private UIElement BuildLeft()
     {
-        _list = new StackPanel { Margin = new Thickness(10, 6, 10, 6) };
-        // Sin barra visible: la lista cabe entera; si la pantalla fuera muy pequeña, la rueda del ratón la desplaza.
+        _list = new StackPanel { Margin = new Thickness(10, 0, 10, 6) };
+        // La barra de desplazamiento es fina y con los colores del tema; la lista nunca toca el borde de arriba.
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list };
         scroll.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), ThinScrollBarStyle());
         var grid = new Grid();
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var topRule = new Border { Height = 45, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };   // la misma línea de 1 px que la de la derecha
+        grid.Children.Add(topRule);
+        Grid.SetRow(scroll, 1);
         grid.Children.Add(scroll);
         var selector = (FrameworkElement)BuildSelector();
-        selector.Margin = new Thickness(8, 18, 8, 8);   // un hueco de una línea sobre el usuario
-        Grid.SetRow(selector, 1);
-        grid.Children.Add(selector);
+        selector.Margin = new Thickness(8, 10, 8, 8);
+        var bottom = new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Child = selector };   // línea sobre el usuario
+        Grid.SetRow(bottom, 2);
+        grid.Children.Add(bottom);
         _side = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = grid };
         _side.SizeChanged += (_, e) => { if (e.WidthChanged && _list.Children.Count > 0) RefreshList(); };
         return _side;
@@ -559,9 +569,9 @@ public sealed partial class VisorWindow : Window
         card.Children.Add(FormRow("Zoom", zoom));
 
         var view = new StackPanel { Orientation = Orientation.Horizontal };
-        view.Children.Add(Flag("espejo", "mirror", false));
-        view.Children.Add(Flag("marcos", "zones", false));
-        view.Children.Add(Pill("Editar dibujo", OpenEditor));
+        view.Children.Add(Flag("Cambiar dirección", "mirror", false));
+        view.Children.Add(Flag("Recuadro", "zones", false));
+        view.Children.Add(Pill("Editar", OpenEditor));
         card.Children.Add(FormRow("Ver", view));
         return border;
     }
@@ -712,7 +722,7 @@ public sealed partial class VisorWindow : Window
             var g = new Grid();
             g.Children.Add(img);
             g.Children.Add(new TextBlock { Text = (i + 1).ToString(CultureInfo.InvariantCulture) + (_atlas.IsEdited(_skin, def.Id, i) ? " ✎" : ""), Foreground = White, FontSize = 9, Margin = new Thickness(2, 0, 0, 0) });
-            var border = new Border { Background = Card, BorderThickness = new Thickness(2), BorderBrush = Transparent, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 4, 0), Child = g, Cursor = Cursors.Hand };
+            var border = new Border { Background = Card, BorderThickness = new Thickness(2), BorderBrush = Transparent, CornerRadius = new CornerRadius(9), ClipToBounds = true, Margin = new Thickness(0, 0, 4, 0), Child = g, Cursor = Cursors.Hand };
             border.MouseLeftButtonUp += (_, _) => { _playing = false; SetFrame(index); };
             _strip.Children.Add(border);
             _thumbs.Add(border);
@@ -722,7 +732,7 @@ public sealed partial class VisorWindow : Window
     // ---------------------------------------------------------------- tiempos
     private UIElement BuildTimingCard()
     {
-        var border = NewCard("Tiempos (valen para los dos gatos)", out var card);
+        var border = NewCard("Configuración (vale para los dos gatos)", out var card);
         border.Margin = new Thickness(0, 2, 0, 0);
         _timingTitle = new TextBlock { Foreground = White, FontFamily = new FontFamily("Consolas"), FontSize = 12, Margin = new Thickness(2, 0, 0, 6) };
         card.Children.Add(_timingTitle);
@@ -730,7 +740,7 @@ public sealed partial class VisorWindow : Window
         card.Children.Add(_timingRow);
         card.Children.Add(new TextBlock
         {
-            Text = "Escribe y pulsa Intro. Avance: casillas que avanza el gato en cada cuadro, separadas por comas.",
+            Text = "Escribe y pulsa Intro. Velocidad: tamaños del gato que avanza por segundo (0 = quieto; caminar, por ejemplo 0,4). Es lo que se mueve el gato y el suelo del visor.",
             Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0),
         });
         return border;
@@ -751,9 +761,9 @@ public sealed partial class VisorWindow : Window
         var (durFrame, durBox) = Field(70);
         durBox.Text = (def.FrameCount / def.Fps).ToString("0.00", CultureInfo.InvariantCulture);
         _timingRow.Children.Add(FormRow("Duración (s)", durFrame));
-        var (advFrame, advBox) = Field(150);
-        advBox.Text = string.Join(",", def.Advance is { Length: > 0 } a ? a : new[] { 0 });
-        _timingRow.Children.Add(FormRow("Avance", advFrame));
+        var (spdFrame, spdBox) = Field(70);
+        spdBox.Text = SpeedText(def);
+        _timingRow.Children.Add(FormRow("Velocidad", spdFrame));
 
         var reset = Pill("Restablecer", () => { ResetTiming(id); RefreshTimingRow(); }, compact: true);
         reset.IsEnabled = _timing.ContainsKey(id);
@@ -764,33 +774,48 @@ public sealed partial class VisorWindow : Window
             double fps = def.Fps;
             if (fromDuration && TryNumber(durBox.Text, out double seconds) && seconds > 0) fps = def.FrameCount / seconds;
             else if (!fromDuration && TryNumber(fpsBox.Text, out double f) && f > 0) fps = f;
-            ApplyTiming(id, fps, ParseAdvance(advBox.Text));
+            // Velocidad: solo se recalcula el avance por cuadro si el valor escrito cambió; si no, se conserva el original.
+            int[]? advance = null;
+            if (TryNumber(spdBox.Text, out double speed) && speed >= 0 && Math.Abs(speed - SpeedOf(def)) > 0.0049)
+                advance = AdvanceForSpeed(speed, def.FrameCount, fps);
+            ApplyTiming(id, fps, advance);
             var now = _clips[id];
             fpsBox.Text = now.Fps.ToString("0.##", CultureInfo.InvariantCulture);
             durBox.Text = (now.FrameCount / now.Fps).ToString("0.00", CultureInfo.InvariantCulture);
-            advBox.Text = string.Join(",", now.Advance is { Length: > 0 } adv ? adv : new[] { 0 });
+            spdBox.Text = SpeedText(now);
+            def = now;
             reset.IsEnabled = _timing.ContainsKey(id);
         }
         fpsBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
         fpsBox.LostFocus += (_, _) => Commit(false);
         durBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(true); };
         durBox.LostFocus += (_, _) => Commit(true);
-        advBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
-        advBox.LostFocus += (_, _) => Commit(false);
+        spdBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
+        spdBox.LostFocus += (_, _) => Commit(false);
         reset.HorizontalAlignment = HorizontalAlignment.Left;
         _timingRow.Children.Add(FormRow("", reset));
     }
 
+    /// <summary>Velocidad en tamaños del gato por segundo: la casilla es 1/100 del alto del gato.</summary>
+    private static double SpeedOf(ClipDef def) => def.Speed / 100.0;
+
+    private static string SpeedText(ClipDef def) => SpeedOf(def).ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// El avance por cuadro (casillas enteras) que da esa velocidad: se reparte lo que avanza en una pasada del clip
+    /// entre sus cuadros, sin perder ni ganar casillas por el redondeo.
+    /// </summary>
+    private static int[] AdvanceForSpeed(double speed, int frames, double fps)
+    {
+        double total = speed * 100 * frames / fps;
+        var advance = new int[frames];
+        for (int i = 0; i < frames; i++)
+            advance[i] = (int)Math.Clamp(Math.Round((i + 1) * total / frames) - Math.Round(i * total / frames), -ClipTimingFile.MaxAdvance, ClipTimingFile.MaxAdvance);
+        return advance;
+    }
+
     private static bool TryNumber(string text, out double value) =>
         double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && double.IsFinite(value);
-
-    private static int[]? ParseAdvance(string text)
-    {
-        var list = new List<int>();
-        foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)) list.Add(v);
-        return list.Count > 0 ? list.ToArray() : null;
-    }
 
     /// <summary>Guarda el retoque de tiempo de un clip y lo aplica al motor (también en las demás sesiones).</summary>
     private void ApplyTiming(string clipId, double fps, int[]? advance)
@@ -798,7 +823,7 @@ public sealed partial class VisorWindow : Window
         var original = _clips.Original(clipId);
         double clamped = ClipTimingFile.ClampFps(fps);
         int[]? adv = advance?.Select(v => Math.Clamp(v, -ClipTimingFile.MaxAdvance, ClipTimingFile.MaxAdvance)).Take(ClipTimingFile.MaxAdvanceLength).ToArray();
-        bool sameAdvance = adv is null || (original.Advance is { } o && o.SequenceEqual(adv));
+        bool sameAdvance = adv is null || (original.Advance is { Length: > 0 } o ? o.SequenceEqual(adv) : adv.All(v => v == 0));
         if (Math.Abs(clamped - original.Fps) < 1e-6 && sameAdvance) _timing.Remove(clipId);
         else _timing[clipId] = new ClipTimingEntry(clamped, adv);
         SaveTimingAndApply();
@@ -901,7 +926,7 @@ public sealed partial class VisorWindow : Window
             {
                 _tick++;
                 int f = DisplayFrame(_tick);
-                if (_tick > 0) _camX += def.AdvanceOf(f);
+                if (_tick > 0) _camX += def.AdvanceOf(f) * (On("mirror") ? -1 : 1);   // el suelo corre en el sentido del dibujo
                 var step = CurStep;
                 if (!step.Loop && _tick >= def.FrameCount)
                 {
@@ -923,7 +948,7 @@ public sealed partial class VisorWindow : Window
         for (int i = 0; i < _thumbs.Count; i++)
             _thumbs[i].BorderBrush = i == _frame ? Accent : Transparent;
         double speed = (def.Advance is { Length: > 0 } adv ? adv.Average() : 0) * def.Fps;
-        _readout.Text = $"{_frame + 1}/{def.FrameCount} · {speed:0} casillas/s";
+        _readout.Text = $"{_frame + 1}/{def.FrameCount} · velocidad {speed / 100:0.##}";
         Draw();
     }
 
@@ -968,11 +993,11 @@ public sealed partial class VisorWindow : Window
     {
         string thumb = _thumbColor();
         string xaml = "<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ScrollBar'>" +
-            "<Setter Property='Width' Value='8'/><Setter Property='Background' Value='Transparent'/>" +
+            "<Setter Property='Width' Value='4'/><Setter Property='Background' Value='Transparent'/>" +
             "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'>" +
             "<Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True'>" +
             "<Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType='Thumb'>" +
-            $"<Border Background='{thumb}' CornerRadius='4' Margin='1,0'/>" +
+            $"<Border Background='{thumb}' CornerRadius='2'/>" +
             "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb></Track></Grid>" +
             "</ControlTemplate></Setter.Value></Setter></Style>";
         return (Style)System.Windows.Markup.XamlReader.Parse(xaml);
@@ -1011,24 +1036,16 @@ public sealed partial class VisorWindow : Window
         protected override void OnRender(DrawingContext dc)
         {
             var LinePen = new Pen(GridLine, 1);
-            var LabelBrush = Muted;
             double w = ActualWidth, gy = Math.Round(ActualHeight * _fraction) + 0.5;
             dc.DrawLine(LinePen, new Point(0, gy), new Point(w, gy));
             double centre = w / 2;
             int first = (int)Math.Floor((_camX - centre / _zoom) / 20) - 1, last = (int)Math.Ceiling((_camX + centre / _zoom) / 20) + 1;
-            double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             for (int k = first; k <= last; k++)
             {
                 double x = Math.Round(centre + (k * 20 - _camX) * _zoom) + 0.5;
                 if (x < 0 || x > w) continue;
                 bool big = k % 5 == 0;
                 dc.DrawLine(LinePen, new Point(x, gy), new Point(x, gy + (big ? 12 : 6)));
-                if (big)
-                {
-                    var text = new FormattedText((k * 20).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight, new Typeface("Segoe UI"), 10, LabelBrush, pixelsPerDip);
-                    dc.DrawText(text, new Point(x + 3, gy + 8));
-                }
             }
         }
     }

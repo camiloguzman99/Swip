@@ -31,7 +31,7 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   rojo las que aún no tienen arte) y abajo el **selector de gato** (la cara del gato y el color de su sesión); a la
   derecha, el visor: al elegir una acción se ve esa acción precedida de las transiciones que haría el motor desde la postura
   anterior, y al elegir una transición se ve de una postura a la otra. Debajo, los controles, los cuadros del clip y, en
-  dos columnas, los **tiempos** (fps o duración y avance por cuadro) y el **tamaño de las piezas**. «Editar dibujo» cambia
+  dos columnas, la **configuración** (fps, duración y velocidad de desplazamiento en tamaños del gato por segundo) y el **tamaño de las piezas**. «Editar dibujo» cambia
   el visor por el editor de píxeles dentro de la misma ventana: **todos los cuadros** del clip a la vez, la paleta y las
   herramientas (lápiz, borrador, gotero, relleno, reemplazo de color, deshacer) a la derecha y **Aceptar / Cancelar /
   Restablecer** debajo. Lo retocado se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en
