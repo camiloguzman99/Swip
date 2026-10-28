@@ -8,6 +8,7 @@
     <LangVersion>latest</LangVersion>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\swip.ico</ApplicationIcon>
     <AssemblyName>Swip</AssemblyName>
     <RootNamespace>Swip.App</RootNamespace>
   </PropertyGroup>
@@ -21,6 +22,7 @@
     <Resource Include="Assets\atlas\*.png" />
     <Resource Include="Assets\atlas\atlas.json" />
     <Resource Include="Assets\atlas\visor.json" />
+    <Resource Include="Assets\swip.ico" />
     <Resource Include="Assets\box\*.png" />
   </ItemGroup>
 

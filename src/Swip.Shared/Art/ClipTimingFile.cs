@@ -44,7 +44,7 @@ public static class ClipTimingFile
     }
 
     public static string Serialize(IReadOnlyDictionary<string, ClipTimingEntry> entries) =>
-        JsonSerializer.Serialize(new FileShape { Clips = entries.ToDictionary(e => e.Key, e => e.Value) }, Options);
+        JsonSerializer.Serialize(new FileShape { Clips = entries.ToDictionary(e => e.Key, e => (ClipTimingEntry?)e.Value) }, Options);
 
     /// <summary>Aplica los retoques a la biblioteca; los clips que no aparecen vuelven a su valor original.</summary>
     public static void Apply(ClipLibrary library, IReadOnlyDictionary<string, ClipTimingEntry> entries)

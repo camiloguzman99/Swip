@@ -39,6 +39,9 @@ public sealed class Cat
     public double CenterX => X + Width / 2;
     public double Bottom => Y + Height;
 
+    /// <summary>Postura en la que termina el comportamiento actual (la de partida para el siguiente).</summary>
+    public Posture Posture { get; internal set; }
+
     public Behavior Current { get; internal set; } = Behaviors.Get("sleep_curl");
     /// <summary>Segundos desde que empezó el comportamiento actual.</summary>
     public double BehaviorTime { get; internal set; }
@@ -54,7 +57,12 @@ public sealed class Cat
 
     // ---- estado interno del cerebro y del movimiento ----
     internal Trigger? Pending;
-    internal Behavior? Last;
+    internal Behavior? Last;                 // la última acción al azar (para no repetirla seguido)
+    internal Posture PrevPosture;            // la que tenía al empezarlo
+    internal readonly Queue<Behavior> Queue = new();   // cadena de transiciones pendiente hasta la acción elegida
+    internal readonly Dictionary<string, double> Ready = new();   // enfriamientos: id → instante en que puede repetirse
+    internal bool ModeDirty;                 // cambió el estado de la sesión: replantear qué hacer
+    internal bool ForceExit;                 // hay que cerrar la caja: tiene que salir de ella
     internal bool ModeInitialized;
     internal bool Finished;          // el movimiento declaró el comportamiento terminado
     internal int Phase;              // fase del movimiento (acercarse, saltar, empujar...)
@@ -65,8 +73,7 @@ public sealed class Cat
     internal int StepTick;           // se desplaza cuando cambia el fotograma (ver SwipWorld.FrameStep)
     internal int Direction = 1;
     internal string? ClipOverride;   // clip de la fase (p. ej. trotar mientras se acerca a la caja)
-    internal string? PartnerId;      // gato con el que interactúa
-    internal double[] NextEmit = Array.Empty<double>();
+        internal double[] NextEmit = Array.Empty<double>();
     internal bool[] Emitted = Array.Empty<bool>();
     internal CatPlace JumpTargetPlace;
 }

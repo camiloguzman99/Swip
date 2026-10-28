@@ -31,29 +31,36 @@ public enum Motion
     Walk,
     Trot,
     Run,
-    /// <summary>Salto en el sitio (desplaza la pose, no el cuerpo).</summary>
-    Hop,
-    /// <summary>Da vueltas sobre sí mismo (perseguir la cola).</summary>
-    Spin,
-    /// <summary>Temblor leve (soñar).</summary>
-    Jitter,
-    TurnAround,
+    /// <summary>Se gira hacia el cursor, sin moverse.</summary>
     FaceCursor,
-    FollowCursor,
-    ApproachCat,
-    /// <summary>Se gira hacia el gato dormido más cercano, sin moverse.</summary>
-    FaceCat,
-    /// <summary>Araña la caja: la mira y la hace tambalear.</summary>
-    ScratchBox,
-    /// <summary>Va hasta la caja (solo si camina) y se frota contra ella.</summary>
-    RubBox,
+    /// <summary>Salto al mismo nivel: un brinco hacia delante por el suelo.</summary>
+    Leap,
+    /// <summary>Se acerca a la caja, choca con ella y la empuja.</summary>
     PushBox,
     JumpOntoBox,
     JumpIntoBox,
     JumpOffBox,
-    CircleBox,
-    /// <summary>Escondido en la caja; al final sale de golpe.</summary>
-    Ambush,
+}
+
+/// <summary>
+/// La postura del cuerpo. Entre dos posturas distintas el gato no cambia de golpe: pasa por la cadena de
+/// transiciones del grafo (<see cref="Behaviors.Path"/>), igual que un gato de verdad no pasa de dormir a correr.
+/// </summary>
+public enum Posture
+{
+    /// <summary>Sin postura propia: el comportamiento vale desde cualquiera y no la cambia.</summary>
+    Any,
+    /// <summary>Durmiendo en bolita.</summary>
+    Curl,
+    /// <summary>Durmiendo de lado.</summary>
+    Side,
+    /// <summary>Acostado en pan (despierto).</summary>
+    Loaf,
+    Sit,
+    Stand,
+    Walk,
+    Trot,
+    Run,
 }
 
 /// <summary>Condiciones del mundo que un comportamiento puede exigir o prohibir.</summary>
@@ -69,11 +76,6 @@ public enum Cond
     BoxClosed = 1 << 5,
     BoxFree = 1 << 6,
     BoxGrounded = 1 << 7,
-    CursorNear = 1 << 8,
-    CursorVeryNear = 1 << 9,
-    CatNear = 1 << 10,
-    CatNearSleeping = 1 << 11,
-    CatNearPlaying = 1 << 12,
 }
 
 /// <summary>Qué hace que un comportamiento empiece.</summary>
@@ -81,14 +83,10 @@ public enum Trigger
 {
     /// <summary>Lo elige el planificador al azar (con pesos) cuando termina el anterior.</summary>
     Random,
-    Pet,
+    /// <summary>Paso intermedio entre dos posturas: solo lo programa el planificador.</summary>
+    Transition,
     Land,
     Attention,
-    WakeUp,
-    ToBackground,
-    ToActive,
-    ToSleep,
-    Invited,
     Carry,
 }
 

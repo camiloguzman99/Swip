@@ -27,8 +27,8 @@ public sealed class SwipWorld
 {
     // Las velocidades de desplazamiento salen de los clips (avance por fotograma × fps), no de aquí.
     public const double JumpTime = 0.55;
-    public const double HopHeight = 14;
-
+    
+    private double _time;
     private WorldConfig _config;
     private readonly ClipLibrary _clips;
     private readonly Random _rng;
@@ -122,9 +122,11 @@ public sealed class SwipWorld
             FacingRight = facingRight,
             Mode = mode,
             ModeInitialized = true,
+            Posture = mode switch { CatMode.Sleep => Posture.Curl, CatMode.Play => Posture.Sit, _ => Posture.Stand },
         };
+        cat.PrevPosture = cat.Posture;
         _cats[id] = cat;
-        StartRandom(cat);
+        PlanRandom(cat, interrupt: false);
         UpdatePose(cat, 0);
         return cat;
     }
@@ -139,17 +141,13 @@ public sealed class SwipWorld
     public void SetMode(string id, CatMode mode)
     {
         if (Find(id) is not { } cat || cat.Mode == mode) return;
-        CatMode old = cat.Mode;
         cat.Mode = mode;
-        cat.Pending = mode == CatMode.Sleep ? Trigger.ToSleep
-            : old == CatMode.Sleep ? Trigger.WakeUp
-            : mode == CatMode.Play ? Trigger.ToBackground
-            : Trigger.ToActive;
+        cat.ModeDirty = true;   // el cerebro lo replantea con las transiciones que toquen
     }
 
     public void Pet(string id)
     {
-        if (Find(id) is { Place: not CatPlace.Carried } cat) cat.Pending = Trigger.Pet;
+        if (Find(id) is { Place: not CatPlace.Carried } cat) Emit(cat, EffectKind.Heart, Anchor.Head);
     }
 
     /// <summary>El menú del gato se abrió/cerró: quiere atención (dormido, no se entera).</summary>
@@ -164,6 +162,7 @@ public sealed class SwipWorld
         if (Box.OccupantId == id) Box.OccupantId = null;
         cat.Place = CatPlace.Carried;
         cat.Vy = 0;
+        cat.Queue.Clear();
         Start(cat, Behaviors.Get("carry"));
     }
 
@@ -187,7 +186,8 @@ public sealed class SwipWorld
         }
         cat.Place = CatPlace.Air;
         cat.Vy = 0;
-        StartRandom(cat); // la pose de caída la decide el planificador al aterrizar
+        cat.Queue.Clear();
+        PlanRandom(cat, interrupt: false); // la pose de caída la decide el planificador al aterrizar
         return false;
     }
 
@@ -207,12 +207,26 @@ public sealed class SwipWorld
         if (Find(id) is { } cat) cat.Heavy = heavy;
     }
 
+    /// <summary>
+    /// Abre o cierra la caja. Si hay un gato despierto dentro, primero sale (se levanta y salta fuera) y la tapa se
+    /// cierra cuando ya ha salido; uno dormido dentro se queda encima de la tapa, como siempre.
+    /// </summary>
     public void SetBoxOpen(bool open)
     {
+        _closeWhenFree = false;
+        if (!open && Box.OccupantId is { } id && Find(id) is { Place: CatPlace.InBox, Mode: not CatMode.Sleep } inside)
+        {
+            _closeWhenFree = true;
+            inside.ForceExit = true;
+            return;
+        }
         Box.Open = open;
-        if (Box.OccupantId is { } id && Find(id) is { } cat && cat.Place is CatPlace.OnBox or CatPlace.InBox)
+        if (Box.OccupantId is { } oid && Find(oid) is { } cat && cat.Place is CatPlace.OnBox or CatPlace.InBox)
             cat.Place = open ? CatPlace.InBox : CatPlace.OnBox;
     }
+
+    /// <summary>La caja se cierra en cuanto salga el gato que tiene dentro.</summary>
+    private bool _closeWhenFree;
 
     public void PlaceBox(double x, double? y = null)
     {
@@ -240,6 +254,7 @@ public sealed class SwipWorld
         if (dt <= 0) return;
         if (dt > 0.1) dt = 0.1; // tras una pausa, no dar saltos enormes
 
+        _time += dt;
         StepBox(dt);
         foreach (var cat in _cats.Values)
         {
@@ -294,6 +309,13 @@ public sealed class SwipWorld
         if (Math.Abs(b.Wobble) < 0.02 && Math.Abs(b.WobbleVelocity) < 0.2) { b.Wobble = 0; b.WobbleVelocity = 0; }
         b.Wobble = Math.Clamp(b.Wobble, -BoxBody.MaxWobble, BoxBody.MaxWobble);
 
+        // Cerrar la caja esperaba a que saliera el gato que tenía dentro.
+        if (_closeWhenFree && !(b.OccupantId is { } inside && Find(inside) is { Place: CatPlace.InBox or CatPlace.Air }))
+        {
+            _closeWhenFree = false;
+            b.Open = false;
+        }
+
         // Solapas: un fotograma cada LidFrameTime hacia abierta o cerrada.
         b.Lid = StepToward(b.Lid, b.Open ? BoxBody.LidFrames - 1 : 0, ref b.LidClock, LidFrameTime, dt);
 
@@ -336,87 +358,149 @@ public sealed class SwipWorld
         if (cat.Place == CatPlace.Carried) return; // lo lleva el ratón
 
         bool committed = IsCommitted(cat);
+        bool airborne = cat.Place == CatPlace.Air;
+        bool free = !committed && !airborne;
 
-        // 1) Disparadores (transiciones, caricias, aterrizajes, invitaciones). Esperan a terminar un salto.
-        if (cat.Pending is { } trigger && !committed && cat.Place != CatPlace.Air)
+        // 1) Aterrizó tras caer.
+        if (cat.Pending == Trigger.Land && free)
         {
             cat.Pending = null;
-            if (Behaviors.ForTrigger(trigger, cat.Mode) is { } b)
+            cat.Queue.Clear();
+            if (Behaviors.ForTrigger(Trigger.Land, cat.Mode) is { } land) { Start(cat, land); return; }
+        }
+
+        // 2) Hay que cerrar la caja y él está dentro: primero sale (levantándose si hace falta) y luego se cierra.
+        if (cat.ForceExit && free)
+        {
+            if (cat.Place != CatPlace.InBox) cat.ForceExit = false;
+            else if (cat.Current.Id != ForcedExit && !cat.Queue.Any(q => q.Id == ForcedExit))
             {
-                Start(cat, b);
+                Plan(cat, Behaviors.Get(ForcedExit), interrupt: true);
                 return;
             }
         }
 
-        // 2) Atención (menú abierto): mientras dure, te mira. Dormido no se entera.
-        if (cat.Attention && cat.Mode != CatMode.Sleep && !committed && cat.Place != CatPlace.Air
-            && cat.Current.Trigger is Trigger.Random)
+        // 3) Cambió el estado de la sesión: se replantea qué hacer desde la postura en la que está.
+        if (cat.ModeDirty && free)
         {
-            Start(cat, Behaviors.Get("attention"));
+            cat.ModeDirty = false;
+            PlanRandom(cat, interrupt: true);
+            return;
+        }
+
+        // 4) Atención (menú abierto): mientras dure, te mira. Dormido no se entera.
+        if (cat.Attention && cat.Mode != CatMode.Sleep && free && cat.Current.Trigger == Trigger.Random && cat.Queue.Count == 0)
+        {
+            Plan(cat, Behaviors.Get("attention"), interrupt: true);
             return;
         }
         if (cat.Current.Trigger == Trigger.Attention && (!cat.Attention || cat.Mode == CatMode.Sleep))
         {
-            StartRandom(cat);
+            PlanRandom(cat, interrupt: false);
             return;
         }
 
-        // 3) Fin del comportamiento, o ya no se cumplen sus condiciones (p. ej. abriste la caja).
+        // 5) Fin del comportamiento, o ya no se cumplen sus condiciones (p. ej. abriste la caja).
         bool expired = cat.Finished || cat.BehaviorTime >= cat.BehaviorDuration;
-        bool invalid = cat.Current.Trigger == Trigger.Random && !committed && cat.Place != CatPlace.Air
-                       && !Allowed(cat, cat.Current);
+        bool invalid = cat.Current.Trigger == Trigger.Random && free && !Allowed(cat, cat.Current);
         bool wrongMode = !cat.Current.Modes.Contains(cat.Mode) && !committed;
-        if (expired || invalid || wrongMode)
-            StartRandom(cat);
+        if (expired) Advance(cat);
+        else if (invalid || wrongMode) PlanRandom(cat, interrupt: true);
     }
+
+    private const string ForcedExit = "box_exit_forced";
 
     /// <summary>True en mitad de un salto: no se interrumpe (se terminaría en el aire).</summary>
     private static bool IsCommitted(Cat cat) =>
-        cat.Current.Motion is Motion.JumpOntoBox or Motion.JumpIntoBox or Motion.JumpOffBox && cat.Phase == 1;
+        cat.Current.Motion is Motion.Leap or Motion.JumpOntoBox or Motion.JumpIntoBox or Motion.JumpOffBox && cat.Phase == 1;
 
-    private void StartRandom(Cat cat)
+    /// <summary>Termina el comportamiento actual: sigue la cadena de transiciones o elige otra acción.</summary>
+    private void Advance(Cat cat)
     {
-        var candidates = Behaviors.All
-            .Where(b => b.Trigger == Trigger.Random && b.Modes.Contains(cat.Mode) && Allowed(cat, b))
-            .ToList();
-
-        if (candidates.Count == 0)
+        while (cat.Queue.Count > 0)
         {
-            // Siempre hay algo que hacer: la acción base del temperamento (o sentarse en la caja).
-            candidates.Add(Fallback(cat));
+            var next = cat.Queue.Dequeue();
+            if (Playable(cat, next)) { Start(cat, next); return; }
+            cat.Queue.Clear(); // la cadena ya no vale: se elige otra cosa
         }
-
-        double total = 0;
-        var weights = new double[candidates.Count];
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            double w = candidates[i].Weight;
-            if (candidates.Count > 1 && ReferenceEquals(candidates[i], cat.Last)) w *= 0.15; // no repetir seguido
-            weights[i] = w;
-            total += w;
-        }
-
-        double roll = _rng.NextDouble() * total;
-        int pick = candidates.Count - 1;
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            roll -= weights[i];
-            if (roll <= 0) { pick = i; break; }
-        }
-        Start(cat, candidates[pick]);
+        PlanRandom(cat, interrupt: false);
     }
 
-    private Behavior Fallback(Cat cat) => cat.Mode switch
+    private bool Playable(Cat cat, Behavior b) =>
+        b.Modes.Contains(cat.Mode)
+        && (b.Trigger == Trigger.Transition || Allowed(cat, b))
+        && !(b.Trigger == Trigger.Attention && !cat.Attention);
+
+    /// <summary>La postura en la que está el gato si se le corta lo que hace: en mitad de un paso, la del lado más cercano.</summary>
+    private static Posture PostureNow(Cat cat) =>
+        cat.Current.Trigger == Trigger.Transition && cat.BehaviorTime < cat.BehaviorDuration * 0.5
+            ? cat.PrevPosture
+            : cat.Posture;
+
+    /// <summary>
+    /// Va a <paramref name="target"/> pasando por las transiciones que haga falta desde su postura
+    /// (de bolita a correr: despertar, levantarse y echar a correr, nunca de golpe).
+    /// </summary>
+    private void Plan(Cat cat, Behavior target, bool interrupt)
     {
-        CatMode.Sleep => Behaviors.Get(cat.Place == CatPlace.InBox ? "sleep_in_box" : "sleep_curl"),
-        CatMode.Play => Behaviors.Get(cat.Place == CatPlace.InBox ? "box_peek" : "play_yarn"),
-        _ => Behaviors.Get(cat.Place switch
+        if (interrupt) cat.Posture = PostureNow(cat);
+        cat.Queue.Clear();
+        foreach (var edge in Behaviors.Path(cat.Posture, target.From))
+            if (edge.Via is { } via) cat.Queue.Enqueue(via);   // un paso sin clip es un corte directo
+        cat.Queue.Enqueue(target);
+        Start(cat, cat.Queue.Dequeue());
+    }
+
+    private void StartRandom(Cat cat) => PlanRandom(cat, interrupt: false);
+
+    /// <summary>
+    /// Elige la siguiente acción al azar con pesos. Prefiere las que no exigen cambiar de postura, no repite la anterior,
+    /// respeta los enfriamientos y, tras algo que cansa (correr, saltar, asearse), casi siempre descansa.
+    /// </summary>
+    private void PlanRandom(Cat cat, bool interrupt)
+    {
+        if (interrupt) cat.Posture = PostureNow(cat);
+        cat.Queue.Clear();
+
+        var candidates = Behaviors.Actions
+            .Where(b => b.Weight > 0 && b.Modes.Contains(cat.Mode) && Allowed(cat, b) && IsReady(cat, b))
+            .ToList();
+        Behavior pick;
+        if (candidates.Count == 0)
         {
-            CatPlace.InBox => "box_peek",
-            CatPlace.OnBox => "box_sit_watch",
-            _ => "walk",
-        }),
-    };
+            pick = Fallback(cat);
+        }
+        else
+        {
+            var weights = new double[candidates.Count];
+            double total = 0;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var b = candidates[i];
+                double w = b.Weight / (1 + 0.8 * Behaviors.Path(cat.Posture, b.From).Count);
+                if (cat.Mode == CatMode.Walk && b.Motion == Motion.None && b.Trigger == Trigger.Random && !b.Active)
+                    w *= 0.4;   // el gato de la pantalla activa pasea más y descansa menos que el de segundo plano
+                if (candidates.Count > 1 && ReferenceEquals(b, cat.Last)) w *= 0.2;
+                if (b.Active && cat.Last is { Active: true }) w *= 0.03;
+                weights[i] = w;
+                total += w;
+            }
+            double roll = _rng.NextDouble() * total;
+            int index = candidates.Count - 1;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                roll -= weights[i];
+                if (roll <= 0) { index = i; break; }
+            }
+            pick = candidates[index];
+        }
+        Plan(cat, pick, interrupt: false);
+    }
+
+    private bool IsReady(Cat cat, Behavior b) => !cat.Ready.TryGetValue(b.Id, out double at) || _time >= at;
+
+    private static Behavior Fallback(Cat cat) =>
+        Behaviors.Get(cat.Mode == CatMode.Sleep ? "sleep_curl" : cat.Mode == CatMode.Walk && cat.Place == CatPlace.Ground ? "stand" : "sit");
 
     /// <summary>
     /// Cierre del comportamiento que termina (o se interrumpe): lo que debe pasar justo al acabar.
@@ -424,37 +508,28 @@ public sealed class SwipWorld
     /// </summary>
     private void EndOf(Cat cat)
     {
-        var b = cat.Current;
-        bool nearEnd = cat.BehaviorTime >= cat.BehaviorDuration * 0.5;
-        switch (b.Motion)
-        {
-            case Motion.TurnAround when nearEnd:
-                cat.FacingRight = !cat.FacingRight;
-                break;
-            case Motion.Hop when cat.BehaviorTime >= cat.BehaviorDuration * 0.9:
-                EmitDustAt(cat.CenterX, cat.Bottom, 3);
-                break;
-            case Motion.PushBox:
-                // Al soltarla, la caja sigue un poco por inercia (la frena la fricción).
-                break;
-        }
+        // Al soltar la caja sigue un poco por inercia (la frena la fricción); no hace falta nada más.
     }
 
     private void Start(Cat cat, Behavior b)
     {
         EndOf(cat);
-        cat.Last = cat.Current;
+        if (b.Trigger == Trigger.Random) cat.Last = b;   // la última acción al azar: la que acaba de empezar o la que termina
+        cat.PrevPosture = cat.Posture;
+        cat.Posture = b.End(cat.Posture);
         cat.Current = b;
         cat.BehaviorTime = 0;
         cat.PhaseTime = 0;
         cat.Phase = 0;
         cat.Finished = false;
         cat.ClipOverride = null;
-        cat.PartnerId = null;
         cat.Speed = 0;
         cat.BehaviorDuration = b.MaxTime > 0
             ? b.MinTime + _rng.NextDouble() * (b.MaxTime - b.MinTime)
             : ClipLength(b.Clip);
+        // El gato de la pantalla activa descansa menos tiempo seguido que el de segundo plano.
+        if (cat.Mode == CatMode.Walk && b.Trigger == Trigger.Random && b.Motion == Motion.None) cat.BehaviorDuration *= 0.6;
+        if (b.Cooldown > 0) cat.Ready[b.Id] = _time + cat.BehaviorDuration + b.Cooldown;
         cat.NextEmit = b.EffectList.Select(e => e.Interval > 0 ? e.Interval * 0.3 : double.MaxValue).ToArray();
         cat.Emitted = new bool[b.EffectList.Count];
         BeginMotion(cat, b);
@@ -485,22 +560,6 @@ public sealed class SwipWorld
             && Math.Abs(cat.CenterX - Box.CenterX) < Box.Width / 2 + cat.Width / 2 + 10)
             c |= Cond.NearBox;
 
-        if (Cursor is { } cur)
-        {
-            double dx = Math.Abs(cur.X - cat.CenterX);
-            double dy = cur.Y - cat.Y;
-            if (dx < 140 && dy > -200 && dy < cat.Height + 20) c |= Cond.CursorNear;
-            if (dx < 40 && dy > -30 && dy < cat.Height + 10) c |= Cond.CursorVeryNear;
-        }
-
-        foreach (var other in _cats.Values)
-        {
-            if (ReferenceEquals(other, cat) || other.Place != CatPlace.Ground) continue;
-            if (Math.Abs(other.CenterX - cat.CenterX) > 90) continue;
-            c |= Cond.CatNear;
-            if (other.Mode == CatMode.Sleep) c |= Cond.CatNearSleeping;
-            if (other.Mode == CatMode.Play) c |= Cond.CatNearPlaying;
-        }
         return c;
     }
 
@@ -519,10 +578,6 @@ public sealed class SwipWorld
                 cat.Direction = cat.FacingRight ? 1 : -1;
                 break;
 
-            case Motion.ApproachCat or Motion.FaceCat:
-                cat.PartnerId = NearestCat(cat, b.Motion == Motion.FaceCat ? CatMode.Sleep : null)?.Id;
-                break;
-
             case Motion.PushBox:
                 // Empuja desde el lado en el que está, hacia el otro.
                 cat.Direction = cat.CenterX < Box.CenterX ? 1 : -1;
@@ -532,51 +587,22 @@ public sealed class SwipWorld
                 StartJumpOff(cat);
                 break;
 
-            case Motion.CircleBox:
-                cat.TargetX = cat.CenterX < Box.CenterX
-                    ? Box.Right + 10
-                    : Box.X - cat.Width - 10;
-                cat.TargetX = Math.Clamp(cat.TargetX, 0, MaxCatX);
+            case Motion.Leap:
+                StartLeap(cat);
                 break;
-        }
-
-        if (b.Id == "cats_invite" && NearestCat(cat, CatMode.Play) is { } partner)
-        {
-            partner.Pending = Trigger.Invited;
-            cat.FacingRight = partner.CenterX > cat.CenterX;
         }
     }
 
     private void StepMotion(Cat cat, double dt)
     {
         cat.Speed = 0;
-        var b = cat.Current;
-        switch (b.Motion)
+        switch (cat.Current.Motion)
         {
             case Motion.Walk or Motion.Trot or Motion.Run:
                 Locomote(cat);
                 break;
-            case Motion.Spin:
-                cat.FacingRight = ((int)(cat.BehaviorTime / 0.14)) % 2 == 0;
-                break;
             case Motion.FaceCursor:
                 if (Cursor is { } c) cat.FacingRight = c.X > cat.CenterX;
-                break;
-            case Motion.FollowCursor:
-                FollowCursor(cat, dt);
-                break;
-            case Motion.ApproachCat:
-                ApproachCat(cat, dt);
-                break;
-            case Motion.FaceCat:
-                if (Find(cat.PartnerId ?? "") is { } p) cat.FacingRight = p.CenterX > cat.CenterX;
-                break;
-            case Motion.ScratchBox:
-                cat.FacingRight = Box.CenterX > cat.CenterX;
-                if ((int)(cat.BehaviorTime / 0.35) != (int)((cat.BehaviorTime - dt) / 0.35)) Box.Shake(25);
-                break;
-            case Motion.RubBox:
-                RubBox(cat, dt);
                 break;
             case Motion.PushBox:
                 PushBox(cat);
@@ -587,22 +613,8 @@ public sealed class SwipWorld
             case Motion.JumpIntoBox:
                 JumpToBox(cat, dt, CatPlace.InBox);
                 break;
-            case Motion.JumpOffBox:
+            case Motion.Leap or Motion.JumpOffBox:
                 JumpArc(cat, dt);
-                break;
-            case Motion.CircleBox:
-                cat.ClipOverride = null;
-                if (MoveToward(cat, cat.TargetX)) cat.Finished = true;
-                break;
-            case Motion.Ambush:
-                double pop = ClipLength(b.Clip);
-                if (cat.Phase == 0 && cat.BehaviorTime >= cat.BehaviorDuration - pop)
-                {
-                    cat.Phase = 1;
-                    Emit(cat, EffectKind.Exclaim, Anchor.Head);
-                    Box.Shake(70);
-                }
-                cat.ClipOverride = cat.Phase == 0 ? "box_peek" : null;
                 break;
         }
     }
@@ -655,38 +667,11 @@ public sealed class SwipWorld
         return Math.Abs(targetX - cat.X) <= 1.5;
     }
 
-    private void FollowCursor(Cat cat, double dt)
-    {
-        if (Cursor is not { } c) { cat.Finished = true; return; }
-        double target = Math.Clamp(c.X - cat.Width / 2, 0, MaxCatX);
-        bool arrived = Math.Abs(c.X - cat.CenterX) < 24 || MoveToward(cat, target);
-        if (arrived) cat.FacingRight = c.X > cat.CenterX;
-        cat.ClipOverride = arrived ? "sit_look" : null;
-    }
-
-    private void ApproachCat(Cat cat, double dt)
-    {
-        if (Find(cat.PartnerId ?? "") is not { } partner) { cat.Finished = true; return; }
-        double gap = cat.Width + 8;
-        double target = partner.CenterX > cat.CenterX ? partner.X - gap : partner.X + gap;
-        bool arrived = Math.Abs(partner.CenterX - cat.CenterX) <= gap + 2
-                       || MoveToward(cat, Math.Clamp(target, 0, MaxCatX));
-        cat.ClipOverride = arrived ? null : "walk";
-        if (arrived) cat.FacingRight = partner.CenterX > cat.CenterX;
-    }
-
     private double SideStandX(Cat cat, bool leftSide) =>
         leftSide ? Box.X - cat.Width + 6 : Box.Right - 6;
 
-    private void RubBox(Cat cat, double dt)
-    {
-        bool left = cat.CenterX < Box.CenterX;
-        cat.FacingRight = left;
-        if (cat.Mode != CatMode.Walk) return; // jugando: se frota solo si ya está al lado
-        bool arrived = MoveToward(cat, Math.Clamp(SideStandX(cat, left), 0, MaxCatX));
-        cat.ClipOverride = arrived ? null : "walk";
-        cat.FacingRight = left;
-    }
+    /// <summary>Tiempo máximo que tarda en llegar a la caja antes de rendirse.</summary>
+    private const double ApproachTimeout = 22;
 
     private void PushBox(Cat cat)
     {
@@ -697,10 +682,13 @@ public sealed class SwipWorld
             cat.ClipOverride = "trot";
             if (MoveToward(cat, Math.Clamp(contactX, 0, MaxCatX)))
             {
+                // Choca con la caja: se sacude y levanta polvo antes de empujar.
                 cat.Phase = 1;
                 cat.PhaseTime = 0;
+                Box.Shake(55);
+                EmitDustAt(fromLeft ? Box.X : Box.Right, Box.Bottom, 2);
             }
-            if (cat.BehaviorTime > 5) cat.Finished = true; // no llega (caja contra la pared)
+            if (cat.BehaviorTime > ApproachTimeout) cat.Finished = true; // no llega (caja contra la pared)
             return;
         }
 
@@ -719,7 +707,7 @@ public sealed class SwipWorld
         cat.X = Math.Clamp(SideStandX(cat, fromLeft), 0, MaxCatX);
 
         bool atWall = fromLeft ? Box.X >= maxBoxX - 0.5 : Box.X <= 0.5;
-        if (atWall || cat.PhaseTime > 2.5) cat.Finished = true;
+        if (atWall || cat.PhaseTime > 4) cat.Finished = true;
     }
 
     private (double X, double Y) BoxAnchor(Cat cat, CatPlace place)
@@ -738,12 +726,12 @@ public sealed class SwipWorld
         if (cat.Phase == 0)
         {
             // Acercarse a un lado de la caja, a una distancia de salto.
-            if (Box.OccupantId is not null || Box.Dragging) { cat.Finished = true; return; }
+            if (Box.OccupantId is not null || Box.Dragging || Box.Open != (target == CatPlace.InBox)) { cat.Finished = true; return; }
             bool left = cat.CenterX < Box.CenterX;
             double standX = left ? Box.X - cat.Width - 4 : Box.Right + 4;
             standX = Math.Clamp(standX, 0, MaxCatX);
             cat.ClipOverride = "trot";
-            bool arrived = MoveToward(cat, standX) || cat.BehaviorTime > 6;
+            bool arrived = MoveToward(cat, standX) || cat.BehaviorTime > ApproachTimeout;
             if (!arrived) return;
 
             cat.FacingRight = left;
@@ -758,6 +746,24 @@ public sealed class SwipWorld
             return;
         }
         JumpArc(cat, dt);
+    }
+
+    /// <summary>Brinco hacia delante por el suelo (mismo nivel): un par de anchos de gato.</summary>
+    private void StartLeap(Cat cat)
+    {
+        if (_rng.NextDouble() < 0.3) cat.FacingRight = !cat.FacingRight;
+        int dir = cat.FacingRight ? 1 : -1;
+        double tx = cat.X + dir * cat.Width * 1.4;
+        if (tx < 0 || tx > MaxCatX) { dir = -dir; tx = cat.X + dir * cat.Width * 1.4; }
+        cat.FacingRight = dir > 0;
+        cat.Phase = 1;
+        cat.PhaseTime = 0;
+        cat.StartX = cat.X;
+        cat.StartY = cat.Y;
+        cat.TargetX = Math.Clamp(tx, 0, MaxCatX);
+        cat.TargetY = CatFloorY;
+        cat.JumpTargetPlace = CatPlace.Ground;
+        cat.Place = CatPlace.Air;
     }
 
     private void StartJumpOff(Cat cat)
@@ -790,7 +796,7 @@ public sealed class SwipWorld
             (cat.TargetX, cat.TargetY) = BoxAnchor(cat, cat.JumpTargetPlace); // la caja podría moverse
 
         double u = Math.Min(1, cat.PhaseTime / JumpTime);
-        double peak = 26 + Math.Max(0, cat.StartY - cat.TargetY) * 0.4;
+        double peak = (cat.Current.Motion == Motion.Leap ? 18 : 26) + Math.Max(0, cat.StartY - cat.TargetY) * 0.4;
         cat.X = cat.StartX + (cat.TargetX - cat.StartX) * u;
         cat.Y = cat.StartY + (cat.TargetY - cat.StartY) * u - peak * 4 * u * (1 - u);
         if (u < 1) return;
@@ -919,20 +925,6 @@ public sealed class SwipWorld
         return clip.StartsWith("sleep", StringComparison.Ordinal) ? 0.6 : 0.3;
     }
 
-    private Cat? NearestCat(Cat cat, CatMode? mode)
-    {
-        Cat? best = null;
-        double bestDist = double.MaxValue;
-        foreach (var other in _cats.Values)
-        {
-            if (ReferenceEquals(other, cat) || other.Place != CatPlace.Ground) continue;
-            if (mode is { } m && other.Mode != m) continue;
-            double d = Math.Abs(other.CenterX - cat.CenterX);
-            if (d < bestDist) { bestDist = d; best = other; }
-        }
-        return best;
-    }
-
     // ======================================================================================
     // Pose: lo que se dibuja
     // ======================================================================================
@@ -949,7 +941,7 @@ public sealed class SwipWorld
         double t = cat.BehaviorTime;
 
         int frame;
-        if (b.Motion is Motion.JumpOntoBox or Motion.JumpIntoBox or Motion.JumpOffBox && cat.Phase >= 1 && clip is not null)
+        if (b.Motion is Motion.Leap or Motion.JumpOntoBox or Motion.JumpIntoBox or Motion.JumpOffBox && cat.Phase >= 1 && clip is not null)
         {
             // El salto sigue la trayectoria: agacharse, volar, aterrizar.
             double u = Math.Clamp(cat.PhaseTime / JumpTime, 0, 1);
@@ -960,21 +952,10 @@ public sealed class SwipWorld
             frame = clip?.FrameAt(cat.ClipOverride is null ? t : cat.PhaseTime) ?? 0;
         }
 
-        // El dibujo no se deforma: solo desplazamientos (saltos en el sitio, temblor, escondido).
+        if (b.Reverse && clip is not null) frame = clip.FrameCount - 1 - frame;
+
+        // El dibujo no se deforma: todo el movimiento del cuerpo está en los fotogramas.
         double ox = 0, oy = 0;
-        switch (b.Motion)
-        {
-            case Motion.Hop:
-                double u = clip is null ? 1 : Math.Clamp(t / clip.Length, 0, 1);
-                oy -= HopHeight * 4 * u * (1 - u);
-                break;
-            case Motion.Jitter:
-                ox += 0.7 * Math.Sin(t * 45);
-                break;
-            case Motion.Ambush when cat.Phase == 0:
-                oy += cat.Height * 0.3; // escondido: solo asoman las orejas
-                break;
-        }
 
         double surface = cat.Place switch
         {

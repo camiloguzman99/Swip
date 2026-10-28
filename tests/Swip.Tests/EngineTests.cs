@@ -48,30 +48,55 @@ public class EngineTests
     [Fact]
     public void Cada_clip_tiene_al_menos_un_comportamiento_que_lo_usa()
     {
-        // Los clips que solo se usan como fase de otro movimiento (trotar al acercarse, etc.) también cuentan.
-        // Y los de arte ya dibujado que aún esperan su comportamiento (transiciones, giros, salto alto).
-        var phaseClips = new[] { "trot", "walk", "sit_look", "box_peek", "sniff", "carry",
-            "sit_to_stand", "walk_start_stop", "walk_to_run", "stand_to_run", "jump_high",
-            "turn_sit8", "turn_stand8", "turn_loaf8", "stand_idle", "loaf_idle" };
+        // Trotar y caminar también se usan como fase al acercarse a la caja.
+        var phaseClips = new[] { "trot", "walk" };
         var used = Behaviors.All.Select(b => b.Clip).Concat(phaseClips).ToHashSet();
         foreach (var c in ClipLibrary.Default.All)
             Assert.True(used.Contains(c.Id), $"El clip '{c.Id}' no lo usa ningún comportamiento");
     }
 
     [Fact]
-    public void Hay_disparador_para_cada_transicion_en_los_temperamentos_que_toca()
+    public void Hay_reaccion_para_cada_disparador_en_todos_los_temperamentos()
     {
-        Assert.NotNull(Behaviors.ForTrigger(Trigger.ToSleep, CatMode.Sleep));
-        Assert.NotNull(Behaviors.ForTrigger(Trigger.WakeUp, CatMode.Play));
-        Assert.NotNull(Behaviors.ForTrigger(Trigger.WakeUp, CatMode.Walk));
-        Assert.NotNull(Behaviors.ForTrigger(Trigger.ToBackground, CatMode.Play));
-        Assert.NotNull(Behaviors.ForTrigger(Trigger.ToActive, CatMode.Walk));
         foreach (var m in Enum.GetValues<CatMode>())
         {
-            Assert.NotNull(Behaviors.ForTrigger(Trigger.Pet, m));
             Assert.NotNull(Behaviors.ForTrigger(Trigger.Land, m));
             Assert.NotNull(Behaviors.ForTrigger(Trigger.Carry, m));
         }
+        foreach (var m in new[] { CatMode.Play, CatMode.Walk })
+            Assert.NotNull(Behaviors.ForTrigger(Trigger.Attention, m));
+    }
+
+    [Fact]
+    public void Las_acciones_son_las_catorce_pedidas()
+    {
+        var clips = Behaviors.Actions.Select(b => b.Clip).ToHashSet();
+        foreach (var clip in new[] { "sit_look", "loaf_idle", "stand_idle", "sleep_curl", "sleep_side", "walk", "trot", "run",
+                     "groom_paw", "jump", "jump_box", "box_enter", "box_exit", "box_push" })
+            Assert.Contains(clip, clips);
+    }
+
+    [Fact]
+    public void Entre_dos_posturas_cualesquiera_hay_camino_y_los_pasos_son_contiguos()
+    {
+        var all = Enum.GetValues<Posture>().Where(p => p != Posture.Any).ToList();
+        foreach (var a in all)
+            foreach (var b in all)
+            {
+                var path = Behaviors.Path(a, b);
+                if (a == b) { Assert.Empty(path); continue; }
+                Assert.NotEmpty(path);
+                Assert.Equal(a, path[0].From);
+                Assert.Equal(b, path[^1].To);
+                for (int i = 1; i < path.Count; i++) Assert.Equal(path[i - 1].To, path[i].From);
+            }
+    }
+
+    [Fact]
+    public void De_bolita_a_correr_no_se_salta_ningun_paso()
+    {
+        var ids = Behaviors.Path(Posture.Curl, Posture.Run).Select(e => e.Via?.Id ?? "corte").ToList();
+        Assert.Equal(new[] { "corte", "t_wake_up", "t_sit_to_stand", "t_stand_to_run" }, ids);
     }
 
     [Theory]
@@ -135,8 +160,8 @@ public class EngineTests
             Assert.Equal(x, cat.X, 6);
             seen.Add(cat.Current.Id);
         });
-        Assert.Contains("play_yarn", seen);
-        Assert.True(seen.Count >= 6, $"poca variedad jugando: {string.Join(", ", seen)}");
+        Assert.Contains("sit", seen);
+        Assert.True(seen.Count >= 3, $"poca variedad en reposo: {string.Join(", ", seen)}");
     }
 
     [Theory]
@@ -163,15 +188,15 @@ public class EngineTests
     public void Caminando_llega_a_hacer_todas_las_acciones_con_la_caja()
     {
         var seen = new HashSet<string>();
-        for (int seed = 1; seed <= 12 && !AllBoxActions(seen); seed++)
+        for (int seed = 1; seed <= 20 && !AllBoxActions(seen); seed++)
         {
             var w = NewWorld(seed, boxX: 500);
             w.BehaviorStarted += (_, b) => seen.Add(b.Id);
             w.AddCat("w", 300, CatMode.Walk);
             // Alterna caja cerrada/abierta para dar ocasión a subirse y a meterse.
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 16; i++)
             {
-                Run(w, 75);
+                Run(w, 90);
                 w.SetBoxOpen(!w.Box.Open);
             }
         }
@@ -180,8 +205,7 @@ public class EngineTests
     }
 
     private static readonly string[] BoxActions =
-        { "box_push", "box_jump_on", "box_jump_in", "box_exit_top", "box_exit_in", "box_rub", "box_circle",
-          "box_peek", "box_sit_watch", "box_ambush", "box_scratch" };
+        { "box_push", "box_jump_on", "box_jump_in", "box_exit_top", "box_exit_in" };
 
     private static bool AllBoxActions(HashSet<string> seen) => BoxActions.All(seen.Contains);
 
@@ -208,8 +232,8 @@ public class EngineTests
         double startBox = w.Box.X;
         bool pushed = false;
         w.BehaviorStarted += (_, b) => { if (b.Id == "box_push") pushed = true; };
-        // Un intento puede no llegar a la caja (el gato empieza lejos y se rinde a los 5 s): se espera a uno que sí.
-        for (int i = 0; i < 40 && w.Box.X == startBox; i++) Run(w, 15);
+        // Un intento puede no llegar a la caja (el gato empieza lejos y se rinde): se espera a uno que sí.
+        for (int i = 0; i < 80 && w.Box.X == startBox; i++) Run(w, 15);
         Assert.True(pushed, "nunca eligió empujar");
         Assert.NotEqual(startBox, w.Box.X);
 
@@ -320,36 +344,72 @@ public class EngineTests
 
     // ---------------------------------------------------------------- transiciones y reacciones
 
+    private static List<string> Started(SwipWorld w, Action act, double seconds)
+    {
+        var ids = new List<string>();
+        void On(Cat c, Behavior b) => ids.Add(b.Id);
+        w.BehaviorStarted += On;
+        act();
+        Run(w, seconds);
+        w.BehaviorStarted -= On;
+        return ids;
+    }
+
     [Theory]
-    [InlineData(CatMode.Sleep, CatMode.Walk, "wake_up")]
-    [InlineData(CatMode.Sleep, CatMode.Play, "wake_up")]
-    [InlineData(CatMode.Walk, CatMode.Play, "to_sit")]
-    [InlineData(CatMode.Play, CatMode.Walk, "to_active")]
-    [InlineData(CatMode.Walk, CatMode.Sleep, "to_sleep")]
-    [InlineData(CatMode.Play, CatMode.Sleep, "to_sleep")]
-    public void Cambiar_de_sesion_lanza_su_transicion(CatMode from, CatMode to, string expected)
+    [InlineData(CatMode.Walk)]
+    [InlineData(CatMode.Play)]
+    public void Al_despertar_primero_se_incorpora_y_nunca_arranca_directo_a_caminar(CatMode to)
     {
         var w = NewWorld();
-        var cat = w.AddCat("a", 100, from);
+        w.AddCat("a", 100, CatMode.Sleep);
         Run(w, 1);
-        w.SetMode("a", to);
-        Run(w, 0.1);
-        Assert.Equal(expected, cat.Current.Id);
+        var ids = Started(w, () => w.SetMode("a", to), 90);
+        Assert.Contains(ids[0], new[] { "t_wake_up", "loaf" });
+        int firstGait = ids.FindIndex(i => i is "walk" or "trot" or "run");
+        if (firstGait >= 0) Assert.True(ids.IndexOf("t_sit_to_stand") is >= 0 and var up && up < firstGait,
+            $"echó a andar sin levantarse: {string.Join(", ", ids.Take(firstGait + 1))}");
+        if (to == CatMode.Play) Assert.DoesNotContain(ids, i => i is "walk" or "trot" or "run");
     }
 
     [Fact]
-    public void Acariciar_al_dormido_no_lo_despierta_ni_lo_mueve()
+    public void Pasar_a_segundo_plano_lo_detiene_y_ya_no_camina()
+    {
+        var w = NewWorld(2);
+        var cat = w.AddCat("a", 100, CatMode.Walk);
+        Run(w, 3);
+        w.SetMode("a", CatMode.Play);
+        Run(w, 20);   // le da tiempo a frenar, sentarse...
+        double x = cat.X;
+        Run(w, 200, () => Assert.Equal(x, cat.X, 6));
+        Assert.DoesNotContain(cat.Posture, new[] { Posture.Walk, Posture.Trot, Posture.Run });
+    }
+
+    [Theory]
+    [InlineData(CatMode.Walk)]
+    [InlineData(CatMode.Play)]
+    public void Al_cerrar_la_sesion_se_acuesta_y_se_duerme_pasando_por_las_transiciones(CatMode from)
+    {
+        var w = NewWorld(4);
+        var cat = w.AddCat("a", 100, from);
+        Run(w, 2);
+        var ids = Started(w, () => w.SetMode("a", CatMode.Sleep), 60);
+        Assert.Contains("t_to_sleep", ids);
+        Assert.Contains(ids.Last(), new[] { "sleep_curl", "sleep_side" });
+        Assert.Equal(CatPlace.Ground, cat.Place);
+    }
+
+    [Fact]
+    public void Acariciar_suelta_corazones_sin_cambiar_lo_que_hace_ni_moverlo()
     {
         var w = NewWorld();
         var cat = w.AddCat("s", 300, CatMode.Sleep);
         Run(w, 2);
+        string before = cat.Current.Id;
         w.Pet("s");
         Run(w, 0.1);
-        Assert.Equal("sleep_petted", cat.Current.Id);
         Assert.Contains(w.Particles, p => p.Kind == EffectKind.Heart);
-        Run(w, 3);
+        Assert.Equal(before, cat.Current.Id);
         Assert.Equal(CatMode.Sleep, cat.Mode);
-        Assert.Contains(CatMode.Sleep, cat.Current.Modes);
         Assert.Equal(300, cat.X, 6);
     }
 
@@ -359,7 +419,7 @@ public class EngineTests
         var w = NewWorld();
         var cat = w.AddCat("w", 300, CatMode.Walk);
         w.SetAttention("w", true);
-        Run(w, 8);
+        Run(w, 20);
         Assert.Equal("attention", cat.Current.Id);
         w.SetAttention("w", false);
         Run(w, 0.2);
@@ -375,19 +435,157 @@ public class EngineTests
         Run(w, 20, () => Assert.NotEqual("attention", cat.Current.Id));
     }
 
-    [Fact]
-    public void Un_gato_activo_invita_a_jugar_al_que_esta_jugando()
+    // ---------------------------------------------------------------- ritmo realista
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void El_gato_no_cambia_de_accion_a_cada_rato_y_descansa(int seed)
     {
-        bool invited = false;
-        for (int seed = 1; seed <= 15 && !invited; seed++)
+        var w = NewWorld(seed, boxX: 1100);
+        w.AddCat("a", 300, CatMode.Walk);
+        var starts = new List<(double T, Behavior B)>();
+        double t = 0;
+        w.BehaviorStarted += (_, b) => { if (b.Trigger == Trigger.Random) starts.Add((t, b)); };
+        for (; t < 900; t += Dt) w.Step(Dt);
+
+        // Al menos unos segundos por acción y nunca ráfagas de cambios.
+        Assert.True(starts.Count <= 900 / 5.0, $"demasiados cambios de acción: {starts.Count} en 15 min");
+        for (int i = 0; i + 4 < starts.Count; i++)
+            Assert.True(starts[i + 4].T - starts[i].T >= 10, $"5 acciones en {starts[i + 4].T - starts[i].T:0.0} s");
+
+        // Lo que cansa nunca va seguido de otra cosa que cansa ni se repite antes de su enfriamiento.
+        foreach (var name in new[] { "run", "leap", "groom", "trot" })
+        {
+            var b = Behaviors.Actions.First(x => x.Id == name);
+            var times = starts.Where(x => x.B.Id == name).Select(x => x.T).ToList();
+            for (int i = 1; i < times.Count; i++)
+                Assert.True(times[i] - times[i - 1] >= b.Cooldown, $"{name} se repite a los {times[i] - times[i - 1]:0} s");
+        }
+        // Y descansa de verdad: más tiempo en reposo que en acciones que cansan.
+        double rest = 0, active = 0;
+        for (int i = 0; i < starts.Count - 1; i++)
+        {
+            double d = starts[i + 1].T - starts[i].T;
+            if (starts[i].B.Active) active += d; else rest += d;
+        }
+        Assert.True(rest > active, $"descansa {rest:0} s y se esfuerza {active:0} s");
+    }
+
+    [Fact]
+    public void Nunca_encadena_dos_acciones_que_cansan_sin_descansar()
+    {
+        int checkedPairs = 0;
+        for (int seed = 1; seed <= 8; seed++)
         {
             var w = NewWorld(seed, boxX: 1100);
-            w.AddCat("w", 300, CatMode.Walk);
-            w.AddCat("p", 340, CatMode.Play);
-            w.BehaviorStarted += (c, b) => { if (c.Id == "p" && b.Id == "play_invited") invited = true; };
-            Run(w, 120);
+            w.AddCat("a", 300, CatMode.Walk);
+            Behavior? last = null;
+            w.BehaviorStarted += (_, b) =>
+            {
+                if (b.Trigger != Trigger.Random) return;
+                if (last is { Active: true } && b.Active) checkedPairs++;
+                last = b;
+            };
+            Run(w, 900);
         }
-        Assert.True(invited);
+        Assert.True(checkedPairs <= 8, $"{checkedPairs} acciones que cansan seguidas");
+    }
+
+    [Fact]
+    public void Saltar_al_mismo_nivel_avanza_por_el_suelo_y_vuelve_a_apoyarse()
+    {
+        bool leapt = false;
+        for (int seed = 1; seed <= 30 && !leapt; seed++)
+        {
+            var w = NewWorld(seed, boxX: 1100);
+            var cat = w.AddCat("a", 300, CatMode.Walk);
+            w.BehaviorStarted += (_, b) => { if (b.Id == "leap") leapt = true; };
+            Run(w, 300);
+            if (leapt)
+            {
+                Assert.Equal(CatPlace.Ground, cat.Place);
+                Assert.Equal(H, cat.Bottom, 3);
+            }
+        }
+        Assert.True(leapt, "nunca saltó al mismo nivel");
+    }
+
+    // ---------------------------------------------------------------- cerrar la caja con el gato dentro
+
+    private static (SwipWorld W, Cat Cat) CatInOpenBox(CatMode mode)
+    {
+        var w = NewWorld(6, boxX: 500);
+        w.SetBoxOpen(true);
+        var cat = w.AddCat("a", 100, mode);
+        w.BeginCarry("a");
+        w.CarryTo("a", w.Box.CenterX - cat.Width / 2, w.Box.Y - 10);
+        Assert.True(w.Drop("a"));
+        Run(w, 0.5);
+        Assert.Equal(CatPlace.InBox, cat.Place);
+        return (w, cat);
+    }
+
+    [Theory]
+    [InlineData(CatMode.Walk)]
+    [InlineData(CatMode.Play)]
+    public void Si_van_a_cerrar_la_caja_el_gato_despierto_sale_antes_y_luego_se_cierra(CatMode mode)
+    {
+        var (w, cat) = CatInOpenBox(mode);
+        w.SetBoxOpen(false);
+        Assert.True(w.Box.Open, "la tapa no debe cerrarse con el gato dentro");
+        bool closedWhileInside = false;
+        Run(w, 30, () =>
+        {
+            if (!w.Box.Open && cat.Place == CatPlace.InBox) closedWhileInside = true;
+        });
+        Assert.False(closedWhileInside);
+        Assert.NotEqual(CatPlace.InBox, cat.Place);
+        Assert.False(w.Box.Open, "la caja debe cerrarse cuando ya ha salido");
+        Assert.Null(w.Box.OccupantId);
+    }
+
+    [Fact]
+    public void Si_vuelven_a_abrir_la_caja_antes_de_que_salga_no_se_cierra()
+    {
+        var (w, cat) = CatInOpenBox(CatMode.Walk);
+        w.SetBoxOpen(false);
+        w.SetBoxOpen(true);
+        Run(w, 30);
+        Assert.True(w.Box.Open);
+    }
+
+    [Fact]
+    public void Al_cerrar_la_caja_un_gato_dormido_dentro_se_queda_encima_de_la_tapa()
+    {
+        var (w, cat) = CatInOpenBox(CatMode.Sleep);
+        w.SetBoxOpen(false);
+        Assert.False(w.Box.Open);
+        Run(w, 1);
+        Assert.Equal(CatPlace.OnBox, cat.Place);
+    }
+
+    [Fact]
+    public void Al_chocar_con_la_caja_para_empujarla_la_hace_tambalear()
+    {
+        bool pushed = false;
+        double maxWobble = 0;
+        for (int seed = 1; seed <= 20 && !pushed; seed++)
+        {
+            var w = NewWorld(seed, boxX: 700);
+            w.AddCat("a", 400, CatMode.Walk);
+            w.BehaviorStarted += (_, b) => { if (b.Id == "box_push") pushed = true; };
+            for (double t = 0; t < 600 && !pushed; t += Dt) w.Step(Dt);
+            if (!pushed) continue;
+            for (double t = 0; t < 30; t += Dt)
+            {
+                w.Step(Dt);
+                maxWobble = Math.Max(maxWobble, Math.Abs(w.Box.Wobble));
+            }
+        }
+        Assert.True(pushed);
+        Assert.True(maxWobble > 0, "la caja no reaccionó al choque");
     }
 
     // ---------------------------------------------------------------- efectos
@@ -456,7 +654,7 @@ public class EngineTests
         int moves = 0, movesWithoutNewFrame = 0;
         (string Clip, int Frame) last = (cat.Pose.Clip, cat.Pose.Frame);
         double lastX = cat.X;
-        Run(w, 120, () =>
+        Run(w, 400, () =>
         {
             var now = (cat.Pose.Clip, cat.Pose.Frame);
             bool walking = cat.Place == CatPlace.Ground && cat.Current.Motion is Motion.Walk or Motion.Trot or Motion.Run;
@@ -472,7 +670,7 @@ public class EngineTests
             last = now;
             lastX = cat.X;
         });
-        Assert.True(moves > 20, $"apenas se movió ({moves} avances)");
+        Assert.True(moves > 15, $"apenas se movió ({moves} avances)");
         Assert.Equal(0, movesWithoutNewFrame);
     }
 

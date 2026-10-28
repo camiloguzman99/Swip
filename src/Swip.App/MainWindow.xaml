@@ -49,13 +49,16 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Foreground="#FFFFFFFF"
                                        FontWeight="Bold" FontSize="13" FontFamily="Consolas"
-                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                       TextAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <!-- CPU y RAM solo tienen sentido con la sesión abierta -->
                             <TextBlock Grid.Column="1" Text="CPU" Foreground="#FF8FD0FF" FontWeight="SemiBold"
-                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right"
-                                       VerticalAlignment="Center" />
+                                       FontSize="11" FontFamily="Consolas" TextAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding HasSession, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Grid.Column="2" Text="RAM" Foreground="#FFB7E39C" FontWeight="SemiBold"
-                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right"
-                                       VerticalAlignment="Center" />
+                                       FontSize="11" FontFamily="Consolas" TextAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding HasSession, Converter={StaticResource BoolToVis}}" />
                         </Grid>
                     </Border>
 
@@ -78,9 +81,9 @@
                                             <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="#FFDADCE0"
                                                        FontSize="11" TextTrimming="CharacterEllipsis" />
                                             <TextBlock Grid.Column="1" Text="{Binding Cpu}" Foreground="#FF8FD0FF"
-                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right" />
+                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Center" />
                                             <TextBlock Grid.Column="2" Text="{Binding Ram}" Foreground="#FFB7E39C"
-                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right" />
+                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Center" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -95,7 +98,7 @@
                     <!-- Aviso de «Iniciar sesión» (antes una ventana emergente): ocupa el sitio de las aplicaciones. -->
                     <Border Style="{StaticResource ListCard}" Padding="12,6"
                             Visibility="{Binding ConfirmingLogon, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Foreground="#FFDADCE0" FontSize="12" TextWrapping="Wrap"
+                        <TextBlock Foreground="#FFDADCE0" FontSize="12" TextWrapping="Wrap" TextAlignment="Justify"
                                    Text="Se mostrará la pantalla de inicio de sesión de Windows para que inicies esta cuenta. Tu sesión actual quedará abierta en segundo plano. ¿Continuar?" />
                     </Border>
 

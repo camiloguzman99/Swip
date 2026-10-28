@@ -12,7 +12,6 @@ internal static class VisorUi
 {
     public static readonly Brush Muted = Frozen(0xFF9AA1AE), Text = Frozen(0xFFE8EAED), White = Frozen(0xFFFFFFFF);
     public static readonly Brush Card = Frozen(0x22FFFFFF), CardSel = Frozen(0x40FFFFFF), Hover = Frozen(0x40FFFFFF);
-    public static readonly Brush Stage = Frozen(0xFF3A3E46);
     public static readonly Brush Transparent = Brushes.Transparent;
 
     public static readonly Dictionary<string, Brush> Dots = new()

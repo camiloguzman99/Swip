@@ -105,104 +105,16 @@
    "g5c8"
   ]
  },
- "groom_face": {
-  "frames": [
-   "g5c2",
-   "g5c5"
-  ]
- },
  "sit_look": {
   "frames": [
    "g1c3",
    "g1c4"
   ]
  },
- "turn_around": {
-  "frames": [
-   "g1c3",
-   "g1c5"
-  ]
- },
- "play_yarn": {
-  "frames": [
-   "g5c2",
-   "g5c3"
-  ]
- },
- "cursor_swat": {
-  "frames": [
-   "g5c2",
-   "g5c3",
-   "g5c4"
-  ]
- },
- "box_scratch": {
-  "frames": [
-   "g5c3",
-   "g5c4",
-   "g5c5"
-  ]
- },
- "box_peek": {
-  "frames": [
-   {
-    "f": "g1c5",
-    "dy": 16
-   },
-   {
-    "f": "g1c5",
-    "dy": 12
-   },
-   {
-    "f": "g1c4",
-    "dy": 16
-   }
-  ]
- },
- "box_paw_out": {
-  "frames": [
-   {
-    "f": "g5c2",
-    "dy": 12
-   },
-   {
-    "f": "g5c3",
-    "dy": 12
-   }
-  ]
- },
- "ambush_pop": {
-  "frames": [
-   {
-    "f": "g1c5",
-    "dy": 26
-   },
-   {
-    "f": "g1c5",
-    "dy": 10
-   },
-   "g6c1"
-  ]
- },
  "box_push": {
   "frames": [
    "g4c2",
    "g4c3"
-  ]
- },
- "play_hop": {
-  "frames": [
-   "g7c1",
-   "g7c3",
-   "g7c5",
-   "g7c8"
-  ]
- },
- "play_hunt_fly": {
-  "frames": [
-   "g7c3",
-   "g7c5",
-   "g7c6"
   ]
  },
  "sit_to_stand": {
@@ -258,181 +170,10 @@
    "t8c8"
   ]
  },
- "jump_high": {
-  "frames": [
-   "g7c1",
-   "g7c2",
-   "g7c3",
-   "g7c4",
-   "g7c5",
-   "g7c6",
-   "g7c7",
-   "g7c8"
-  ]
- },
- "turn_sit8": {
-  "frames": [
-   "g1c1",
-   "g1c2",
-   "g1c3",
-   "g1c4",
-   "g1c5",
-   "g1c6",
-   "g1c7",
-   "g1c8"
-  ]
- },
- "turn_stand8": {
-  "frames": [
-   "g2c1",
-   "g2c2",
-   "g2c3",
-   "g2c4",
-   "g2c5",
-   "g2c6",
-   "g2c7",
-   "g2c8"
-  ]
- },
- "turn_loaf8": {
-  "frames": [
-   "g3c1",
-   "g3c2",
-   "g3c3",
-   "g3c4",
-   "g3c5",
-   "g3c6",
-   "g3c7",
-   "g3c8"
-  ]
- },
  "sleep_curl": {
   "frames": [
    "r5c5",
    "r5c6"
-  ]
- },
- "sleep_turn": {
-  "frames": [
-   "r5c5",
-   {
-    "f": "r5c6",
-    "flip": 1
-   },
-   {
-    "f": "r5c8",
-    "flip": 1
-   }
-  ]
- },
- "sleep_stretch": {
-  "frames": [
-   "r5c5",
-   "r5c2",
-   "r5c1"
-  ]
- },
- "sleep_ear": {
-  "frames": [
-   "r5c5",
-   "r5c6",
-   "r5c5"
-  ]
- },
- "sleep_tail": {
-  "frames": [
-   "r5c6",
-   "r5c7",
-   "r5c6"
-  ]
- },
- "sleep_dream": {
-  "frames": [
-   "r5c7",
-   "r5c8"
-  ]
- },
- "sleep_petted": {
-  "frames": [
-   "r5c5",
-   "r5c6",
-   "r5c7",
-   "r5c8"
-  ]
- },
- "sleep_box": {
-  "frames": [
-   "r5c5",
-   "r5c6"
-  ]
- },
- "play_tail_chase": {
-  "frames": [
-   "g1c3",
-   "g1c4",
-   {
-    "f": "g1c3",
-    "flip": 1
-   },
-   {
-    "f": "g1c4",
-    "flip": 1
-   }
-  ]
- },
- "play_roll": {
-  "frames": [
-   "r5c5",
-   "r5c6",
-   {
-    "f": "r5c5",
-    "flip": 1
-   },
-   {
-    "f": "r5c6",
-    "flip": 1
-   }
-  ]
- },
- "yawn": {
-  "frames": [
-   "g1c3",
-   "r6c5",
-   "r6c5",
-   "g1c3"
-  ]
- },
- "knead": {
-  "frames": [
-   "g3c3",
-   "g3c4"
-  ]
- },
- "sniff": {
-  "frames": [
-   "g4c1",
-   "g4c5"
-  ]
- },
- "stretch_yoga": {
-  "frames": [
-   "g7c1",
-   "g7c2",
-   "g2c3",
-   "g7c2"
-  ]
- },
- "box_rub": {
-  "frames": [
-   "g5c1",
-   "g5c8"
-  ]
- },
- "petted_happy": {
-  "frames": [
-   "r6c5",
-   "g1c3",
-   "r6c5"
   ]
  },
  "carry": {
@@ -451,6 +192,48 @@
   "frames": [
    "r5c1",
    "r5c2"
+  ]
+ },
+ "sleep_side": {
+  "frames": [
+   "r5c7",
+   "r5c8"
+  ]
+ },
+ "jump_box": {
+  "frames": [
+   "g7c1",
+   "g7c2",
+   "g7c3",
+   "g7c4",
+   "g7c5",
+   "g7c6",
+   "g7c7",
+   "g7c8"
+  ]
+ },
+ "box_enter": {
+  "frames": [
+   "g6c1",
+   "g6c2",
+   "g6c3",
+   "g6c4",
+   "g6c5",
+   "g6c6",
+   "g6c7",
+   "g6c8"
+  ]
+ },
+ "box_exit": {
+  "frames": [
+   "g6c8",
+   "g6c7",
+   "g6c6",
+   "g6c5",
+   "g6c4",
+   "g6c3",
+   "g6c2",
+   "g6c1"
   ]
  }
 }

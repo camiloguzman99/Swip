@@ -538,11 +538,11 @@ public partial class MainWindow : Window, IVisorHost
         UpdateClickThrough();
 
         // Cada segundo, volver a ponerse por encima de la barra de tareas (al pulsarla se pone delante
-        // y taparía lo que cuelga por debajo de la base). No con un menú o el Visor abiertos: quedarían detrás.
+        // y taparía lo que cuelga por debajo de la base). No con un menú abierto: quedaría detrás.
         if (++_topmostTicks >= 30)
         {
             _topmostTicks = 0;
-            if (!InfoPopup.IsOpen && !ConfigPopup.IsOpen && !VisorWindow.IsOpen) DisplayNative.KeepOnTop(_hwnd);
+            if (!InfoPopup.IsOpen && !ConfigPopup.IsOpen) DisplayNative.KeepOnTop(_hwnd);
         }
     }
 

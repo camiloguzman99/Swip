@@ -25,16 +25,18 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   gustan más las cajas que las casas.
 - 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
   dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
-- 🔍 **Visor** (opción de la caja): una ventana emergente con el estilo de los menús, con una pestaña por gato.
-  A la izquierda, las acciones básicas y debajo las transiciones; a la derecha (75 % del ancho), el visor: al elegir una
-  acción se ve esa acción, y al elegir otra distinta se ve la transición desde la anterior (encadenando las que hagan
-  falta) hasta terminar en la elegida. Desde ahí también se puede **cambiar el tiempo de cada transición** (fps o
-  duración y avance por cuadro), **colorear y corregir el dibujo** cuadro a cuadro (lápiz, borrador, gotero, relleno,
-  reemplazo de color, deshacer; el original se puede restablecer) y **cambiar el tamaño de las piezas**. Lo retocado
-  se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en `<gato>\<clip>_<cuadro>.png`) y el
-  tamaño en `settings.json`, así que lo ven todas las sesiones. Las acciones que faltan por dibujar salen en la lista con
-  el texto para pedirlas a Gemini. Los datos de estado salen de `src/Swip.App/Assets/atlas/visor.json`
-  (`tools/art/build_viewer.py`).
+- 🔍 **Visor** (opción de la caja): una ventana normal de aplicación (con el icono de Swip en la barra de tareas, se
+  puede minimizar y no se queda encima de las demás) con una pestaña por gato. A la izquierda, las **14 acciones** y las
+  transiciones entre posturas (en rojo las que aún no tienen arte); a la derecha (75 % del ancho), arriba del todo el
+  visor: al elegir una acción se ve esa acción precedida de las transiciones que haría el motor desde la postura
+  anterior, y al elegir una transición se ve de una postura a la otra. Debajo, los controles, los cuadros del clip y, en
+  dos columnas, los **tiempos** (fps o duración y avance por cuadro) y el **tamaño de las piezas**. «Editar dibujo» cambia
+  el visor por el editor de píxeles dentro de la misma ventana: **todos los cuadros** del clip a la vez, la paleta y las
+  herramientas (lápiz, borrador, gotero, relleno, reemplazo de color, deshacer) a la derecha y **Aceptar / Cancelar /
+  Restablecer** debajo. Lo retocado se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en
+  `<gato>\<clip>_<cuadro>.png`) y el tamaño en `settings.json`, así que lo ven todas las sesiones. La calidad del arte
+  sale de `src/Swip.App/Assets/atlas/visor.json` (`tools/art/build_viewer.py`) y el plan completo está en
+  **[`docs/art/PLAN_TRANSICIONES.md`](docs/art/PLAN_TRANSICIONES.md)**.
 - 🏷️ **Etiquetas** (opción de la caja): el nombre del usuario **sobre** cada gato, en el color de
   énfasis de Windows; si tiene dos palabras, en dos filas centradas. No se puede seleccionar ni
   estorba al clic.
@@ -85,23 +87,22 @@ Todo lo que se mueve vive en `Swip.Shared/Engine` (`SwipWorld`), sin depender de
 prueba entero: física de gatos y caja, el cerebro de cada gato, los movimientos y los efectos. La
 app solo traduce clics y arrastres en llamadas al motor y dibuja lo que este le dice.
 
-- **Cerebro:** cuando un gato termina lo que hace, el planificador elige lo siguiente entre los
-  comportamientos permitidos para su temperamento y su situación (en el suelo, encima o dentro de
-  la caja, cerca de la caja, del cursor o de otro gato), con pesos y sin repetir seguido. Las
-  transiciones de sesión, las caricias, los aterrizajes y el menú abierto tienen prioridad.
-- **Comportamientos** (52, en `Behaviors.cs`):
-  - *Durmiendo:* enroscado, darse la vuelta, estirarse, oreja, cola, soñar, dormir dentro de la
-    caja, acurrucarse junto a otro gato dormido, abrir un ojo al acariciarlo.
-  - *Jugando:* ovillo, perseguir la cola, cazar una mosca, saltar, revolcarse, lamerse la pata o la
-    cara, mirar alrededor, bostezar, amasar ronroneando.
-  - *Caminando:* caminar, trotar, correr, olfatear, estirarse, media vuelta.
-  - *Caja:* empujarla, saltar encima, meterse de un salto, salir, frotarse, rodearla, arañarla,
-    asomarse, sacar una pata, emboscada, vigilar sentado encima.
-  - *Cursor, entre gatos, reacciones y transiciones:* mirar, seguir y dar un zarpazo al cursor;
-    olfatear a otro gato e invitarlo a jugar; despertarse, sentarse, levantarse, dormirse, aterrizar.
-- **Efectos de movimiento** (sin arte adicional): aplastar y estirar al aterrizar, respiración al
-  dormir, balanceo, giros, saltos en arco, tambaleo de la caja, sombra en el suelo o en la tapa, y
-  partículas: zzz, corazones, polvo, ¡!, notas, chispas, una mosca y arañazos.
+- **Posturas y transiciones:** el gato siempre está en una postura (bolita, de lado, acostado, sentado, de pie,
+  caminando, trotando o corriendo). Para pasar de una a otra recorre el camino más corto del grafo de transiciones
+  (`Behaviors.Edges`): de bolita a correr es despertar, levantarse y echar a correr, nunca de golpe. Los pasos sin arte
+  son cortes directos y salen en rojo en el Visor. Ver [`docs/art/PLAN_TRANSICIONES.md`](docs/art/PLAN_TRANSICIONES.md).
+- **Cerebro:** cuando un gato termina lo que hace, el planificador elige la siguiente acción entre las permitidas para su
+  temperamento y su situación, con pesos: prefiere las que no obligan a cambiar de postura, no repite la anterior, respeta
+  los **enfriamientos** (aseo 60 s, trote 30 s, carrera 60 s, saltos 50 s, caja 75 s) y tras algo que cansa casi siempre
+  descansa. Los reposos duran de 10 a 70 s; el gato de la pantalla activa descansa menos que el de segundo plano.
+  El aterrizaje, el menú abierto y el cambio de sesión tienen prioridad.
+- **Acciones** (14, en `Behaviors.cs`): sentado, acostado, de pie, durmiendo de bolita, durmiendo de lado, caminar,
+  trotar, correr, lamerse la pata, saltar al mismo nivel, saltar a la caja, meterse en la caja, salirse de la caja y
+  chocar con la caja y empujarla. Dormido nunca se desplaza; jugando nunca camina.
+- **Caja:** si la van a cerrar con un gato despierto dentro, primero se levanta y sale de un salto y después se cierra la
+  tapa (uno dormido se queda encima). Al chocar con la caja para empujarla, esta se sacude y levanta polvo.
+- **Efectos de movimiento** (sin arte adicional): respiración al dormir, tambaleo de la caja, saltos en arco, sombra en
+  el suelo o en la tapa, y partículas: zzz, corazones al acariciarlo, polvo al correr y al aterrizar.
 
 ### Arte: hojas de sprites
 
