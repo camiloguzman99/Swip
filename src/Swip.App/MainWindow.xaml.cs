@@ -1127,6 +1127,9 @@ public partial class MainWindow : Window, IVisorHost
 
     void IVisorHost.SetCellSize(double value) => UpdateSettings(s => s.CellSize = ArtScale.Clamp(value));
 
+    string? IVisorHost.UserOf(string skin) =>
+        _agents.Values.FirstOrDefault(a => string.Equals(a.Skin, skin, StringComparison.OrdinalIgnoreCase))?.DisplayName;
+
     void IVisorHost.ArtChanged() => UpdateSettings(s => s.ArtRevision = unchecked(s.ArtRevision + 1));
 
     /// <summary>Aplica el tamaño de las piezas guardado en los ajustes: gatos, caja, suelo y ventana.</summary>

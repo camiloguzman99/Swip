@@ -27,6 +27,9 @@ public interface IVisorHost
 
     /// <summary>Se retocó un cuadro o un tiempo (ya guardado en la carpeta compartida): hay que releerlo y avisar a las demás sesiones.</summary>
     void ArtChanged();
+
+    /// <summary>El nombre del usuario cuyo gato usa ese dibujo, o null si ninguno.</summary>
+    string? UserOf(string skin);
 }
 
 /// <summary>
@@ -340,7 +343,9 @@ public sealed partial class VisorWindow : Window
         RefreshSelector();
     }
 
-    private static string SkinName(string skin) => skin == CatSkins.Gray ? "Gris" : "Naranja";
+    /// <summary>El nombre del usuario dueño del gato; si ninguna cuenta lo usa, el color del dibujo.</summary>
+    private string SkinName(string skin) =>
+        _host.UserOf(skin) is { Length: > 0 } user ? user : skin == CatSkins.Gray ? "Gris" : "Naranja";
 
     /// <summary>La cara del gato (recortada de un cuadro sentado) para el selector.</summary>
     private Border Face(string skin, double size)
