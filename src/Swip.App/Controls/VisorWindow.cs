@@ -376,7 +376,7 @@ public sealed partial class VisorWindow : Window
     {
         _selectorFace = new Border { Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) };
         _selectorName = new TextBlock { Foreground = Text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var chevron = new TextBlock { Text = "▲", Foreground = Muted, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+        var chevron = new TextBlock { Text = "▲", Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -433,7 +433,12 @@ public sealed partial class VisorWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var topRule = new Border { Height = 45, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };   // la misma línea de 1 px que la de la derecha
+        // Cabecera con «Swip» centrado y una línea de 1 px debajo (la misma altura que la barra de la derecha).
+        var topRule = new Border
+        {
+            Height = 45, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = new TextBlock { Text = "Swip", Foreground = White, FontSize = 14, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
         grid.Children.Add(topRule);
         Grid.SetRow(scroll, 1);
         grid.Children.Add(scroll);
@@ -505,7 +510,7 @@ public sealed partial class VisorWindow : Window
         root.Children.Add(editor);
         _editPanel = editor;
 
-        _status = new TextBlock { Foreground = Frozen(0xFFFF8A65), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 2, 0, 0), Visibility = Visibility.Collapsed };
+        _status = new TextBlock { Foreground = Frozen(0xFFFF8A65), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 2, 0, 0), Visibility = Visibility.Collapsed };
         Grid.SetRow(_status, 1);
         root.Children.Add(_status);
         return root;
@@ -517,7 +522,7 @@ public sealed partial class VisorWindow : Window
         var g = new Grid { Margin = new Thickness(0, 0, 0, 2) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.Children.Add(new TextBlock { Text = label, Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 6) });
+        g.Children.Add(new TextBlock { Text = label, Foreground = Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 6) });
         Grid.SetColumn((FrameworkElement)control, 1);
         g.Children.Add(control);
         return g;
@@ -552,7 +557,7 @@ public sealed partial class VisorWindow : Window
         restart.Click += (_, _) => { _stepIdx = 0; ResetStep(); _playing = true; };
         buttons.Children.Add(_playButton);
         buttons.Children.Add(restart);
-        _readout = new TextBlock { Foreground = Muted, FontSize = 10, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+        _readout = new TextBlock { Foreground = Muted, FontSize = 11, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
         buttons.Children.Add(_readout);
         card.Children.Add(buttons);
 
@@ -587,7 +592,7 @@ public sealed partial class VisorWindow : Window
 
     private UIElement Flag(string label, string key, bool initial)
     {
-        var b = new Button { Content = label, Style = RowStyle, Foreground = Text, Padding = new Thickness(10, 5, 10, 5), FontSize = 11, Margin = new Thickness(0, 0, 6, 6) };
+        var b = new Button { Content = label, Style = RowStyle, Foreground = Text, Padding = new Thickness(10, 5, 10, 5), FontSize = 12, Margin = new Thickness(0, 0, 6, 6) };
         _flags[key] = initial;
         AttachHover(b);
         Paint(b, initial);
@@ -721,7 +726,7 @@ public sealed partial class VisorWindow : Window
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor);
             var g = new Grid();
             g.Children.Add(img);
-            g.Children.Add(new TextBlock { Text = (i + 1).ToString(CultureInfo.InvariantCulture) + (_atlas.IsEdited(_skin, def.Id, i) ? " ✎" : ""), Foreground = White, FontSize = 9, Margin = new Thickness(2, 0, 0, 0) });
+            g.Children.Add(new TextBlock { Text = (i + 1).ToString(CultureInfo.InvariantCulture) + (_atlas.IsEdited(_skin, def.Id, i) ? " ✎" : ""), Foreground = White, FontSize = 11, Margin = new Thickness(2, 0, 0, 0) });
             var border = new Border { Background = Card, BorderThickness = new Thickness(2), BorderBrush = Transparent, CornerRadius = new CornerRadius(9), ClipToBounds = true, Margin = new Thickness(0, 0, 4, 0), Child = g, Cursor = Cursors.Hand };
             border.MouseLeftButtonUp += (_, _) => { _playing = false; SetFrame(index); };
             _strip.Children.Add(border);
@@ -741,7 +746,7 @@ public sealed partial class VisorWindow : Window
         card.Children.Add(new TextBlock
         {
             Text = "Escribe y pulsa Intro. Velocidad: tamaños del gato que avanza por segundo (0 = quieto; caminar, por ejemplo 0,4). Es lo que se mueve el gato y el suelo del visor.",
-            Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0),
+            Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0),
         });
         return border;
     }
@@ -869,7 +874,7 @@ public sealed partial class VisorWindow : Window
         custom.Children.Add(frame);
         custom.Children.Add(Pill("Aplicar", () => { if (TryNumber(_sizeBox.Text, out double v)) ApplySize(v); }, compact: true));
         card.Children.Add(FormRow("Casilla (px)", custom));
-        _sizeInfo = new TextBlock { Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
+        _sizeInfo = new TextBlock { Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
         card.Children.Add(_sizeInfo);
         return border;
     }

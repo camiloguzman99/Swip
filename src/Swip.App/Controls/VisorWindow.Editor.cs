@@ -82,7 +82,7 @@ public sealed partial class VisorWindow
         buttons.Children.Add(Pill("Cancelar", CancelEditor));
         buttons.Children.Add(Pill("Restablecer el original", RestoreOriginal));
         buttons.Children.Add(Pill("Deshacer", Undo));
-        _edInfo = new TextBlock { Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 6) };
+        _edInfo = new TextBlock { Foreground = Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 6) };
         buttons.Children.Add(_edInfo);
         Grid.SetRow(buttons, 1);
         grid.Children.Add(buttons);
@@ -130,7 +130,7 @@ public sealed partial class VisorWindow
         {
             Text = "Botón izquierdo: pinta con la herramienta elegida en cualquier cuadro. Botón derecho: gotero. Ctrl+Z deshace. " +
                    "Nada se guarda hasta pulsar Aceptar.",
-            Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 4, 0, 0),
+            Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 4, 0, 0),
         });
         SetColor(_color);
         return border;
@@ -256,7 +256,7 @@ public sealed partial class VisorWindow
             fr.Canvas = canvas;
 
             var card = new StackPanel { Margin = new Thickness(0, 0, 8, 6) };
-            card.Children.Add(new TextBlock { Text = $"Cuadro {i + 1}", Foreground = Muted, FontSize = 10, Margin = new Thickness(2, 0, 0, 2) });
+            card.Children.Add(new TextBlock { Text = $"Cuadro {i + 1}", Foreground = Muted, FontSize = 11, Margin = new Thickness(2, 0, 0, 2) });
             card.Children.Add(canvas);
             _edWrap.Children.Add(card);
         }

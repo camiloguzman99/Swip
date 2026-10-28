@@ -91,7 +91,7 @@ internal static class VisorUi
     {
         var b = new Button
         {
-            Content = text, Style = RowStyle, Foreground = Text, FontSize = 11, Margin = new Thickness(0, 0, 6, 6),
+            Content = text, Style = RowStyle, Foreground = Text, FontSize = 12, Margin = new Thickness(0, 0, 6, 6),
             Padding = compact ? new Thickness(8, 3, 8, 3) : new Thickness(10, 5, 10, 5),
         };
         Rest(b, Card);
@@ -102,7 +102,7 @@ internal static class VisorUi
 
     public static TextBlock Label(string text) => new()
     {
-        Text = text, Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 6),
+        Text = text, Foreground = Muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 6),
     };
 
     /// <summary>Botones en fila de los que solo uno está activo.</summary>
@@ -117,7 +117,7 @@ internal static class VisorUi
         for (int i = 0; i < labels.Length; i++)
         {
             int index = i;
-            var b = new Button { Content = labels[i], Style = RowStyle, Foreground = Text, Padding = new Thickness(9, 5, 9, 5), FontSize = 11, Margin = new Thickness(0, 0, 2, 0) };
+            var b = new Button { Content = labels[i], Style = RowStyle, Foreground = Text, Padding = new Thickness(9, 5, 9, 5), FontSize = 12, Margin = new Thickness(0, 0, 2, 0) };
             AttachHover(b);
             b.Click += (_, _) => { Repaint(index); changed(index); };
             buttons.Add(b);
@@ -136,7 +136,7 @@ internal static class VisorUi
         var tb = new TextBox
         {
             Width = width, Background = Transparent, Foreground = Text, CaretBrush = White, BorderThickness = new Thickness(0),
-            Padding = new Thickness(6, 5, 6, 5), FontSize = 11, VerticalContentAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(6, 5, 6, 5), FontSize = 12, VerticalContentAlignment = VerticalAlignment.Center,
         };
         if (mono) tb.FontFamily = new FontFamily("Consolas");
         var frame = new Border { Background = Card, CornerRadius = new CornerRadius(9), Child = tb, Margin = new Thickness(0, 0, 8, 6) };
@@ -146,7 +146,7 @@ internal static class VisorUi
     public static TextBox ReadOnlyBox(double height) => new()
     {
         IsReadOnly = true, Height = height, Background = Card, Foreground = Text, BorderThickness = new Thickness(0), Padding = new Thickness(8),
-        FontFamily = new FontFamily("Consolas"), FontSize = 11, TextWrapping = TextWrapping.Wrap,
+        FontFamily = new FontFamily("Consolas"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 0, 0, 6),
     };
 
@@ -155,13 +155,13 @@ internal static class VisorUi
     {
         panel = new StackPanel();
         if (title.Length > 0)
-            panel.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Foreground = Muted, FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 0, 0, 6) });
+            panel.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Foreground = Muted, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 0, 0, 6) });
         return new Border { Background = Card, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 4, 0, 6), Child = panel };
     }
 
     public static TextBlock GroupLabel(string text) => new()
     {
-        Text = text.ToUpperInvariant(), Foreground = Muted, FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(4, 10, 0, 4),
+        Text = text.ToUpperInvariant(), Foreground = Muted, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(4, 10, 0, 4),
     };
 
     /// <summary>Fila de una lista: punto de color, nombre y una etiqueta a la derecha.</summary>
@@ -180,7 +180,7 @@ internal static class VisorUi
         g.Children.Add(n);
         if (tag.Length > 0)
         {
-            var t = new TextBlock { Text = tag, Foreground = Muted, FontSize = 10, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { Text = tag, Foreground = Muted, FontSize = 11, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(t, 2);
             g.Children.Add(t);
         }
