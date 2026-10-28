@@ -8,11 +8,11 @@ Visor de la caja.
 
 | # | Acción | Clip | Postura de partida → final | Quién | Duración | Peso | Enfriamiento | Arte |
 |---|--------|------|----------------------------|-------|----------|------|--------------|------|
-| 1 | Sentado | `sit_look` | Sentado | juega, camina | 10–30 s | 5 | – | listo |
-| 2 | Acostado | `loaf_idle` | Acostado | juega, camina | 15–40 s | 2,5 | – | listo |
-| 3 | De pie | `stand_idle` | De pie | juega, camina | 4–10 s | 2 | – | listo |
-| 4 | Durmiendo de bolita | `sleep_curl` | Bolita | duerme | 25–70 s | 5 | – | listo |
-| 5 | Durmiendo de lado | `sleep_side` | De lado | duerme | 25–70 s | 3 | – | prestado |
+| 1 | Sentarse | `sit_look` | Sentado | juega, camina | 10–30 s | 5 | – | listo |
+| 2 | Acostarse | `loaf_idle` | Acostado | juega, camina | 15–40 s | 2,5 | – | listo |
+| 3 | Ponerse de pie | `stand_idle` | De pie | juega, camina | 4–10 s | 2 | – | listo |
+| 4 | Dormir en bolita | `sleep_curl` | Bolita | duerme | 25–70 s | 5 | – | listo |
+| 5 | Dormir de lado | `sleep_side` | De lado | duerme | 25–70 s | 3 | – | prestado |
 | 6 | Caminar | `walk` | Caminando | camina | 6–14 s | 5 | – | listo |
 | 7 | Trotar | `trot` | Trotando | camina | 3–6 s | 1 | 30 s | listo |
 | 8 | Correr | `run` | Corriendo | camina | 1,5–3 s | 0,5 | 60 s | listo |

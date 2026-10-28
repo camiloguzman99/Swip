@@ -83,11 +83,11 @@ public sealed partial class VisorWindow : Window
     /// <summary>Las catorce acciones, en el orden de la lista.</summary>
     private static readonly ActionItem[] Actions =
     {
-        new("sit", "Sentado", "sit"),
-        new("loaf", "Acostado", "loaf"),
-        new("stand", "De pie", "stand"),
-        new("curl", "Durmiendo de bolita", "sleep_curl"),
-        new("side", "Durmiendo de lado", "sleep_side"),
+        new("sit", "Sentarse", "sit"),
+        new("loaf", "Acostarse", "loaf"),
+        new("stand", "Ponerse de pie", "stand"),
+        new("curl", "Dormir en bolita", "sleep_curl"),
+        new("side", "Dormir de lado", "sleep_side"),
         new("walk", "Caminar", "walk"),
         new("trot", "Trotar", "trot"),
         new("run", "Correr", "run"),
@@ -136,7 +136,7 @@ public sealed partial class VisorWindow : Window
     private bool _dark;
     private Grid _viewPanel = null!;
     private TextBlock _readout = null!, _status = null!, _timingTitle = null!, _sizeInfo = null!;
-    private WrapPanel _timingRow = null!;
+    private StackPanel _timingRow = null!;
     private TextBox _sizeBox = null!;
     private Image _frameImage = null!, _overlayImage = null!;
     private GroundView _ground = null!;
@@ -148,7 +148,7 @@ public sealed partial class VisorWindow : Window
 
     // ---------------------------------------------------------------- estado
     private string _skin = CatSkins.Orange;
-    private int _zoom;                              // 0 = ajustar al alto disponible
+    private int _zoom;                              // 0 = todavía sin fijar: se ajusta al abrir
     private double _speed = 1;
     private Posture _posture = Posture.Stand;       // postura en la que queda el gato tras lo último que se reprodujo
     private string _selClip = "walk";               // clip de lo elegido en la lista (el que se edita)
@@ -302,6 +302,10 @@ public sealed partial class VisorWindow : Window
         lights.Children.Add(Light(0xFFEC5B57, 0xFF8E1F1C, "M0,0 L9,9 M9,0 L0,9", "Cerrar", () => Close(), filled: false));
         bar.Children.Add(lights);
         right.Children.Add(bar);
+        // Una línea de 1 px bajo la barra superior para separarla del visor (a todo el ancho del lado derecho).
+        var rule = new Border { Height = 1, Background = Line, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(-14, 0, -14, 0) };
+        Grid.SetRow(rule, 0);
+        right.Children.Add(rule);
         var content = BuildRight();
         Grid.SetRow(content, 1);
         right.Children.Add(content);
@@ -425,12 +429,14 @@ public sealed partial class VisorWindow : Window
     {
         _list = new StackPanel { Margin = new Thickness(10, 6, 10, 6) };
         // Sin barra visible: la lista cabe entera; si la pantalla fuera muy pequeña, la rueda del ratón la desplaza.
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, Content = _list };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list };
+        scroll.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), ThinScrollBarStyle());
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.Children.Add(scroll);
-        var selector = BuildSelector();
+        var selector = (FrameworkElement)BuildSelector();
+        selector.Margin = new Thickness(8, 18, 8, 8);   // un hueco de una línea sobre el usuario
         Grid.SetRow(selector, 1);
         grid.Children.Add(selector);
         _side = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = grid };
@@ -444,12 +450,14 @@ public sealed partial class VisorWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        // ---- visor (arriba del todo): escenario, controles, cuadros y ajustes
+        // ---- visor (arriba del todo): escenario, cuadros del clip y tres tarjetas (reproducción, tiempos, tamaño)
         _viewPanel = new Grid();
         _viewPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        for (int i = 0; i < 3; i++) _viewPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _viewPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _viewPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        _stage = new Grid { ClipToBounds = true, Margin = new Thickness(0, 4, 0, 6) };   // sin fondo: se ve el cristal del menú
+        // El escenario tiene el alto que deje la ventana y no cambia con el zoom: el dibujo se amplía o se aleja dentro de él.
+        _stage = new Grid { ClipToBounds = true, Margin = new Thickness(0, 8, 0, 6), Background = Transparent };
         _ground = new GroundView();
         _frameImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
         _overlayImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.None, IsHitTestVisible = false, SnapsToDevicePixels = true };
@@ -458,48 +466,33 @@ public sealed partial class VisorWindow : Window
         _stage.Children.Add(_ground);
         _stage.Children.Add(_frameImage);
         _stage.Children.Add(_overlayImage);
+        _stage.MouseWheel += (_, e) => { ChangeZoom(e.Delta > 0 ? 1 : -1); e.Handled = true; };
         Grid.SetRow(_stage, 0);
         _viewPanel.Children.Add(_stage);
 
-        var play = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
-        _playButton = Pill("Pausa", () => { _playing = !_playing; });
-        play.Children.Add(_playButton);
-        play.Children.Add(Pill("Reiniciar", () => { _stepIdx = 0; ResetStep(); _playing = true; }));
-        play.Children.Add(Pill("◀", () => { _playing = false; SetFrame((_frame - 1 + CurFrameCount) % CurFrameCount); }));
-        play.Children.Add(Pill("▶", () => { _playing = false; SetFrame((_frame + 1) % CurFrameCount); }));
-        play.Children.Add(Label("velocidad"));
-        play.Children.Add(Segments(new[] { "¼", "½", "1", "2" }, 2, i => _speed = new[] { 0.25, 0.5, 1, 2 }[i]));
-        play.Children.Add(Label("zoom"));
-        play.Children.Add(Segments(new[] { "Ajustar", "2", "3", "4", "6" }, 0, i => { _zoom = new[] { 0, 2, 3, 4, 6 }[i]; _shownKey = ""; }));
-        play.Children.Add(Flag("suelo avanza", "mov", true));
-        play.Children.Add(Flag("espejo", "mirror", false));
-        play.Children.Add(Flag("marcos", "zones", false));
-        play.Children.Add(Pill("Editar dibujo", OpenEditor));
-        _readout = new TextBlock { Foreground = Muted, FontSize = 11, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 6) };
-        play.Children.Add(_readout);
-        Grid.SetRow(play, 1);
-        _viewPanel.Children.Add(play);
-
+        // Los cuadros del clip, justo debajo del dibujo, para elegirlos.
         _strip = new StackPanel { Orientation = Orientation.Horizontal };
         var stripScroll = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = _strip, Margin = new Thickness(0, 0, 0, 2),
+            Content = _strip, Margin = new Thickness(0, 0, 0, 4),
         };
-        Grid.SetRow(stripScroll, 2);
+        Grid.SetRow(stripScroll, 1);
         _viewPanel.Children.Add(stripScroll);
 
-        // tiempos y tamaño, en dos columnas
+        // reproducción, tiempos y tamaño: tres tarjetas
         var cards = new Grid();
-        cards.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        cards.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-        cards.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < 5; i++)
+            cards.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 1 ? new GridLength(8) : new GridLength(1, GridUnitType.Star) });
+        var playCard = BuildPlayCard();
         var timingCard = BuildTimingCard();
         var sizeCard = BuildSizeCard();
-        Grid.SetColumn(sizeCard, 2);
+        Grid.SetColumn(timingCard, 2);
+        Grid.SetColumn(sizeCard, 4);
+        cards.Children.Add(playCard);
         cards.Children.Add(timingCard);
         cards.Children.Add(sizeCard);
-        Grid.SetRow(cards, 3);
+        Grid.SetRow(cards, 2);
         _viewPanel.Children.Add(cards);
         root.Children.Add(_viewPanel);
 
@@ -515,9 +508,83 @@ public sealed partial class VisorWindow : Window
         return root;
     }
 
+    /// <summary>Una fila de tarjeta: el nombre a la izquierda en una columna fija y el control a la derecha.</summary>
+    private static Grid FormRow(string label, UIElement control)
+    {
+        var g = new Grid { Margin = new Thickness(0, 0, 0, 2) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.Children.Add(new TextBlock { Text = label, Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 6) });
+        Grid.SetColumn((FrameworkElement)control, 1);
+        g.Children.Add(control);
+        return g;
+    }
+
+    private static readonly Geometry PlayIcon = Geometry.Parse("M0,0 L10,6 L0,12 Z");
+    private static readonly Geometry PauseIcon = Geometry.Parse("M0,0 L3.5,0 L3.5,12 L0,12 Z M6.5,0 L10,0 L10,12 L6.5,12 Z");
+    private bool _shownPlaying = true;
+
+    private static UIElement GlyphIcon(Geometry g) => new System.Windows.Shapes.Path
+    {
+        Data = g, Fill = Text, Stretch = Stretch.None, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    private UIElement BuildPlayCard()
+    {
+        var border = NewCard("Reproducción", out var card);
+        border.Margin = new Thickness(0, 2, 0, 0);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        _playButton = new Button { Content = GlyphIcon(PauseIcon), Style = RowStyle, Foreground = Text, Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 6, 6), ToolTip = "Pausa / reproducir" };
+        Rest(_playButton, Card);
+        AttachHover(_playButton);
+        _playButton.Click += (_, _) => _playing = !_playing;
+        var restart = new Button
+        {
+            Content = new TextBlock { Text = "↻", FontSize = 16, FontFamily = new FontFamily("Segoe UI Symbol"), Foreground = Text, VerticalAlignment = VerticalAlignment.Center },
+            Style = RowStyle, Foreground = Text, Padding = new Thickness(14, 2, 14, 2), Margin = new Thickness(0, 0, 10, 6), ToolTip = "Reiniciar",
+        };
+        Rest(restart, Card);
+        AttachHover(restart);
+        restart.Click += (_, _) => { _stepIdx = 0; ResetStep(); _playing = true; };
+        buttons.Children.Add(_playButton);
+        buttons.Children.Add(restart);
+        _readout = new TextBlock { Foreground = Muted, FontSize = 10, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+        buttons.Children.Add(_readout);
+        card.Children.Add(buttons);
+
+        card.Children.Add(FormRow("Velocidad", Segments(new[] { "¼", "½", "1", "2" }, 2, i => _speed = new[] { 0.25, 0.5, 1, 2 }[i])));
+
+        var zoom = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        var minus = Pill("−", () => ChangeZoom(-1), compact: true);
+        var plus = Pill("+", () => ChangeZoom(1), compact: true);
+        _zoomText = new TextBlock { Foreground = Text, FontSize = 12, Width = 36, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        minus.Margin = new Thickness(0); plus.Margin = new Thickness(0);
+        zoom.Children.Add(minus);
+        zoom.Children.Add(_zoomText);
+        zoom.Children.Add(plus);
+        card.Children.Add(FormRow("Zoom", zoom));
+
+        var view = new StackPanel { Orientation = Orientation.Horizontal };
+        view.Children.Add(Flag("espejo", "mirror", false));
+        view.Children.Add(Flag("marcos", "zones", false));
+        view.Children.Add(Pill("Editar dibujo", OpenEditor));
+        card.Children.Add(FormRow("Ver", view));
+        return border;
+    }
+
+    private TextBlock _zoomText = null!;
+
+    private void ChangeZoom(int delta)
+    {
+        if (_zoom == 0) _zoom = FitZoom();
+        _zoom = Math.Clamp(_zoom + delta, 1, 12);
+        _shownKey = "";
+    }
+
     private UIElement Flag(string label, string key, bool initial)
     {
-        var b = new Button { Content = label, Style = RowStyle, Padding = new Thickness(10, 5, 10, 5), FontSize = 11, Margin = new Thickness(0, 0, 6, 6) };
+        var b = new Button { Content = label, Style = RowStyle, Foreground = Text, Padding = new Thickness(10, 5, 10, 5), FontSize = 11, Margin = new Thickness(0, 0, 6, 6) };
         _flags[key] = initial;
         AttachHover(b);
         Paint(b, initial);
@@ -543,6 +610,7 @@ public sealed partial class VisorWindow : Window
         _list.Children.Clear();
         double width = Math.Max(150, (_side.ActualWidth > 0 ? _side.ActualWidth : Width / 4) - 36);
 
+        _list.Children.Add(Spacer());
         _list.Children.Add(GroupLabel("Acciones"));
         foreach (var a in Actions)
         {
@@ -553,6 +621,7 @@ public sealed partial class VisorWindow : Window
         }
 
         // Las transiciones, en formato lista: punto verde si está dibujada (↺ si se reproduce al revés), rojo si es un corte.
+        _list.Children.Add(Spacer());
         _list.Children.Add(GroupLabel("Transiciones entre posturas"));
         foreach (var edge in Behaviors.Edges.Where(e => e.Via is not null).Concat(Behaviors.Edges.Where(e => e.Via is null)))
         {
@@ -564,6 +633,9 @@ public sealed partial class VisorWindow : Window
             _list.Children.Add(row);
         }
     }
+
+    /// <summary>Un hueco del alto de una línea de texto para que los títulos no choquen con lo de arriba.</summary>
+    private static FrameworkElement Spacer() => new Border { Height = 18 };
 
     private static Button Row(string name, string quality, Action click, bool selected, double width)
     {
@@ -659,13 +731,13 @@ public sealed partial class VisorWindow : Window
     {
         var border = NewCard("Tiempos (valen para los dos gatos)", out var card);
         border.Margin = new Thickness(0, 2, 0, 0);
-        _timingTitle = new TextBlock { Foreground = White, FontFamily = new FontFamily("Consolas"), FontSize = 12, Margin = new Thickness(2, 0, 0, 4) };
+        _timingTitle = new TextBlock { Foreground = White, FontFamily = new FontFamily("Consolas"), FontSize = 12, Margin = new Thickness(2, 0, 0, 6) };
         card.Children.Add(_timingTitle);
-        _timingRow = new WrapPanel();
+        _timingRow = new StackPanel();
         card.Children.Add(_timingRow);
         card.Children.Add(new TextBlock
         {
-            Text = "Cambia los fps o la duración (segundos del clip entero) y pulsa Intro. El avance son las casillas que avanza el gato en cada cuadro, separadas por comas.",
+            Text = "Escribe y pulsa Intro. Avance: casillas que avanza el gato en cada cuadro, separadas por comas.",
             Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0),
         });
         return border;
@@ -680,18 +752,15 @@ public sealed partial class VisorWindow : Window
         var original = _clips.Original(id);
         _timingTitle.Text = $"{id} · {def.FrameCount} cuadros · {(def.Loop ? "bucle" : "una vez")}";
 
-        _timingRow.Children.Add(Label("fps"));
-        var (fpsFrame, fpsBox) = Field(56);
+        var (fpsFrame, fpsBox) = Field(70);
         fpsBox.Text = def.Fps.ToString("0.##", CultureInfo.InvariantCulture);
-        _timingRow.Children.Add(fpsFrame);
-        _timingRow.Children.Add(Label("duración (s)"));
-        var (durFrame, durBox) = Field(56);
+        _timingRow.Children.Add(FormRow("fps", fpsFrame));
+        var (durFrame, durBox) = Field(70);
         durBox.Text = (def.FrameCount / def.Fps).ToString("0.00", CultureInfo.InvariantCulture);
-        _timingRow.Children.Add(durFrame);
-        _timingRow.Children.Add(Label("avance"));
-        var (advFrame, advBox) = Field(130);
+        _timingRow.Children.Add(FormRow("Duración (s)", durFrame));
+        var (advFrame, advBox) = Field(150);
         advBox.Text = string.Join(",", def.Advance is { Length: > 0 } a ? a : new[] { 0 });
-        _timingRow.Children.Add(advFrame);
+        _timingRow.Children.Add(FormRow("Avance", advFrame));
 
         var reset = Pill("Restablecer", () => { ResetTiming(id); RefreshTimingRow(); }, compact: true);
         reset.IsEnabled = _timing.ContainsKey(id);
@@ -715,7 +784,8 @@ public sealed partial class VisorWindow : Window
         durBox.LostFocus += (_, _) => Commit(true);
         advBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
         advBox.LostFocus += (_, _) => Commit(false);
-        _timingRow.Children.Add(reset);
+        reset.HorizontalAlignment = HorizontalAlignment.Left;
+        _timingRow.Children.Add(FormRow("", reset));
     }
 
     private static bool TryNumber(string text, out double value) =>
@@ -770,18 +840,17 @@ public sealed partial class VisorWindow : Window
     {
         var border = NewCard("Tamaño de las piezas (gato y caja)", out var card);
         border.Margin = new Thickness(0, 2, 0, 0);
-        var row = new WrapPanel();
         int nearest = Array.IndexOf(SizePresets, SizePresets.OrderBy(p => Math.Abs(p - _host.CellSize)).First());
         _sizeSegments = Segments(SizePresets.Select(p => $"{p * 100:0}%").ToArray(), nearest, i => ApplySize(SizePresets[i]));
-        row.Children.Add(_sizeSegments);
-        row.Children.Add(Label("casilla (px)"));
-        var (frame, box) = Field(56);
+        card.Children.Add(FormRow("Tamaño", _sizeSegments));
+        var custom = new StackPanel { Orientation = Orientation.Horizontal };
+        var (frame, box) = Field(60);
         _sizeBox = box;
         _sizeBox.Text = _host.CellSize.ToString("0.###", CultureInfo.InvariantCulture);
         _sizeBox.KeyDown += (_, e) => { if (e.Key == Key.Enter && TryNumber(_sizeBox.Text, out double v)) ApplySize(v); };
-        row.Children.Add(frame);
-        row.Children.Add(Pill("Aplicar", () => { if (TryNumber(_sizeBox.Text, out double v)) ApplySize(v); }));
-        card.Children.Add(row);
+        custom.Children.Add(frame);
+        custom.Children.Add(Pill("Aplicar", () => { if (TryNumber(_sizeBox.Text, out double v)) ApplySize(v); }, compact: true));
+        card.Children.Add(FormRow("Casilla (px)", custom));
         _sizeInfo = new TextBlock { Foreground = Muted, FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
         card.Children.Add(_sizeInfo);
         return border;
@@ -800,7 +869,7 @@ public sealed partial class VisorWindow : Window
         double c = _host.CellSize;
         int index = Array.FindIndex(SizePresets, p => Math.Abs(p - c) < 1e-6);
         if (index >= 0) Select(_sizeSegments, index);
-        _sizeInfo.Text = $"Cada casilla mide {c:0.###} px: el gato (100 casillas) se ve de {100 * c:0} px y la caja (66) de {66 * c:0} px, sin cambiar la cantidad de píxeles. Vale para todas las sesiones (de 0,25 a 1,5).";
+        _sizeInfo.Text = $"Gato: {100 * c:0} px · caja: {66 * c:0} px. No cambia la cantidad de píxeles. Vale para todas las sesiones (de 0,25 a 1,5).";
     }
 
     // ---------------------------------------------------------------- reproducción (como el motor)
@@ -839,7 +908,7 @@ public sealed partial class VisorWindow : Window
             {
                 _tick++;
                 int f = DisplayFrame(_tick);
-                if (On("mov") && _tick > 0) _camX += def.AdvanceOf(f);
+                if (_tick > 0) _camX += def.AdvanceOf(f);
                 var step = CurStep;
                 if (!step.Loop && _tick >= def.FrameCount)
                 {
@@ -857,30 +926,35 @@ public sealed partial class VisorWindow : Window
         }
 
         _frame = DisplayFrame(Math.Max(0, _tick));
-        if (_playButton.Content as string != (_playing ? "Pausa" : "Reproducir")) _playButton.Content = _playing ? "Pausa" : "Reproducir";
+        if (_playing != _shownPlaying) { _shownPlaying = _playing; _playButton.Content = GlyphIcon(_playing ? PauseIcon : PlayIcon); }
         for (int i = 0; i < _thumbs.Count; i++)
             _thumbs[i].BorderBrush = i == _frame ? Accent : Transparent;
         double speed = (def.Advance is { Length: > 0 } adv ? adv.Average() : 0) * def.Fps;
-        _readout.Text = $"{CurStep.Label} · cuadro {_frame + 1}/{def.FrameCount} · avance {def.AdvanceOf(_frame)} · {speed:0} casillas/s";
+        _readout.Text = $"{_frame + 1}/{def.FrameCount} · {speed:0} casillas/s";
         Draw();
     }
 
-    /// <summary>Zoom que se usa: el elegido, o el mayor que cabe en el escenario si está en «Ajustar» (o el elegido no cabe).</summary>
-    private int EffectiveZoom()
+    /// <summary>El mayor zoom con el que el gato cabe entero por encima del suelo y a lo ancho del escenario.</summary>
+    private int FitZoom()
     {
-        int gw = _atlas.GridWidth, gh = _atlas.GridHeight;
         double h = _stage.ActualHeight, w = _stage.ActualWidth;
-        if (h < 1 || w < 1) return Math.Max(1, _zoom == 0 ? 2 : _zoom);
-        int fit = (int)Math.Max(1, Math.Min(Math.Floor((h - 26) / gh), Math.Floor(w / gw)));
-        return _zoom == 0 ? Math.Min(fit, 8) : Math.Min(_zoom, fit);
+        if (h < 1 || w < 1) return 3;
+        double above = h * GroundFraction;
+        return (int)Math.Clamp(Math.Min(Math.Floor(above / _atlas.BaseRows), Math.Floor(w / _atlas.GridWidth)), 1, 8);
     }
+
+    /// <summary>Dónde cae la línea del suelo dentro del escenario (fracción del alto): no cambia con el zoom.</summary>
+    private const double GroundFraction = 0.78;
 
     private void Draw()
     {
         int gw = _atlas.GridWidth, gh = _atlas.GridHeight;
-        int zoom = EffectiveZoom();
+        if (_zoom == 0 && _stage.ActualHeight > 1) _zoom = FitZoom();
+        int zoom = Math.Max(1, _zoom);
+        _zoomText.Text = $"{zoom}×";
         string clip = CurStep.Clip;
-        string key = $"{_skin}|{clip}|{_frame}|{zoom}|{On("mirror")}|{On("zones")}|{_atlas.IsEdited(_skin, clip, _frame)}|{_drawRevision}";
+        double top = Math.Round(_stage.ActualHeight * GroundFraction) - _atlas.BaseRows * zoom;   // los pies siempre en la misma línea
+        string key = $"{_skin}|{clip}|{_frame}|{zoom}|{On("mirror")}|{On("zones")}|{_atlas.IsEdited(_skin, clip, _frame)}|{_drawRevision}|{top}";
         if (key != _shownKey)
         {
             _shownKey = key;
@@ -888,11 +962,30 @@ public sealed partial class VisorWindow : Window
             // imágenes enormes por cada zoom (un cuadro a zoom 6 ocupa más de 3 MB).
             _frameImage.Source = _atlas.Frame(_skin, clip, _frame, On("mirror"));
             _frameImage.Width = gw * zoom; _frameImage.Height = gh * zoom;
+            _frameImage.Margin = new Thickness(0, top, 0, 0);
             _overlayImage.Source = On("zones") ? ZoneOverlay.Get("cat", gw, gh, _atlas.ExtraZones, _atlas.Main, zoom) : null;
             _overlayImage.Width = gw * zoom; _overlayImage.Height = gh * zoom;
+            _overlayImage.Margin = new Thickness(0, top, 0, 0);
         }
-        _ground.Set(_camX, zoom, _atlas.BaseRows);
+        _ground.Set(_camX, zoom, _atlas.BaseRows, GroundFraction);
     }
+
+    /// <summary>Barra de desplazamiento vertical fina y redondeada, con los colores del tema (en vez de la de Windows).</summary>
+    private static Style ThinScrollBarStyle()
+    {
+        string thumb = _thumbColor();
+        string xaml = "<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ScrollBar'>" +
+            "<Setter Property='Width' Value='8'/><Setter Property='Background' Value='Transparent'/>" +
+            "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'>" +
+            "<Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True'>" +
+            "<Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType='Thumb'>" +
+            $"<Border Background='{thumb}' CornerRadius='4' Margin='1,0'/>" +
+            "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb></Track></Grid>" +
+            "</ControlTemplate></Setter.Value></Setter></Style>";
+        return (Style)System.Windows.Markup.XamlReader.Parse(xaml);
+    }
+
+    private static string _thumbColor() => ((SolidColorBrush)Muted).Color is var c ? $"#80{c.R:X2}{c.G:X2}{c.B:X2}" : "#80888888";
 
     private int _drawRevision;
 
@@ -908,15 +1001,17 @@ public sealed partial class VisorWindow : Window
     /// <summary>Línea del suelo con marcas cada 20 casillas que se desplazan con el avance del gato.</summary>
     private sealed class GroundView : FrameworkElement
     {
-        private double _camX, _baseRows;
+        private double _camX, _baseRows, _fraction;
         private int _zoom = 4;
+
+        protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo) { base.OnRenderSizeChanged(sizeInfo); InvalidateVisual(); }
         private bool _ready;
 
-        public void Set(double camX, int zoom, double baseRows)
+        public void Set(double camX, int zoom, double baseRows, double fraction)
         {
-            if (_ready && camX == _camX && zoom == _zoom) return;
+            if (_ready && camX == _camX && zoom == _zoom && fraction == _fraction) return;
             _ready = true;
-            _camX = camX; _zoom = zoom; _baseRows = baseRows;
+            _camX = camX; _zoom = zoom; _baseRows = baseRows; _fraction = fraction;
             InvalidateVisual();
         }
 
@@ -924,7 +1019,7 @@ public sealed partial class VisorWindow : Window
         {
             var LinePen = new Pen(GridLine, 1);
             var LabelBrush = Muted;
-            double w = ActualWidth, gy = Math.Round(_baseRows * _zoom) + 0.5;
+            double w = ActualWidth, gy = Math.Round(ActualHeight * _fraction) + 0.5;
             dc.DrawLine(LinePen, new Point(0, gy), new Point(w, gy));
             double centre = w / 2;
             int first = (int)Math.Floor((_camX - centre / _zoom) / 20) - 1, last = (int)Math.Ceiling((_camX + centre / _zoom) / 20) + 1;
