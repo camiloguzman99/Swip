@@ -19,7 +19,7 @@ public sealed class CatAgent : INotifyPropertyChanged
     public int SessionId
     {
         get => _sessionId;
-        set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
+        set { _sessionId = value; Raise(nameof(SessionId)); Raise(nameof(HasSession)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); Raise(nameof(ShowStartButton)); Raise(nameof(ShowConfirmButtons)); }
     }
 
     public bool HasSession => _sessionId >= 0;
@@ -28,11 +28,32 @@ public sealed class CatAgent : INotifyPropertyChanged
     public bool IsCurrent
     {
         get => _isCurrent;
-        set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); }
+        set { _isCurrent = value; Raise(nameof(IsCurrent)); Raise(nameof(CanSwitch)); Raise(nameof(ShowNoSession)); Raise(nameof(ShowStartButton)); Raise(nameof(ShowConfirmButtons)); }
     }
 
     public bool CanSwitch => HasSession && !IsCurrent;
     public bool ShowNoSession => !HasSession && !IsCurrent;
+
+    /// <summary>
+    /// True mientras el menú pide confirmar «Iniciar sesión»: el aviso ocupa el sitio de las aplicaciones y los
+    /// botones Sí / No el del botón.
+    /// </summary>
+    private bool _confirmingLogon;
+    public bool ConfirmingLogon
+    {
+        get => _confirmingLogon;
+        set
+        {
+            if (_confirmingLogon == value) return;
+            _confirmingLogon = value;
+            Raise(nameof(ConfirmingLogon)); Raise(nameof(ShowApps)); Raise(nameof(ShowStartButton)); Raise(nameof(ShowConfirmButtons));
+        }
+    }
+
+    /// <summary>La lista de aplicaciones se ve salvo cuando se está confirmando el inicio de sesión.</summary>
+    public bool ShowApps => !_confirmingLogon;
+    public bool ShowStartButton => ShowNoSession && !_confirmingLogon;
+    public bool ShowConfirmButtons => ShowNoSession && _confirmingLogon;
 
     private bool _appsLoading;
     public bool AppsLoading

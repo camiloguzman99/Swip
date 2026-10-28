@@ -1,6 +1,10 @@
 namespace Swip.Shared.Engine;
 
-/// <summary>Medidas del mundo (en píxeles independientes del dispositivo).</summary>
+/// <summary>
+/// Medidas del mundo (en píxeles independientes del dispositivo). <c>CellSize</c> son los px lógicos que mide
+/// cada casilla del dibujo: el avance por fotograma de los clips y las filas de aplastamiento de la caja están
+/// en casillas y se pasan a px con él.
+/// </summary>
 public sealed record WorldConfig(
     double CatWidth,
     double CatHeight,
@@ -8,7 +12,8 @@ public sealed record WorldConfig(
     double BoxHeight,
     double BoxTopInsetClosed,
     double BoxTopInsetOpen,
-    double Gravity = 2200);
+    double Gravity = 2200,
+    double CellSize = 1);
 
 /// <summary>
 /// El motor de movimientos de Swip. Todo lo que se mueve vive aquí: física de gatos y caja,
@@ -24,7 +29,7 @@ public sealed class SwipWorld
     public const double JumpTime = 0.55;
     public const double HopHeight = 14;
 
-    private readonly WorldConfig _config;
+    private WorldConfig _config;
     private readonly ClipLibrary _clips;
     private readonly Random _rng;
     private readonly Dictionary<string, Cat> _cats = new(StringComparer.OrdinalIgnoreCase);
@@ -36,7 +41,7 @@ public sealed class SwipWorld
         _clips = clips ?? ClipLibrary.Default;
         _rng = seed is null ? new Random() : new Random(seed.Value);
         _particles = new ParticleSystem(_rng);
-        Box = new BoxBody(config.BoxWidth, config.BoxHeight, config.BoxTopInsetClosed, config.BoxTopInsetOpen);
+        Box = new BoxBody(config.BoxWidth, config.BoxHeight, config.BoxTopInsetClosed, config.BoxTopInsetOpen, config.CellSize);
     }
 
     public double Width { get; private set; }
@@ -79,6 +84,33 @@ public sealed class SwipWorld
             cat.X = Math.Clamp(cat.X, 0, MaxCatX);
             if (cat.Place == CatPlace.Ground) cat.Y = CatFloorY;
         }
+    }
+
+    /// <summary>
+    /// Cambia el tamaño de las piezas (px lógicos por casilla) con el mundo en marcha: escala los gatos y la caja,
+    /// los vuelve a apoyar en el suelo y ajusta el avance de los clips y el aplastamiento. Los gatos que van en la
+    /// caja se recolocan solos en el siguiente paso.
+    /// </summary>
+    public void SetCellSize(double cellSize)
+    {
+        if (cellSize <= 0 || Math.Abs(cellSize - _config.CellSize) < 1e-9) return;
+        double f = cellSize / _config.CellSize;
+        bool boxOnFloor = Box.Y >= BoxFloorY - 0.5;
+        _config = _config with
+        {
+            CatWidth = _config.CatWidth * f, CatHeight = _config.CatHeight * f,
+            BoxWidth = _config.BoxWidth * f, BoxHeight = _config.BoxHeight * f, CellSize = cellSize,
+        };
+        Box.Width *= f;
+        Box.Height *= f;
+        Box._cellSize = cellSize;
+        foreach (var cat in _cats.Values)
+        {
+            cat.Width *= f;
+            cat.Height *= f;
+        }
+        Resize(Width, Height);
+        if (boxOnFloor) Box.Y = BoxFloorY;
     }
 
     public Cat AddCat(string id, double x, CatMode mode, bool facingRight = true)
@@ -580,13 +612,13 @@ public sealed class SwipWorld
     /// mostrarse del clip actual. Entre dos cambios de fotograma devuelve 0, así que el gato no se
     /// desliza: el desplazamiento va siempre unido al dibujo de las patas.
     /// </summary>
-    private int FrameStep(Cat cat)
+    private double FrameStep(Cat cat)
     {
         string clipId = CurrentClip(cat);
         if (!_clips.Contains(clipId)) return 0;
         var clip = _clips[clipId];
         int tick = clip.TickAt(cat.ClipOverride is null ? cat.BehaviorTime : cat.PhaseTime);
-        cat.Speed = clip.Speed;
+        cat.Speed = clip.Speed * _config.CellSize;
         // Clip nuevo, clip reiniciado o un salto grande de tiempo (pausa): se toma como punto de
         // partida sin avanzar, para no dar un tirón.
         if (cat.StepClip != clipId || tick < cat.StepTick || tick - cat.StepTick > 2)
@@ -595,11 +627,11 @@ public sealed class SwipWorld
             cat.StepTick = tick;
             return 0;
         }
-        int step = 0;
+        int cells = 0;
         for (int t = cat.StepTick + 1; t <= tick; t++)
-            step += clip.AdvanceOf(clip.FrameOfTick(t));
+            cells += clip.AdvanceOf(clip.FrameOfTick(t));
         cat.StepTick = tick;
-        return step;
+        return cells * _config.CellSize;
     }
 
     private void Locomote(Cat cat)
@@ -677,7 +709,7 @@ public sealed class SwipWorld
         cat.ClipOverride = null;
         cat.FacingRight = fromLeft;
         double maxBoxX = Math.Max(0, Width - Box.Width);
-        int step = FrameStep(cat);
+        double step = FrameStep(cat);
         if (step > 0)
         {
             Box.Vx = 0;

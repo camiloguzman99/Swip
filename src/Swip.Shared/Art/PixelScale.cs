@@ -13,6 +13,33 @@ namespace Swip.Shared.Art;
 /// </list>
 /// El ancho y el alto se escalan siempre por el mismo factor: el dibujo nunca se ensancha ni se aplasta.
 /// </summary>
+public static class ArtScale
+{
+    /// <summary>
+    /// Tamaño en px lógicos de cada casilla del dibujo. La cuadrícula del gato (100x100 casillas) se
+    /// conserva entera, pero se dibuja a la mitad de tamaño en pantalla: 0,5 px lógicos por casilla. A 100 %
+    /// de escala caben dos casillas por píxel real (la reducción es suave); a 200 % cada casilla es un píxel
+    /// real exacto. El motor trabaja en px lógicos: sus medidas son casillas × CellSize.
+    /// </summary>
+    public const double Default = 0.5, Min = 0.25, Max = 1.5;
+
+    private static double _cellSize = Default;
+
+    /// <summary>
+    /// Tamaño actual de la casilla. Lo guardan los ajustes compartidos (AppSettings.CellSize) y se cambia desde
+    /// el Visor; siempre queda entre <see cref="Min"/> y <see cref="Max"/>.
+    /// </summary>
+    public static double CellSize
+    {
+        get => _cellSize;
+        set => _cellSize = Clamp(value);
+    }
+
+    /// <summary>Valor válido más cercano (los NaN y los infinitos vuelven al tamaño por defecto).</summary>
+    public static double Clamp(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, Min, Max) : Default;
+}
+
 public static class PixelScale
 {
     private const double Tolerance = 0.01;

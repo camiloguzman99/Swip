@@ -18,6 +18,18 @@ public sealed class AppSettings
     /// </summary>
     public bool MenuBlur { get; set; } = true;
 
+    /// <summary>
+    /// Tamaño de las piezas: px lógicos por casilla del dibujo (0,5 = el gato de 100 casillas mide 50 px). Se cambia
+    /// desde el Visor y lo ven todas las sesiones.
+    /// </summary>
+    public double CellSize { get; set; } = 0.5;
+
+    /// <summary>
+    /// Sube cada vez que el Visor guarda un retoque del dibujo o de los tiempos (carpeta compartida art\): así las
+    /// otras sesiones saben que tienen que volver a leerlo.
+    /// </summary>
+    public int ArtRevision { get; set; }
+
     /// <summary>Posición de la caja dentro de la franja (null = esquina inferior izquierda).</summary>
     public double? BoxLeft { get; set; }
     public double? BoxTop { get; set; }

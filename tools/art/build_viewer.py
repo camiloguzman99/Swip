@@ -28,7 +28,7 @@ APP_DATA = os.path.join(ATLAS, "visor.json")        # lo lee el Visor de la app 
 LISTOS = {
     "walk", "trot", "run", "jump", "jump_high", "to_sit", "sit_to_stand", "to_sleep", "wake_up", "groom_paw",
     "walk_start_stop", "walk_to_run", "stand_to_run", "turn_sit8", "turn_stand8", "turn_loaf8", "sleep_curl",
-    "sit_look",
+    "sit_look", "stand_idle", "loaf_idle",
 }
 # Clips que usan una pose parecida: qué hay que dibujar para que sean buenos.
 PRESTADOS = {
@@ -94,6 +94,38 @@ FALTAN = [
     ("Especiales", "Cargado de la nuca", 4, "Colgado de la nuca, patas encogidas, cola caída."),
     ("Especiales", "Recibir caricias", 6, "Sentado con los ojos cerrados y la cabeza hacia la mano."),
 ]
+# Acciones básicas del Visor: (id, nombre, clip que la representa, en bucle).
+ACTIONS = [
+    ("sit", "Sentado", "sit_look"),
+    ("stand", "De pie", "stand_idle"),
+    ("loaf", "Acostado", "loaf_idle"),
+    ("sleep", "Dormido (bolita)", "sleep_curl"),
+    ("walk", "Caminar", "walk"),
+    ("trot", "Trotar", "trot"),
+    ("run", "Correr", "run"),
+    ("groom", "Asearse", "groom_paw"),
+    ("jump", "Saltar", "jump"),
+]
+# Transiciones que ya tienen arte: (clip, de, a, al revés).
+TRANSITIONS = [
+    ("sit_to_stand", "sit", "stand", False),
+    ("to_sit", "stand", "sit", False),
+    ("to_sleep", "sit", "loaf", False),
+    ("wake_up", "loaf", "sit", False),
+    ("walk_start_stop", "stand", "walk", False),
+    ("walk_start_stop", "walk", "stand", False),
+    ("walk_to_run", "walk", "run", False),
+    ("walk_to_run", "run", "walk", True),
+    ("stand_to_run", "stand", "run", False),
+    ("stand_to_run", "run", "stand", True),
+]
+# Pares que se enlazan con un corte directo (la acción de destino ya arranca desde la pose de origen).
+DIRECT = [("sit", "groom"), ("groom", "sit"), ("stand", "jump"), ("jump", "stand"), ("walk", "jump"), ("jump", "walk"),
+          ("run", "jump"), ("jump", "run")]
+# Pares sin transición dibujada todavía.
+FALTAN_TRANSICIONES = [("loaf", "sleep"), ("sleep", "loaf"), ("stand", "trot"), ("trot", "stand"), ("walk", "trot"),
+                       ("trot", "walk"), ("trot", "run"), ("run", "trot")]
+
 PRESETS = [
     ("Paseo: arrancar, caminar, trotar y correr", ["walk_start_stop", "walk", "walk", "trot", "walk_to_run", "run", "run", "walk"]),
     ("Arrancar a correr desde parado", ["stand_to_run", "run", "run", "walk_to_run"]),
@@ -161,6 +193,10 @@ def main():
         "clips": {c["id"]: {"quality": c["quality"], "note": c["note"], "origin": c["origin"],
                             "wired": c["wired"], "desc": c["desc"]} for c in clips},
         "needed": needed, "presets": presets,
+        "actions": [{"id": i, "name": n, "clip": c} for i, n, c in ACTIONS if c in ids],
+        "transitions": [{"clip": c, "from": a, "to": b, "reverse": r} for c, a, b, r in TRANSITIONS if c in ids],
+        "direct": [list(p) for p in DIRECT],
+        "missingTransitions": [list(p) for p in FALTAN_TRANSICIONES],
     }
     with open(APP_DATA, "w", encoding="utf-8") as f:
         json.dump(app, f, ensure_ascii=False, indent=1)

@@ -12,10 +12,16 @@ public sealed class SettingsDelta
     public bool ShowLabels { get; private init; }
     public bool Box { get; private init; }
 
+    /// <summary>Cambió el tamaño de las piezas.</summary>
+    public bool Size { get; private init; }
+
+    /// <summary>Hay retoques nuevos del dibujo o de los tiempos que leer.</summary>
+    public bool Art { get; private init; }
+
     /// <summary>Claves (nombre de usuario) de los gatos nuevos o modificados.</summary>
     public IReadOnlyList<string> Cats { get; private init; } = Array.Empty<string>();
 
-    public bool Any => ShowLabels || Box || Cats.Count > 0;
+    public bool Any => ShowLabels || Box || Size || Art || Cats.Count > 0;
 
     public static SettingsDelta Between(AppSettings before, AppSettings after)
     {
@@ -30,6 +36,8 @@ public sealed class SettingsDelta
         {
             ShowLabels = before.ShowLabels != after.ShowLabels,
             Box = Differs(before.BoxLeft, after.BoxLeft) || Differs(before.BoxTop, after.BoxTop),
+            Size = Math.Abs(before.CellSize - after.CellSize) > 1e-6,
+            Art = before.ArtRevision != after.ArtRevision,
             Cats = changed,
         };
     }

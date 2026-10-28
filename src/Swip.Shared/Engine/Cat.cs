@@ -24,8 +24,8 @@ public sealed class Cat
     }
 
     public string Id { get; }
-    public double Width { get; }
-    public double Height { get; }
+    public double Width { get; internal set; }
+    public double Height { get; internal set; }
 
     public CatMode Mode { get; internal set; }
     public CatPlace Place { get; internal set; } = CatPlace.Ground;

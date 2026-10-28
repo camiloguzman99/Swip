@@ -8,7 +8,7 @@
     Se auto-eleva (UAC).
 
     Con -Silent no muestra pausas ni espera ninguna tecla: es lo que usa el botón "Actualizar" del
-    gato, que lo lanza sin ventana. Todo queda en %ProgramData%\Swip\update.log y, si algo falla,
+    gato, que lo lanza sin ventana. Todo queda en <instalación>\logs\update.log (C:\Program Files\Swip\logs) y, si algo falla,
     se muestra un aviso.
 .PARAMETER Silent
     Modo segundo plano: sin pausas "Pulsa Enter", con registro en update.log y aviso solo si falla.
@@ -41,8 +41,21 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     return
 }
 
+# --- Carpetas del actualizador: solo administradores y SYSTEM ---------------------------
+# Este script corre elevado. Lo que descarga y extrae no puede estar en una carpeta que un proceso sin privilegios
+# pueda modificar (el %TEMP% del usuario, %ProgramData%\Swip...): entre comprobar el SHA-256 y copiar los archivos a
+# Program Files podría cambiarlos y ejecutar código con privilegios. Por eso el trabajo se hace en una carpeta de
+# nombre aleatorio con permisos solo para administradores, y el registro va a la carpeta logs de la instalación.
+function New-SecureDirectory($path) {
+    New-Item -ItemType Directory -Force -Path $path | Out-Null
+    & icacls.exe $path /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo proteger la carpeta de trabajo: $path" }
+}
+$workDir = Join-Path $env:SystemRoot ("Temp\swip-update-" + [Guid]::NewGuid().ToString("N"))
+New-SecureDirectory $workDir
+
 # --- Registro (modo silencioso): no hay consola que mirar ---------------------------
-$logFile = Join-Path $env:ProgramData "Swip\update.log"
+$logFile = Join-Path $InstallRoot "logs\update.log"
 $transcribing = $false
 if ($Silent) {
     try {
@@ -110,9 +123,9 @@ try {
 
     $zipUrl  = "https://github.com/$Owner/$Repo/releases/download/latest/Swip-win-x64.zip"
     $shaUrl  = "$zipUrl.sha256"
-    $tmp     = Join-Path $env:TEMP ("swip-update-" + [Guid]::NewGuid().ToString("N"))
-    $zipPath = Join-Path $env:TEMP "Swip-win-x64.zip"
-    $shaPath = Join-Path $env:TEMP "Swip-win-x64.zip.sha256"
+    $tmp     = Join-Path $workDir "extract"
+    $zipPath = Join-Path $workDir "Swip-win-x64.zip"
+    $shaPath = Join-Path $workDir "Swip-win-x64.zip.sha256"
 
     # --- 1) Descargar y VERIFICAR (el gato y el servicio siguen en marcha) ---------
     Write-Host "==> Descargando la última versión..." -ForegroundColor Cyan
@@ -185,8 +198,7 @@ try {
         if (Test-Path $oldUser) { Remove-Item $oldUser -Force -ErrorAction SilentlyContinue }
     } catch { Write-Host "   (no se pudo crear el acceso directo: $($_.Exception.Message))" -ForegroundColor DarkYellow }
 
-    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item $zipPath, $shaPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $workDir -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Host ""
     Write-Host "Swip actualizado correctamente." -ForegroundColor Green
@@ -198,6 +210,8 @@ catch {
     Write-Host $failure -ForegroundColor Red
 }
 finally {
+    # La carpeta de trabajo no debe quedar en el disco (el zip descargado y lo extraído).
+    if ($workDir -and (Test-Path $workDir)) { Remove-Item $workDir -Recurse -Force -ErrorAction SilentlyContinue }
     # Pase lo que pase, dejar el servicio y el gato en marcha. Se hace ANTES de avisar de un error:
     # un aviso que espera un clic no debe retrasar la vuelta del gato.
     Write-Host "==> Rearrancando el servicio..." -ForegroundColor Cyan

@@ -321,6 +321,20 @@
    "origin": "Gemini · hoja de giros · cuadros g3c1, g3c2, g3c3, g3c4, g3c5, g3c6, g3c7, g3c8",
    "wired": "",
    "desc": "Acostado girando por las 8 direcciones."
+  },
+  "stand_idle": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de giros · cuadros g2c3",
+   "wired": "",
+   "desc": "De pie quieto, visto de lado (acción básica: punto de partida de las transiciones)."
+  },
+  "loaf_idle": {
+   "quality": "ok",
+   "note": "",
+   "origin": "Gemini · hoja de poses · cuadros r5c1, r5c2",
+   "wired": "",
+   "desc": "Acostado en pan, visto de lado, respirando (acción básica)."
   }
  },
  "needed": [
@@ -558,5 +572,182 @@
     "sit_to_stand"
    ]
   }
+ ],
+ "actions": [
+  {
+   "id": "sit",
+   "name": "Sentado",
+   "clip": "sit_look"
+  },
+  {
+   "id": "stand",
+   "name": "De pie",
+   "clip": "stand_idle"
+  },
+  {
+   "id": "loaf",
+   "name": "Acostado",
+   "clip": "loaf_idle"
+  },
+  {
+   "id": "sleep",
+   "name": "Dormido (bolita)",
+   "clip": "sleep_curl"
+  },
+  {
+   "id": "walk",
+   "name": "Caminar",
+   "clip": "walk"
+  },
+  {
+   "id": "trot",
+   "name": "Trotar",
+   "clip": "trot"
+  },
+  {
+   "id": "run",
+   "name": "Correr",
+   "clip": "run"
+  },
+  {
+   "id": "groom",
+   "name": "Asearse",
+   "clip": "groom_paw"
+  },
+  {
+   "id": "jump",
+   "name": "Saltar",
+   "clip": "jump"
+  }
+ ],
+ "transitions": [
+  {
+   "clip": "sit_to_stand",
+   "from": "sit",
+   "to": "stand",
+   "reverse": false
+  },
+  {
+   "clip": "to_sit",
+   "from": "stand",
+   "to": "sit",
+   "reverse": false
+  },
+  {
+   "clip": "to_sleep",
+   "from": "sit",
+   "to": "loaf",
+   "reverse": false
+  },
+  {
+   "clip": "wake_up",
+   "from": "loaf",
+   "to": "sit",
+   "reverse": false
+  },
+  {
+   "clip": "walk_start_stop",
+   "from": "stand",
+   "to": "walk",
+   "reverse": false
+  },
+  {
+   "clip": "walk_start_stop",
+   "from": "walk",
+   "to": "stand",
+   "reverse": false
+  },
+  {
+   "clip": "walk_to_run",
+   "from": "walk",
+   "to": "run",
+   "reverse": false
+  },
+  {
+   "clip": "walk_to_run",
+   "from": "run",
+   "to": "walk",
+   "reverse": true
+  },
+  {
+   "clip": "stand_to_run",
+   "from": "stand",
+   "to": "run",
+   "reverse": false
+  },
+  {
+   "clip": "stand_to_run",
+   "from": "run",
+   "to": "stand",
+   "reverse": true
+  }
+ ],
+ "direct": [
+  [
+   "sit",
+   "groom"
+  ],
+  [
+   "groom",
+   "sit"
+  ],
+  [
+   "stand",
+   "jump"
+  ],
+  [
+   "jump",
+   "stand"
+  ],
+  [
+   "walk",
+   "jump"
+  ],
+  [
+   "jump",
+   "walk"
+  ],
+  [
+   "run",
+   "jump"
+  ],
+  [
+   "jump",
+   "run"
+  ]
+ ],
+ "missingTransitions": [
+  [
+   "loaf",
+   "sleep"
+  ],
+  [
+   "sleep",
+   "loaf"
+  ],
+  [
+   "stand",
+   "trot"
+  ],
+  [
+   "trot",
+   "stand"
+  ],
+  [
+   "walk",
+   "trot"
+  ],
+  [
+   "trot",
+   "walk"
+  ],
+  [
+   "trot",
+   "run"
+  ],
+  [
+   "run",
+   "trot"
+  ]
  ]
 }

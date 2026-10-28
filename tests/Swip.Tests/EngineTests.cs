@@ -52,7 +52,7 @@ public class EngineTests
         // Y los de arte ya dibujado que aún esperan su comportamiento (transiciones, giros, salto alto).
         var phaseClips = new[] { "trot", "walk", "sit_look", "box_peek", "sniff", "carry",
             "sit_to_stand", "walk_start_stop", "walk_to_run", "stand_to_run", "jump_high",
-            "turn_sit8", "turn_stand8", "turn_loaf8" };
+            "turn_sit8", "turn_stand8", "turn_loaf8", "stand_idle", "loaf_idle" };
         var used = Behaviors.All.Select(b => b.Clip).Concat(phaseClips).ToHashSet();
         foreach (var c in ClipLibrary.Default.All)
             Assert.True(used.Contains(c.Id), $"El clip '{c.Id}' no lo usa ningún comportamiento");
@@ -494,6 +494,30 @@ public class EngineTests
         });
         Assert.True(time > 5, "no caminó lo suficiente para medir");
         Assert.InRange(walked / time, walk.Speed * 0.8, walk.Speed * 1.2);
+    }
+
+    [Fact]
+    public void Con_casillas_de_media_unidad_el_gato_avanza_la_mitad_por_segundo()
+    {
+        var walk = ClipLibrary.Default["walk"];
+        var half = new WorldConfig(CatWidth: 17, CatHeight: 24, BoxWidth: 25, BoxHeight: 18,
+            BoxTopInsetClosed: 46.0 / 282, BoxTopInsetOpen: 5.0 / 282, CellSize: 0.5);
+        var w = new SwipWorld(half, seed: 4);
+        w.Resize(W, H);
+        w.PlaceBox(1600);
+        var cat = w.AddCat("a", 300, CatMode.Walk);
+        double walked = 0, time = 0, lastX = cat.X;
+        Run(w, 200, () =>
+        {
+            if (cat.Current.Motion == Motion.Walk && cat.Place == CatPlace.Ground && cat.X > 1 && cat.X < W - 60)
+            {
+                walked += Math.Abs(cat.X - lastX);
+                time += Dt;
+            }
+            lastX = cat.X;
+        });
+        Assert.True(time > 5, "no caminó lo suficiente para medir");
+        Assert.InRange(walked / time, walk.Speed * 0.5 * 0.8, walk.Speed * 0.5 * 1.2);
     }
 
     // ---------------------------------------------------------------- arte

@@ -13,38 +13,64 @@ using Swip.App.Native;
 using Swip.Shared;
 using Swip.Shared.Art;
 using Swip.Shared.Engine;
+using static Swip.App.Controls.VisorUi;
 
 namespace Swip.App.Controls;
 
+/// <summary>Lo que el Visor necesita de la ventana de los gatos: el tamaño de las piezas y avisar de los retoques.</summary>
+public interface IVisorHost
+{
+    /// <summary>Px lógicos por casilla del dibujo (<see cref="ArtScale.CellSize"/>).</summary>
+    double CellSize { get; }
+
+    /// <summary>Cambia el tamaño de las piezas: se guarda en los ajustes compartidos y se aplica en todas las sesiones.</summary>
+    void SetCellSize(double value);
+
+    /// <summary>Se retocó un cuadro o un tiempo (ya guardado en la carpeta compartida): hay que releerlo y avisar a las demás sesiones.</summary>
+    void ArtChanged();
+}
+
 /// <summary>
-/// El Visor (opción del menú de la caja): una ventana emergente con el estilo de las tarjetas de los
-/// menús (desenfoque, tinte negro, esquinas redondeadas, filas y botones del mismo estilo) donde se ve
-/// cada movimiento del gato como lo anima el motor, con la lista de los que están listos, los que usan
-/// una pose prestada y los que aún no tienen arte.
-///
-/// - El gato avanza solo cuando cambia el cuadro (igual que <c>SwipWorld</c>), sobre un suelo marcado
-///   cada 20 casillas: si los pies resbalan sobre las marcas, el avance de ese clip está mal.
-/// - Los fps y el avance por cuadro se pueden editar en vivo y copiar para pasarlos a art/clips.json.
-/// - Una secuencia encadena movimientos para probar las transiciones.
-/// Los datos de estado salen de Assets/atlas/visor.json (tools/art/build_viewer.py); los cuadros, fps y
-/// avance, del atlas y de los clips del motor.
+/// El Visor (opción del menú de la caja): una ventana emergente con el estilo de las tarjetas de los menús.
+/// Tiene una pestaña por gato. A la izquierda, las acciones básicas y debajo las transiciones entre ellas; a la
+/// derecha (75 % del ancho), el visor:
+///   - al elegir una acción se ve esa acción; al elegir otra acción básica se ve la transición desde la anterior
+///     y se termina en la elegida (varias transiciones encadenadas si hace falta);
+///   - se puede cambiar el tiempo de cada transición (y el avance por cuadro de cada clip);
+///   - se puede colorear y corregir el dibujo cuadro a cuadro (editor de píxeles, ver VisorWindow.Editor.cs);
+///   - se puede cambiar el tamaño de las piezas.
+/// El gato avanza solo cuando cambia el cuadro (igual que <c>SwipWorld</c>), sobre un suelo marcado cada 20 casillas:
+/// si los pies resbalan sobre las marcas, el avance de ese clip está mal.
+/// Los datos de estado salen de Assets/atlas/visor.json (tools/art/build_viewer.py); los cuadros, fps y avance, del
+/// atlas y de los clips del motor.
 /// </summary>
-public sealed class VisorWindow : Window
+public sealed partial class VisorWindow : Window
 {
     private static VisorWindow? _open;
 
     /// <summary>True mientras el Visor está abierto (la ventana de los gatos no se reafirma "encima" para no taparlo).</summary>
     public static bool IsOpen => _open is not null;
 
+    /// <summary>
+    /// Pausa o reanuda la animación del Visor abierto: con la sesión fuera de pantalla (otro usuario, pantalla bloqueada)
+    /// nadie lo ve, así que no hace falta dibujar. No cierra nada: no se pierden los retoques sin guardar.
+    /// </summary>
+    public static void SetActive(bool active)
+    {
+        if (_open is null) return;
+        if (active) _open._timer.Start();
+        else _open._timer.Stop();
+    }
+
     /// <summary>Abre el Visor, o lo trae al frente si ya está abierto.</summary>
-    public static void ShowOrActivate(bool blur)
+    public static void ShowOrActivate(bool blur, IVisorHost host)
     {
         if (_open is not null)
         {
             _open.Activate();
             return;
         }
-        _open = new VisorWindow(blur);
+        _open = new VisorWindow(blur, host);
         _open.Show();
         _open.Activate();
     }
@@ -52,12 +78,15 @@ public sealed class VisorWindow : Window
     // ---------------------------------------------------------------- datos
     internal sealed record VisorClip(string Quality, string Note, string Origin, string Wired, string Desc);
     internal sealed record VisorNeeded(string Group, string Name, int Frames, string Detail);
-    internal sealed record VisorPreset(string Name, string[] Clips);
+    internal sealed record VisorAction(string Id, string Name, string Clip);
     internal sealed class VisorData
     {
         public Dictionary<string, VisorClip> Clips { get; set; } = new();
         public List<VisorNeeded> Needed { get; set; } = new();
-        public List<VisorPreset> Presets { get; set; } = new();
+        public List<VisorAction> Actions { get; set; } = new();
+        public List<TransitionEdge> Transitions { get; set; } = new();
+        public List<string[]> Direct { get; set; } = new();
+        public List<string[]> MissingTransitions { get; set; } = new();
     }
 
     private static readonly Dictionary<string, string> QualityText = new()
@@ -65,65 +94,62 @@ public sealed class VisorWindow : Window
         ["ok"] = "Listo", ["prestada"] = "Pose prestada", ["falta"] = "Falta",
     };
 
-    private static readonly Brush Muted = Frozen(0xFF9AA1AE), Text = Frozen(0xFFE8EAED), White = Frozen(0xFFFFFFFF);
-    private static readonly Brush Card = Frozen(0x22FFFFFF), CardSel = Frozen(0x40FFFFFF), Transparent = Brushes.Transparent;
-    private static readonly Dictionary<string, Brush> Dots = new()
-    {
-        ["ok"] = Frozen(0xFF5FD08A), ["prestada"] = Frozen(0xFFFFCC4D), ["falta"] = Frozen(0xFFFF7B72),
-    };
-
-    private static Brush Frozen(uint argb)
-    {
-        var b = new SolidColorBrush(Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
-        b.Freeze();
-        return b;
-    }
-
     private readonly CatAtlas _atlas = CatAtlas.Default;
     private readonly ClipLibrary _clips = ClipLibrary.Default;
+    private readonly ArtStore _store = new();
+    private readonly IVisorHost _host;
     private readonly VisorData _data;
     private readonly bool _blur;
     private readonly bool _layered;
+    private Dictionary<string, ClipTimingEntry> _timing = new();
 
     // ---------------------------------------------------------------- interfaz
     private Border _root = null!;
     private StackPanel _list = null!;
     private TextBox _search = null!;
-    private WrapPanel _filters = null!;
     private TextBlock _summary = null!;
-    private StackPanel _clipView = null!, _missingView = null!, _strip = null!;
-    private TextBlock _title = null!, _badge = null!, _desc = null!, _readout = null!, _info = null!;
-    private TextBox _fpsBox = null!, _advBox = null!, _promptBox = null!, _loopsBox = null!, _allMissing = null!;
-    private TextBlock _missingTitle = null!, _missingDesc = null!;
+    private StackPanel _clipView = null!, _missingView = null!, _strip = null!, _timingRows = null!, _tabs = null!;
+    private TextBlock _title = null!, _badge = null!, _desc = null!, _readout = null!, _info = null!, _chain = null!;
+    private TextBlock _missingTitle = null!, _missingDesc = null!, _sizeInfo = null!, _status = null!;
+    private TextBox _promptBox = null!, _allMissing = null!, _sizeBox = null!;
     private Image _frameImage = null!, _overlayImage = null!;
     private GroundView _ground = null!;
     private Grid _stage = null!;
     private Button _playButton = null!;
-    private WrapPanel _chips = null!;
-    private readonly Dictionary<string, Button> _toggles = new();
+    private StackPanel _sizeSegments = null!;
+    private readonly Dictionary<string, Button> _filters = new();
     private readonly List<Border> _thumbs = new();
+    private readonly Dictionary<string, bool> _flags = new();
 
     // ---------------------------------------------------------------- estado
-    private string _filter = "todos", _query = "", _skin = "orange";
-    private int _zoom = 3;
+    private string _skin = CatSkins.Orange;
+    private string _query = "";
+    private int _zoom = 4;
     private double _speed = 1;
-    private ClipDef? _cur;
+    private string? _action;                        // acción básica en la que está el gato (destino de la reproducción)
     private VisorNeeded? _curMissing;
-    private bool _playing = true, _seqOn;
-    private double _t;
-    private int _tick = -1, _frame, _seqIdx, _doneAt;
+    private string? _curMissingTransition;
+    private string? _selectedKey;                   // fila seleccionada de la lista
+    private bool _playing = true;
+    private double _t, _holdUntil, _last;
+    private int _tick = -1, _frame, _stepIdx;
     private double _camX;
-    private readonly List<string> _seq = new();
+    private string _shownKey = "";
+    private string _stripClip = "";
+
+    private sealed record PlanStep(string Clip, bool Reverse, bool Loop, string Label);
+    private List<PlanStep> _plan = new();
+
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly Stopwatch _clock = new();
-    private double _holdUntil;
-    private string _shownKey = "";
 
-    private VisorWindow(bool blur)
+    private VisorWindow(bool blur, IVisorHost host)
     {
         _blur = blur;
+        _host = host;
         _data = LoadData();
         _layered = MenuCorners.Choose(Environment.OSVersion.Version.Build, blur) == MenuCornerMode.Layered;
+        _timing = _store.LoadTiming(_clips);
 
         Title = "Swip · Visor";
         WindowStyle = WindowStyle.None;
@@ -136,21 +162,22 @@ public sealed class VisorWindow : Window
         SnapsToDevicePixels = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var work = SystemParameters.WorkArea;
-        Width = Math.Min(1080, work.Width - 40);
-        Height = Math.Min(740, work.Height - 40);
+        Width = Math.Min(1560, work.Width - 40);
+        Height = Math.Min(920, work.Height - 40);
 
         Content = BuildUi();
         Loaded += OnLoaded;
+        Closing += OnClosing;
         Closed += (_, _) => { _timer.Stop(); _open = null; };
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+        KeyDown += OnKeyDown;
         _timer.Tick += (_, _) => Step();
 
-        foreach (var id in _data.Presets.FirstOrDefault()?.Clips ?? Array.Empty<string>()) _seq.Add(id);
         RefreshSummary();
         RefreshList();
-        RefreshChips();
         _allMissing.Text = MissingText();
-        Select(_clips.Contains("walk") ? _clips["walk"] : _clips.All.First());
+        UpdateSizeInfo();
+        var first = _data.Actions.FirstOrDefault(a => a.Id == "walk") ?? _data.Actions.FirstOrDefault();
+        if (first is not null) ShowAction(first.Id);
         _clock.Start();
         _timer.Start();
     }
@@ -187,6 +214,26 @@ public sealed class VisorWindow : Window
         }
     }
 
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is TextBox) return;   // en un cuadro de texto, Esc y Ctrl+Z son del propio cuadro
+        if (e.Key == Key.Escape) Close();
+        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _editOpen) Undo();
+    }
+
+    private bool _closeWarned;
+
+    /// <summary>Con cambios del editor sin guardar, el primer intento de cerrar avisa; el segundo los descarta.</summary>
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_editOpen && _editDirty && !_closeWarned)
+        {
+            _closeWarned = true;
+            e.Cancel = true;
+            SetStatus("Hay cambios del cuadro sin guardar. Pulsa Cerrar otra vez para descartarlos, o guárdalos antes.");
+        }
+    }
+
     // ---------------------------------------------------------------- construcción de la interfaz
     private UIElement BuildUi()
     {
@@ -201,33 +248,48 @@ public sealed class VisorWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.Child = grid;
 
-        // Encabezado arrastrable, como el de cada gato.
+        // Encabezado arrastrable, como el de cada gato; con las dos pestañas (una por gato).
         var header = new Border { Style = (Style)Application.Current.FindResource("ListCard"), Cursor = Cursors.SizeAll };
         header.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); };
         var hg = new Grid();
+        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        titleRow.Children.Add(new TextBlock
+        var title = new TextBlock
         {
             Text = "Visor", Foreground = White, FontWeight = FontWeights.Bold, FontSize = 13,
-            FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0),
+        };
+        hg.Children.Add(title);
+        _tabs = Segments(new[] { "Gato naranja", "Gato gris" }, 0, i =>
+        {
+            if (_editDirty) { SetStatus("Guarda o descarta los cambios del cuadro antes de cambiar de gato."); Select(_tabs!, SkinIndex()); return; }
+            _skin = i == 0 ? CatSkins.Orange : CatSkins.Gray;
+            _shownKey = "";
+            BuildStrip();
+            if (_editOpen) LoadEditorFrame(_editClip, _editFrame);
+            RefreshTimingRows();
         });
-        _summary = new TextBlock { Foreground = Muted, FontSize = 11, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        titleRow.Children.Add(_summary);
-        hg.Children.Add(titleRow);
+        _tabs.Margin = new Thickness(0);
+        Grid.SetColumn(_tabs, 1);
+        hg.Children.Add(_tabs);
+        _summary = new TextBlock { Foreground = Muted, FontSize = 11, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(_summary, 2);
+        hg.Children.Add(_summary);
         var close = Pill("Cerrar", () => Close());
         close.Margin = new Thickness(0);
-        Grid.SetColumn(close, 1);
+        Grid.SetColumn(close, 3);
         hg.Children.Add(close);
         header.Child = hg;
         grid.Children.Add(header);
 
+        // Cuerpo: la lista ocupa el 25 % y el visor el 75 %.
         var body = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         Grid.SetRow(body, 1);
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(290) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
         body.Children.Add(BuildLeft());
         var right = BuildRight();
         Grid.SetColumn(right, 2);
@@ -236,30 +298,18 @@ public sealed class VisorWindow : Window
         return _root;
     }
 
+    private int SkinIndex() => _skin == CatSkins.Gray ? 1 : 0;
+
     private UIElement BuildLeft()
     {
         var dock = new DockPanel();
-        _filters = new WrapPanel();
-        foreach (var (key, label) in new[] { ("todos", "Todos"), ("ok", "Listos"), ("prestada", "Prestadas"), ("falta", "Faltan"), ("sinmotor", "Sin comportamiento") })
-        {
-            var k = key;
-            var b = Pill(label, () => { _filter = k; RefreshList(); });
-            _toggles["f_" + key] = b;
-            _filters.Children.Add(b);
-        }
-        DockPanel.SetDock(_filters, Dock.Top);
-        dock.Children.Add(_filters);
-
-        _search = new TextBox
-        {
-            Background = Transparent, Foreground = Text, CaretBrush = White, BorderThickness = new Thickness(0),
-            Padding = new Thickness(8, 6, 8, 6), FontSize = 12,
-        };
+        var (searchFrame, search) = Field(100, mono: false);
+        _search = search;
+        _search.Width = double.NaN;
         _search.TextChanged += (_, _) => { _query = _search.Text.Trim().ToLowerInvariant(); RefreshList(); };
-        var searchBox = new Border { Background = Card, CornerRadius = new CornerRadius(9), Child = _search, Margin = new Thickness(0, 0, 0, 6) };
-        DockPanel.SetDock(searchBox, Dock.Top);
-        dock.Children.Add(searchBox);
-
+        searchFrame.Margin = new Thickness(0, 0, 0, 6);
+        DockPanel.SetDock(searchFrame, Dock.Top);
+        dock.Children.Add(searchFrame);
         _list = new StackPanel();
         dock.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list });
         return dock;
@@ -271,9 +321,9 @@ public sealed class VisorWindow : Window
         var stack = new StackPanel();
         scroll.Content = stack;
 
-        // ---- vista de un movimiento
+        // ---- vista de una acción o transición
         _clipView = new StackPanel();
-        var titleLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 6) };
+        var titleLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 2) };
         _badge = new TextBlock { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         _title = new TextBlock { Foreground = White, FontWeight = FontWeights.Bold, FontSize = 15, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center };
         _desc = new TextBlock { Foreground = Muted, FontSize = 11, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -281,49 +331,36 @@ public sealed class VisorWindow : Window
         titleLine.Children.Add(_title);
         titleLine.Children.Add(_desc);
         _clipView.Children.Add(titleLine);
+        _chain = new TextBlock { Foreground = Muted, FontSize = 11, Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap };
+        _clipView.Children.Add(_chain);
 
-        _stage = new Grid { Background = Frozen(0xFF3A3E46), ClipToBounds = true };
+        _stage = new Grid { Background = Stage, ClipToBounds = true };
         _ground = new GroundView();
-        _frameImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.None, SnapsToDevicePixels = true };
+        _frameImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
         _overlayImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.None, IsHitTestVisible = false, SnapsToDevicePixels = true };
         RenderOptions.SetBitmapScalingMode(_frameImage, BitmapScalingMode.NearestNeighbor);
         RenderOptions.SetBitmapScalingMode(_overlayImage, BitmapScalingMode.NearestNeighbor);
         _stage.Children.Add(_ground);
         _stage.Children.Add(_frameImage);
         _stage.Children.Add(_overlayImage);
-        var stageCard = new Border { CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = _stage, Margin = new Thickness(0, 0, 0, 8) };
-        _clipView.Children.Add(stageCard);
+        _clipView.Children.Add(new Border { CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = _stage, Margin = new Thickness(0, 0, 0, 8) });
 
-        // controles de reproducción
         var play = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
         _playButton = Pill("Pausa", () => { _playing = !_playing; });
         play.Children.Add(_playButton);
-        play.Children.Add(Pill("Reiniciar", () => { ResetPlayback(); _playing = true; if (_seqOn) { _seqIdx = 0; StartSeqClip(); } }));
-        play.Children.Add(Pill("◀", () => { _playing = false; SetFrame((_frame - 1 + FrameCount) % FrameCount); }));
-        play.Children.Add(Pill("▶", () => { _playing = false; SetFrame((_frame + 1) % FrameCount); }));
+        play.Children.Add(Pill("Reiniciar", () => { _stepIdx = 0; ResetStep(); _playing = true; }));
+        play.Children.Add(Pill("◀", () => { _playing = false; SetFrame((_frame - 1 + CurFrameCount) % CurFrameCount); }));
+        play.Children.Add(Pill("▶", () => { _playing = false; SetFrame((_frame + 1) % CurFrameCount); }));
+        play.Children.Add(Label("velocidad"));
+        play.Children.Add(Segments(new[] { "¼", "½", "1", "2" }, 2, i => _speed = new[] { 0.25, 0.5, 1, 2 }[i]));
+        play.Children.Add(Label("zoom"));
+        play.Children.Add(Segments(new[] { "2", "3", "4", "5", "6" }, 2, i => { _zoom = new[] { 2, 3, 4, 5, 6 }[i]; _shownKey = ""; }));
+        play.Children.Add(Flag("suelo avanza", "mov", true));
+        play.Children.Add(Flag("espejo", "mirror", false));
+        play.Children.Add(Flag("marcos", "zones", false));
         _readout = new TextBlock { Foreground = Muted, FontSize = 11, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 6) };
         play.Children.Add(_readout);
         _clipView.Children.Add(play);
-
-        var edit = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        _fpsBox = NumberField(60, "fps", edit);
-        _advBox = NumberField(150, "avance por cuadro", edit);
-        edit.Children.Add(Label("velocidad"));
-        edit.Children.Add(Segments(new[] { "¼", "½", "1", "2" }, 2, i => _speed = new[] { 0.25, 0.5, 1, 2 }[i]));
-        edit.Children.Add(Label("zoom"));
-        edit.Children.Add(Segments(new[] { "1", "2", "3", "4", "6" }, 2, i => { _zoom = new[] { 1, 2, 3, 4, 6 }[i]; _shownKey = ""; }));
-        edit.Children.Add(Label("gato"));
-        edit.Children.Add(Segments(new[] { "naranja", "gris" }, 0, i => { _skin = i == 0 ? "orange" : "gray"; _shownKey = ""; BuildStrip(); }));
-        _clipView.Children.Add(edit);
-
-        var flags = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        flags.Children.Add(Flag("suelo avanza", "mov", true));
-        flags.Children.Add(Flag("marcos", "zones", false));
-        flags.Children.Add(Flag("cuadrícula", "cells", false));
-        flags.Children.Add(Flag("espejo", "mirror", false));
-        flags.Children.Add(Flag("repetir", "rep", true));
-        flags.Children.Add(Pill("Copiar fps y avance", CopySettings));
-        _clipView.Children.Add(flags);
 
         _strip = new StackPanel { Orientation = Orientation.Horizontal };
         _clipView.Children.Add(new ScrollViewer
@@ -332,43 +369,31 @@ public sealed class VisorWindow : Window
             Content = _strip, Margin = new Thickness(0, 0, 0, 6),
         });
 
-        // secuencia
-        var seqBorder = NewCard("Secuencia (prueba de transiciones)", out var seqCard);
-        var seqRow = new WrapPanel();
-        foreach (var p in _data.Presets)
+        // tiempos
+        var timingBorder = NewCard("Tiempos (se guardan y valen para los dos gatos)", out var timingCard);
+        _timingRows = new StackPanel();
+        timingCard.Children.Add(_timingRows);
+        timingCard.Children.Add(new TextBlock
         {
-            var preset = p;
-            seqRow.Children.Add(Pill(preset.Name, () => { _seq.Clear(); _seq.AddRange(preset.Clips); RefreshChips(); }));
-        }
-        seqCard.Children.Add(seqRow);
-        var seqRow2 = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
-        seqRow2.Children.Add(Pill("Reproducir secuencia", () =>
-        {
-            if (_seq.Count == 0) return;
-            _seqOn = true; _seqIdx = 0; _playing = true; StartSeqClip();
-        }));
-        seqRow2.Children.Add(Pill("Añadir el movimiento actual", () => { if (_cur is not null) { _seq.Add(_cur.Id); RefreshChips(); } }));
-        seqRow2.Children.Add(Pill("Vaciar", () => { _seq.Clear(); _seqOn = false; RefreshChips(); }));
-        seqRow2.Children.Add(Label("vueltas de los que se repiten"));
-        _loopsBox = NumberField(40, null, seqRow2);
-        _loopsBox.Text = "2";
-        seqCard.Children.Add(seqRow2);
-        _chips = new WrapPanel();
-        seqCard.Children.Add(_chips);
-        seqCard.Children.Add(new TextBlock
-        {
-            Text = "Pasa de un movimiento al siguiente como lo haría el motor: el gato avanza solo cuando cambia el cuadro.",
-            Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 4, 0, 0),
+            Text = "Cambia los fps o la duración (segundos que dura el clip entero) y pulsa Intro. El avance son las casillas que " +
+                   "avanza el gato al mostrar cada cuadro, separadas por comas.",
+            Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 2, 0, 0),
         });
-        _clipView.Children.Add(seqBorder);
+        _clipView.Children.Add(timingBorder);
+
+        // editor de píxeles (Editor.cs) y tamaño de las piezas
+        _clipView.Children.Add(BuildEditorCard());
+        _clipView.Children.Add(BuildSizeCard());
 
         var infoBorder = NewCard("Ficha", out var infoCard);
         _info = new TextBlock { Foreground = Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
         infoCard.Children.Add(_info);
         _clipView.Children.Add(infoBorder);
+        _status = new TextBlock { Foreground = Frozen(0xFFFF8A65), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 0, 6), Visibility = Visibility.Collapsed };
+        _clipView.Children.Add(_status);
         stack.Children.Add(_clipView);
 
-        // ---- vista de una acción que falta
+        // ---- vista de algo que falta
         _missingView = new StackPanel { Visibility = Visibility.Collapsed };
         var mBorder = NewCard("", out var mCard);
         _missingTitle = new TextBlock { Foreground = White, FontWeight = FontWeights.Bold, FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 6) };
@@ -376,7 +401,7 @@ public sealed class VisorWindow : Window
         mCard.Children.Add(_missingTitle);
         mCard.Children.Add(_missingDesc);
         mCard.Children.Add(new TextBlock { Text = "Texto para pedirlo a Gemini:", Foreground = Muted, FontSize = 11, Margin = new Thickness(2, 0, 0, 4) });
-        _promptBox = ReadOnlyBox(110);
+        _promptBox = ReadOnlyBox(120);
         mCard.Children.Add(_promptBox);
         var mb = Pill("Copiar texto", () => CopyText(_promptBox.Text));
         mb.HorizontalAlignment = HorizontalAlignment.Left;
@@ -384,7 +409,6 @@ public sealed class VisorWindow : Window
         _missingView.Children.Add(mBorder);
         stack.Children.Add(_missingView);
 
-        // ---- lista completa de lo que falta
         var allBorder = NewCard("Lista de lo que falta (para pedir a Gemini)", out var allCard);
         _allMissing = ReadOnlyBox(150);
         allCard.Children.Add(_allMissing);
@@ -393,75 +417,6 @@ public sealed class VisorWindow : Window
         allCard.Children.Add(allBtn);
         stack.Children.Add(allBorder);
         return scroll;
-    }
-
-    // ---------------------------------------------------------------- piezas con el estilo de las tarjetas
-    private static Style RowStyle => (Style)Application.Current.FindResource("ListRow");
-
-    private Button Pill(string text, Action click)
-    {
-        var b = new Button
-        {
-            Content = text, Style = RowStyle, Padding = new Thickness(10, 5, 10, 5), FontSize = 11,
-            Margin = new Thickness(0, 0, 6, 6),
-        };
-        Rest(b, Card);
-        AttachHover(b);
-        b.Click += (_, _) => click();
-        return b;
-    }
-
-    private TextBlock Label(string text) => new()
-    {
-        Text = text, Foreground = Muted, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 6),
-    };
-
-    /// <summary>Botones en fila de los que solo uno está activo (en el color de énfasis de Windows).</summary>
-    private UIElement Segments(string[] labels, int selected, Action<int> changed)
-    {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 6) };
-        var buttons = new List<Button>();
-        void Repaint(int on)
-        {
-            for (int i = 0; i < buttons.Count; i++) Paint(buttons[i], i == on);
-        }
-        for (int i = 0; i < labels.Length; i++)
-        {
-            int index = i;
-            var b = new Button { Content = labels[i], Style = RowStyle, Padding = new Thickness(9, 5, 9, 5), FontSize = 11, Margin = new Thickness(0, 0, 2, 0) };
-            AttachHover(b);
-            b.Click += (_, _) => { Repaint(index); changed(index); };
-            buttons.Add(b);
-            panel.Children.Add(b);
-        }
-        Repaint(selected);
-        return panel;
-    }
-
-    private static readonly Brush HoverBrush = Frozen(0x40FFFFFF);
-
-    /// <summary>
-    /// Fondo en reposo de un botón. Como se fija como valor local, el resalte del estilo ListRow (que es un
-    /// disparador) ya no actúa: <see cref="AttachHover"/> lo reproduce.
-    /// </summary>
-    private static void Rest(Button b, Brush brush)
-    {
-        b.Tag = brush;
-        b.Background = brush;
-    }
-
-    private static void AttachHover(Button b)
-    {
-        b.MouseEnter += (_, _) => b.Background = ReferenceEquals(b.Tag, Application.Current.FindResource("AccentBrush"))
-            ? (Brush)Application.Current.FindResource("AccentHoverBrush")
-            : HoverBrush;
-        b.MouseLeave += (_, _) => b.Background = b.Tag as Brush ?? Transparent;
-    }
-
-    private static void Paint(Button b, bool on)
-    {
-        Rest(b, on ? (Brush)Application.Current.FindResource("AccentBrush") : Card);
-        b.Foreground = on ? (Brush)Application.Current.FindResource("AccentFgBrush") : Text;
     }
 
     private UIElement Flag(string label, string key, bool initial)
@@ -473,178 +428,202 @@ public sealed class VisorWindow : Window
         b.Click += (_, _) => { _flags[key] = !_flags[key]; Paint(b, _flags[key]); _shownKey = ""; };
         return b;
     }
-    private readonly Dictionary<string, bool> _flags = new();
+
     private bool On(string key) => _flags.TryGetValue(key, out var v) && v;
 
-    private TextBox NumberField(double width, string? label, Panel parent)
+    private void SetStatus(string? text)
     {
-        if (label is not null) parent.Children.Add(Label(label));
-        var tb = new TextBox
-        {
-            Width = width, Background = Transparent, Foreground = Text, CaretBrush = White, BorderThickness = new Thickness(0),
-            Padding = new Thickness(6, 5, 6, 5), FontSize = 11, FontFamily = new FontFamily("Consolas"),
-        };
-        parent.Children.Add(new Border { Background = Card, CornerRadius = new CornerRadius(9), Child = tb, Margin = new Thickness(0, 0, 8, 6) });
-        return tb;
+        _status.Text = text ?? "";
+        _status.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private TextBox ReadOnlyBox(double height) => new()
+    private static void CopyText(string text)
     {
-        IsReadOnly = true, Height = height, Background = Card, Foreground = Text, BorderThickness = new Thickness(0), Padding = new Thickness(8),
-        FontFamily = new FontFamily("Consolas"), FontSize = 11, TextWrapping = TextWrapping.Wrap,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 0, 0, 6),
-    };
-
-    /// <summary>Tarjeta (fondo suave, esquinas redondeadas) con un título opcional; devuelve el borde para
-    /// añadirlo al padre y, en <paramref name="panel"/>, el contenedor donde se pone su contenido.</summary>
-    private static Border NewCard(string title, out StackPanel panel)
-    {
-        panel = new StackPanel();
-        if (title.Length > 0)
-            panel.Children.Add(new TextBlock { Text = title.ToUpperInvariant(), Foreground = Muted, FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 0, 0, 6) });
-        return new Border { Background = Card, CornerRadius = new CornerRadius(9), Padding = new Thickness(10), Margin = new Thickness(0, 4, 0, 6), Child = panel };
+        try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.COMException) { /* el portapapeles lo tiene otra aplicación */ }
     }
 
-    // ---------------------------------------------------------------- lista
+    // ---------------------------------------------------------------- lista de la izquierda
     private void RefreshSummary()
     {
-        int ok = 0, prestada = 0;
-        foreach (var c in _clips.All) { if (QualityOf(c.Id) == "ok") ok++; else prestada++; }
-        _summary.Text = $"{ok} listos · {prestada} con pose prestada · {_data.Needed.Count} sin arte";
+        int ok = _clips.All.Count(c => QualityOf(c.Id) == "ok");
+        _summary.Text = $"{ok} movimientos listos · {_clips.All.Count - ok} con pose prestada · {_data.Needed.Count + _data.MissingTransitions.Count} sin arte";
     }
 
     private string QualityOf(string clip) => _data.Clips.TryGetValue(clip, out var c) ? c.Quality : "prestada";
     private VisorClip? InfoOf(string clip) => _data.Clips.TryGetValue(clip, out var c) ? c : null;
-
-    private bool Matches(string name, string detail, bool isClip, string quality, bool wired)
-    {
-        if (_query.Length > 0 && !name.ToLowerInvariant().Contains(_query) && !detail.ToLowerInvariant().Contains(_query)) return false;
-        return _filter switch
-        {
-            "todos" => true,
-            "sinmotor" => isClip && !wired,
-            "falta" => !isClip,
-            _ => isClip && quality == _filter,
-        };
-    }
+    private VisorAction? ActionById(string id) => _data.Actions.FirstOrDefault(a => a.Id == id);
+    private string ActionName(string id) => ActionById(id)?.Name ?? id;
+    private bool Matches(string text) => _query.Length == 0 || text.ToLowerInvariant().Contains(_query);
 
     private void RefreshList()
     {
-        foreach (var (key, b) in _toggles)
-            if (key.StartsWith("f_", StringComparison.Ordinal)) Paint(b, key == "f_" + _filter);
         _list.Children.Clear();
+        double width = Math.Max(150, (Width - 24) / 4 - 46);   // la lista es el 25 % del ancho (menos relleno y barra)
 
-        var missing = _data.Needed.Where(n => Matches(n.Name, n.Detail, false, "falta", false)).ToList();
-        if (missing.Count > 0)
+        _list.Children.Add(GroupLabel("Acciones básicas"));
+        foreach (var a in _data.Actions.Where(a => Matches(a.Name + " " + a.Clip)))
         {
-            _list.Children.Add(GroupLabel("Faltan (sin arte)"));
-            foreach (var n in missing)
-            {
-                var item = n;
-                _list.Children.Add(ListItem(item.Name, "falta", item.Group, () => SelectMissing(item), _curMissing == item));
-            }
+            var action = a;
+            string key = "a:" + action.Id;
+            _list.Children.Add(ListItem(action.Name, QualityOf(action.Clip), action.Clip, () => { _selectedKey = key; ShowAction(action.Id); RefreshList(); }, _selectedKey == key, width));
         }
-        foreach (var (quality, label) in new[] { ("ok", "Listos"), ("prestada", "Con pose prestada (mejorables)") })
+
+        _list.Children.Add(GroupLabel("Transiciones"));
+        foreach (var t in _data.Transitions.Where(t => Matches(ActionName(t.From) + " " + ActionName(t.To) + " " + t.Clip)))
         {
-            var cs = _clips.All.Where(c => QualityOf(c.Id) == quality
-                && Matches(c.Id, InfoOf(c.Id)?.Desc ?? c.Description, true, quality, !string.IsNullOrEmpty(InfoOf(c.Id)?.Wired))).ToList();
-            if (cs.Count == 0) continue;
-            _list.Children.Add(GroupLabel($"{label} · {cs.Count}"));
-            foreach (var c in cs)
-            {
-                var clip = c;
-                bool wired = !string.IsNullOrEmpty(InfoOf(clip.Id)?.Wired);
-                _list.Children.Add(ListItem(clip.Id, quality, wired ? "" : "sin motor", () => Select(clip), _cur?.Id == clip.Id));
-            }
+            var tr = t;
+            string key = $"t:{tr.Clip}:{tr.From}:{tr.To}";
+            string name = $"{ActionName(tr.From)} → {ActionName(tr.To)}" + (tr.Reverse ? " ↺" : "");
+            _list.Children.Add(ListItem(name, QualityOf(tr.Clip), tr.Clip, () => { _selectedKey = key; ShowTransition(tr); RefreshList(); }, _selectedKey == key, width));
+        }
+
+        var missingTr = _data.MissingTransitions.Where(p => p.Length == 2 && Matches(ActionName(p[0]) + " " + ActionName(p[1]))).ToList();
+        var missingNeeded = _data.Needed.Where(n => Matches(n.Name + " " + n.Detail)).ToList();
+        if (missingTr.Count + missingNeeded.Count > 0) _list.Children.Add(GroupLabel("Faltan (sin arte)"));
+        foreach (var p in missingTr)
+        {
+            var pair = p;
+            string key = $"m:{pair[0]}:{pair[1]}";
+            _list.Children.Add(ListItem($"{ActionName(pair[0])} → {ActionName(pair[1])}", "falta", "transición", () => { _selectedKey = key; SelectMissingTransition(pair[0], pair[1]); RefreshList(); }, _selectedKey == key, width));
+        }
+        foreach (var n in missingNeeded)
+        {
+            var item = n;
+            string key = "n:" + item.Name;
+            _list.Children.Add(ListItem(item.Name, "falta", item.Group, () => { _selectedKey = key; SelectMissing(item); RefreshList(); }, _selectedKey == key, width));
         }
     }
 
-    private static TextBlock GroupLabel(string text) => new()
-    {
-        Text = text.ToUpperInvariant(), Foreground = Muted, FontSize = 10, FontWeight = FontWeights.SemiBold, Margin = new Thickness(4, 10, 0, 4),
-    };
+    // ---------------------------------------------------------------- qué reproducir: acciones, transiciones y cadenas
+    private ClipDef? ClipOf(string id) => _clips.Contains(id) ? _clips[id] : null;
 
-    private UIElement ListItem(string name, string quality, string tag, Action click, bool selected)
+    private TransitionGraph Graph => _graph ??= new TransitionGraph(_data.Transitions,
+        _data.Direct.Where(d => d.Length == 2).Select(d => (d[0], d[1])));
+    private TransitionGraph? _graph;
+
+    private void ShowAction(string id)
     {
-        var b = new Button { Style = RowStyle, Margin = new Thickness(0, 0, 0, 2), Padding = new Thickness(8, 6, 8, 6), HorizontalContentAlignment = HorizontalAlignment.Stretch };
-        Rest(b, selected ? CardSel : Transparent);
-        AttachHover(b);
-        var g = new Grid { Width = 248 };   // el estilo ListRow no estira el contenido: ancho fijo de la lista
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Dots[quality], Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
-        var n = new TextBlock { Text = name, Foreground = Text, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
-        Grid.SetColumn(n, 1);
-        g.Children.Add(n);
-        if (tag.Length > 0)
+        var a = ActionById(id);
+        if (a is null || ClipOf(a.Clip) is null) return;
+        var steps = new List<PlanStep>();
+        string note = "";
+        if (_action is not null && _action != id)
         {
-            var t = new TextBlock { Text = tag, Foreground = Muted, FontSize = 10, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(t, 2);
-            g.Children.Add(t);
+            var path = Graph.FindPath(_action, id);
+            if (path is null) note = $"No hay transición dibujada de «{ActionName(_action)}» a «{a.Name}»: se corta directamente (aparece en «Faltan»).";
+            else foreach (var t in path) steps.Add(new PlanStep(t.Clip, t.Reverse, false, $"{ActionName(t.From)} → {ActionName(t.To)}"));
         }
-        b.Content = g;
-        b.Click += (_, _) => click();
-        return b;
+        steps.Add(new PlanStep(a.Clip, false, true, a.Name));
+        StartPlan(steps, id, note);
     }
 
-    // ---------------------------------------------------------------- selección
-    private int FrameCount => _cur?.FrameCount ?? 1;
-
-    private void Select(ClipDef clip)
+    private void ShowTransition(TransitionEdge t)
     {
-        _cur = clip; _curMissing = null; _seqOn = false;
+        var from = ActionById(t.From);
+        var to = ActionById(t.To);
+        if (from is null || to is null || ClipOf(t.Clip) is null) return;
+        var steps = new List<PlanStep>
+        {
+            new(from.Clip, false, false, from.Name),                                   // un ciclo de la acción de partida
+            new(t.Clip, t.Reverse, false, $"{from.Name} → {to.Name}"),
+            new(to.Clip, false, true, to.Name),                                       // y termina en la de llegada
+        };
+        StartPlan(steps, t.To, "");
+    }
+
+    private void StartPlan(List<PlanStep> steps, string finalAction, string note)
+    {
+        if (_editOpen && _editDirty) { SetStatus("Guarda o descarta los cambios del cuadro antes de cambiar de movimiento."); return; }
+        _curMissing = null; _curMissingTransition = null;
         _clipView.Visibility = Visibility.Visible; _missingView.Visibility = Visibility.Collapsed;
-        ShowClipInfo(clip);
-        ResetPlayback();
-        BuildStrip();
-        RefreshList();
-        RefreshChips();
-    }
-
-    private void ShowClipInfo(ClipDef clip)
-    {
-        var info = InfoOf(clip.Id);
-        string q = QualityOf(clip.Id);
+        _plan = steps;
+        _action = finalAction;
+        _stepIdx = 0;
+        ResetStep();
+        _playing = true;
+        SetStatus(note.Length > 0 ? note : null);
+        var final = steps[^1];
+        string q = QualityOf(final.Clip);
         _badge.Text = QualityText[q];
         _badge.Foreground = Dots[q];
-        _title.Text = clip.Id;
-        _desc.Text = info?.Desc ?? clip.Description;
-        _fpsBox.Text = clip.Fps.ToString("0.##", CultureInfo.InvariantCulture);
-        _advBox.Text = string.Join(",", clip.Advance is { Length: > 0 } a ? a : new[] { 0 });
+        _title.Text = steps.Count == 1 ? steps[0].Label : $"{steps[0].Label} … {final.Label}";
+        _chain.Text = steps.Count == 1
+            ? "Acción básica (se repite)."
+            : "Reproduce: " + string.Join("  →  ", steps.Select(s => s.Loop ? $"{s.Label} (se repite)" : s.Label));
+        _desc.Text = InfoOf(final.Clip)?.Desc ?? "";
+        RefreshTimingRows();
+        EnterStep();
+        if (_editOpen) LoadEditorFrame(CurStep.Clip, 0);
+    }
+
+    private PlanStep CurStep => _plan[Math.Min(_stepIdx, _plan.Count - 1)];
+    private ClipDef CurClipDef => _clips[CurStep.Clip];
+    private int CurFrameCount => Math.Max(1, CurClipDef.FrameCount);
+
+    /// <summary>Al empezar un paso: la tira de miniaturas y la ficha pasan a ser las de su clip.</summary>
+    private void EnterStep()
+    {
+        string clip = CurStep.Clip;
+        if (_stripClip != clip) { _stripClip = clip; BuildStrip(); }
+        var def = CurClipDef;
+        var info = InfoOf(clip);
         var sb = new StringBuilder();
-        sb.AppendLine($"Cuadros: {clip.FrameCount} · {(clip.Loop ? "bucle" : "una vez")} · {clip.Fps:0.##} fps · {clip.Length:0.00} s");
+        sb.AppendLine($"Clip «{clip}»: {def.FrameCount} cuadros · {(def.Loop ? "bucle" : "una vez")} · {def.Fps:0.##} fps · {def.Length:0.00} s");
         if (info is not null)
         {
             sb.AppendLine($"Origen del arte: {info.Origin}");
-            sb.AppendLine(info.Wired.Length > 0
-                ? $"Motor: lo usa el comportamiento «{info.Wired}»"
-                : "Motor: tiene arte pero ningún comportamiento lo usa todavía");
+            sb.AppendLine(info.Wired.Length > 0 ? $"Motor: lo usa el comportamiento «{info.Wired}»" : "Motor: tiene arte pero ningún comportamiento lo usa todavía");
             if (info.Note.Length > 0) sb.AppendLine($"Qué mejorar: {info.Note}");
         }
         _info.Text = sb.ToString().TrimEnd();
+        RefreshChainMarks();
+    }
+
+    private void RefreshChainMarks()
+    {
+        if (_plan.Count <= 1) return;
+        _chain.Text = "Reproduce: " + string.Join("  →  ", _plan.Select((s, i) =>
+            (i == _stepIdx ? "▶ " : "") + (s.Loop ? $"{s.Label} (se repite)" : s.Label)));
     }
 
     private void SelectMissing(VisorNeeded n)
     {
-        _curMissing = n; _cur = null; _seqOn = false;
-        _clipView.Visibility = Visibility.Collapsed; _missingView.Visibility = Visibility.Visible;
-        _missingTitle.Text = $"{n.Name} · {n.Group}";
-        _missingDesc.Text = n.Detail;
-        _promptBox.Text = PromptFor(n);
-        RefreshList();
+        _curMissing = n; _curMissingTransition = null;
+        ShowMissingView($"{n.Name} · {n.Group}", n.Detail,
+            Prompt($"One row, {n.Frames} frames side by side", $"Action: {n.Name}. {n.Detail}"));
     }
 
-    private static string PromptFor(VisorNeeded n) =>
+    private void SelectMissingTransition(string from, string to)
+    {
+        _curMissing = null; _curMissingTransition = from + ">" + to;
+        string a = ActionName(from), b = ActionName(to);
+        ShowMissingView($"Transición {a} → {b} · Faltan los cuadros",
+            "Esta transición no tiene arte: el visor la enlaza con un corte directo. Pide a Gemini los cuadros intermedios (8 a 10).",
+            Prompt("One row, 8 to 10 frames side by side", $"Action: smooth transition of the cat from «{a}» to «{b}». The first frame is exactly the «{a}» pose and the last frame is exactly the «{b}» pose; the frames in between show the natural movement."));
+    }
+
+    private void ShowMissingView(string title, string detail, string prompt)
+    {
+        if (_editOpen && _editDirty) { SetStatus("Guarda o descarta los cambios del cuadro antes de cambiar."); return; }
+        _clipView.Visibility = Visibility.Collapsed; _missingView.Visibility = Visibility.Visible;
+        _missingTitle.Text = title;
+        _missingDesc.Text = detail;
+        _promptBox.Text = prompt;
+    }
+
+    private static string Prompt(string rows, string action) =>
         "Same cat, same flat 2D pixel-art style, same palette, same scale and same baseline as the attached sheet.\n" +
-        $"One row, {n.Frames} frames side by side, magenta #FF00FF background, no grid lines, no shadows, no text, at least 12% empty margin around every frame (tail, ears and paws never touch the cell edge).\n" +
+        $"{rows}, magenta #FF00FF background, no grid lines, no shadows, no text, at least 12% empty margin around every frame (tail, ears and paws never touch the cell edge).\n" +
         "Smooth animation: consecutive frames differ by a SMALL change; where the motion is big add intermediate frames.\n" +
         "Strict profile facing RIGHT unless said otherwise. Black outline only on the outer silhouette. Collar with red heart tag visible when the neck is visible.\n" +
-        $"Action: {n.Name}. {n.Detail}";
+        action;
 
     private string MissingText()
     {
-        var sb = new StringBuilder("ACCIONES QUE FALTAN (sin arte propio)\n");
+        var sb = new StringBuilder("TRANSICIONES QUE FALTAN\n");
+        foreach (var p in _data.MissingTransitions.Where(p => p.Length == 2)) sb.AppendLine($"  - {ActionName(p[0])} → {ActionName(p[1])}");
+        sb.AppendLine("\nACCIONES QUE FALTAN (sin arte propio)");
         foreach (var g in _data.Needed.GroupBy(n => n.Group))
         {
             sb.Append('\n').AppendLine(g.Key);
@@ -656,181 +635,273 @@ public sealed class VisorWindow : Window
         return sb.ToString();
     }
 
+    // ---------------------------------------------------------------- miniaturas
     private void BuildStrip()
     {
         _strip.Children.Clear();
         _thumbs.Clear();
-        if (_cur is null) return;
-        for (int i = 0; i < _cur.FrameCount; i++)
+        if (_plan.Count == 0) return;
+        var def = CurClipDef;
+        for (int i = 0; i < def.FrameCount; i++)
         {
             int index = i;
-            var img = new Image { Source = _atlas.Frame(_skin, _cur.Id, i), Stretch = Stretch.Uniform, Width = _atlas.GridWidth * 0.8, Height = _atlas.GridHeight * 0.8 };
+            var img = new Image { Source = _atlas.Frame(_skin, def.Id, i), Stretch = Stretch.Uniform, Width = _atlas.GridWidth * 0.8, Height = _atlas.GridHeight * 0.8 };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor);
-            var grid = new Grid();
-            grid.Children.Add(img);
-            grid.Children.Add(new TextBlock { Text = (i + 1).ToString(CultureInfo.InvariantCulture), Foreground = White, FontSize = 9, Margin = new Thickness(2, 0, 0, 0) });
-            var border = new Border { Background = Frozen(0xFF3A3E46), BorderThickness = new Thickness(2), BorderBrush = Transparent, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 4, 0), Child = grid, Cursor = Cursors.Hand };
-            border.MouseLeftButtonUp += (_, _) => { _playing = false; SetFrame(index); };
+            var g = new Grid();
+            g.Children.Add(img);
+            g.Children.Add(new TextBlock { Text = (i + 1).ToString(CultureInfo.InvariantCulture) + (_atlas.IsEdited(_skin, def.Id, i) ? " ✎" : ""), Foreground = White, FontSize = 9, Margin = new Thickness(2, 0, 0, 0) });
+            var border = new Border { Background = Stage, BorderThickness = new Thickness(2), BorderBrush = Transparent, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 4, 0), Child = g, Cursor = Cursors.Hand };
+            border.MouseLeftButtonUp += (_, _) => PickFrame(index);
             _strip.Children.Add(border);
             _thumbs.Add(border);
         }
     }
 
-    private void RefreshChips()
+    private void PickFrame(int index)
     {
-        _chips.Children.Clear();
-        if (_seq.Count == 0)
+        _playing = false;
+        SetFrame(index);
+        if (_editOpen) LoadEditorFrame(CurStep.Clip, index);
+    }
+
+    // ---------------------------------------------------------------- tiempos
+    private void RefreshTimingRows()
+    {
+        _timingRows.Children.Clear();
+        foreach (string id in _plan.Select(s => s.Clip).Distinct())
         {
-            _chips.Children.Add(new TextBlock { Text = "Vacía: añade movimientos o elige una secuencia de ejemplo.", Foreground = Muted, FontSize = 11 });
-            return;
-        }
-        for (int i = 0; i < _seq.Count; i++)
-        {
-            int index = i;
-            var chip = new Button
+            var def = _clips[id];
+            var original = _clips.Original(id);
+            string clipId = id;
+            var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
+            row.Children.Add(new TextBlock { Text = id, Foreground = White, FontFamily = new FontFamily("Consolas"), FontSize = 12, Width = 130, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) });
+            row.Children.Add(new TextBlock { Text = $"{def.FrameCount} cuadros", Foreground = Muted, FontSize = 11, Width = 78, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) });
+
+            row.Children.Add(Label("fps"));
+            var (fpsFrame, fpsBox) = Field(60);
+            fpsBox.Text = def.Fps.ToString("0.##", CultureInfo.InvariantCulture);
+            row.Children.Add(fpsFrame);
+            row.Children.Add(Label("duración (s)"));
+            var (durFrame, durBox) = Field(60);
+            durBox.Text = (def.FrameCount / def.Fps).ToString("0.00", CultureInfo.InvariantCulture);
+            row.Children.Add(durFrame);
+            row.Children.Add(Label("avance"));
+            var (advFrame, advBox) = Field(150);
+            advBox.Text = string.Join(",", def.Advance is { Length: > 0 } a ? a : new[] { 0 });
+            row.Children.Add(advFrame);
+
+            var reset = Pill("Restablecer", () => { ResetTiming(clipId); RefreshTimingRows(); EnterStep(); }, compact: true);
+            reset.IsEnabled = _timing.ContainsKey(id);
+            reset.ToolTip = $"Vuelve a {original.Fps:0.##} fps";
+
+            void Commit(bool fromDuration)
             {
-                Content = $"{i + 1}. {_seq[i]}  ×", Style = RowStyle, Padding = new Thickness(9, 4, 9, 4), FontSize = 11,
-                Margin = new Thickness(0, 0, 6, 6),
-            };
-            AttachHover(chip);
-            Paint(chip, _seqOn && _seqIdx == i);
-            chip.Click += (_, _) => { _seq.RemoveAt(index); RefreshChips(); };
-            _chips.Children.Add(chip);
+                double fps = def.Fps;
+                if (fromDuration && TryNumber(durBox.Text, out double seconds) && seconds > 0) fps = def.FrameCount / seconds;
+                else if (!fromDuration && TryNumber(fpsBox.Text, out double f) && f > 0) fps = f;
+                var advance = ParseAdvance(advBox.Text);
+                ApplyTiming(clipId, fps, advance);
+                var now = _clips[clipId];
+                fpsBox.Text = now.Fps.ToString("0.##", CultureInfo.InvariantCulture);
+                durBox.Text = (now.FrameCount / now.Fps).ToString("0.00", CultureInfo.InvariantCulture);
+                advBox.Text = string.Join(",", now.Advance is { Length: > 0 } adv ? adv : new[] { 0 });
+                reset.IsEnabled = _timing.ContainsKey(clipId);
+            }
+            fpsBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
+            fpsBox.LostFocus += (_, _) => Commit(false);
+            durBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(true); };
+            durBox.LostFocus += (_, _) => Commit(true);
+            advBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
+            advBox.LostFocus += (_, _) => Commit(false);
+
+            row.Children.Add(reset);
+            _timingRows.Children.Add(row);
         }
+    }
+
+    private static bool TryNumber(string text, out double value) =>
+        double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && double.IsFinite(value);
+
+    private static int[]? ParseAdvance(string text)
+    {
+        var list = new List<int>();
+        foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)) list.Add(v);
+        return list.Count > 0 ? list.ToArray() : null;
+    }
+
+    /// <summary>Guarda el retoque de tiempo de un clip y lo aplica al motor (también en las demás sesiones).</summary>
+    private void ApplyTiming(string clipId, double fps, int[]? advance)
+    {
+        var original = _clips.Original(clipId);
+        double clamped = ClipTimingFile.ClampFps(fps);
+        int[]? adv = advance?.Select(v => Math.Clamp(v, -ClipTimingFile.MaxAdvance, ClipTimingFile.MaxAdvance)).Take(ClipTimingFile.MaxAdvanceLength).ToArray();
+        bool sameAdvance = adv is null || (original.Advance is { } o && o.SequenceEqual(adv));
+        if (Math.Abs(clamped - original.Fps) < 1e-6 && sameAdvance) _timing.Remove(clipId);
+        else _timing[clipId] = new ClipTimingEntry(clamped, adv);
+        SaveTimingAndApply(clipId);
+    }
+
+    private void ResetTiming(string clipId)
+    {
+        _timing.Remove(clipId);
+        SaveTimingAndApply(clipId);
+    }
+
+    private void SaveTimingAndApply(string clipId)
+    {
+        try
+        {
+            _store.SaveTiming(_timing);
+            ClipTimingFile.Apply(_clips, _timing);
+            _host.ArtChanged();
+            SetStatus(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ClipTimingFile.Apply(_clips, _timing);   // vale en esta sesión aunque no se pueda guardar
+            SetStatus("No se pudo guardar el tiempo en la carpeta compartida: " + ex.Message);
+        }
+        if (_plan.Count > 0 && CurStep.Clip == clipId) EnterStep();
+    }
+
+    // ---------------------------------------------------------------- tamaño de las piezas
+    private static readonly double[] SizePresets = { 0.25, 0.35, 0.5, 0.75, 1.0, 1.5 };
+
+    private UIElement BuildSizeCard()
+    {
+        var border = NewCard("Tamaño de las piezas (gato y caja)", out var card);
+        var row = new WrapPanel();
+        int nearest = Array.IndexOf(SizePresets, SizePresets.OrderBy(p => Math.Abs(p - _host.CellSize)).First());
+        _sizeSegments = Segments(SizePresets.Select(p => $"{p * 100:0}%").ToArray(), nearest, i => ApplySize(SizePresets[i]));
+        row.Children.Add(_sizeSegments);
+        row.Children.Add(Label("casilla (px)"));
+        var (frame, box) = Field(60);
+        _sizeBox = box;
+        _sizeBox.Text = _host.CellSize.ToString("0.###", CultureInfo.InvariantCulture);
+        _sizeBox.KeyDown += (_, e) => { if (e.Key == Key.Enter && TryNumber(_sizeBox.Text, out double v)) ApplySize(v); };
+        row.Children.Add(frame);
+        row.Children.Add(Pill("Aplicar", () => { if (TryNumber(_sizeBox.Text, out double v)) ApplySize(v); }));
+        card.Children.Add(row);
+        _sizeInfo = new TextBlock { Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
+        card.Children.Add(_sizeInfo);
+        return border;
+    }
+
+    private void ApplySize(double value)
+    {
+        value = ArtScale.Clamp(value);
+        _host.SetCellSize(value);
+        _sizeBox.Text = value.ToString("0.###", CultureInfo.InvariantCulture);
+        UpdateSizeInfo();
+    }
+
+    private void UpdateSizeInfo()
+    {
+        double c = _host.CellSize;
+        int index = Array.FindIndex(SizePresets, p => Math.Abs(p - c) < 1e-6);
+        if (index >= 0) Select(_sizeSegments, index);
+        _sizeInfo.Text = $"Cada casilla del dibujo mide {c:0.###} px: el gato (100 casillas de alto) se ve de {100 * c:0} px y la caja (66) de {66 * c:0} px. " +
+                         "No cambia la cantidad de píxeles del dibujo. Vale para todas las sesiones; entre 0,25 y 1,5.";
     }
 
     // ---------------------------------------------------------------- reproducción (como el motor)
-    private void ResetPlayback() { _t = 0; _tick = -1; _holdUntil = 0; _frame = 0; }
-
-    private double Fps => double.TryParse(_fpsBox.Text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 ? Math.Min(v, 120) : (_cur?.Fps ?? 8);
-
-    private int[] Advance()
-    {
-        var list = new List<int>();
-        foreach (var part in _advBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v)) list.Add(v);
-        return list.Count > 0 ? list.ToArray() : new[] { 0 };
-    }
-
-    private int FrameOfTick(int tick)
-    {
-        int n = FrameCount;
-        if (n <= 1 || tick <= 0) return 0;
-        return _cur!.Loop ? tick % n : Math.Min(tick, n - 1);
-    }
+    private void ResetStep() { _t = 0; _tick = -1; _holdUntil = 0; _frame = 0; }
 
     private void SetFrame(int i)
     {
         _frame = i;
-        _t = (i + 0.01) / Fps;
+        _t = (i + 0.01) / CurClipDef.Fps;
         _tick = i;
     }
 
-    private void StartSeqClip()
+    /// <summary>Cuadro (de 0 a n-1) que toca al cambio número <paramref name="tick"/> del paso actual, con la inversa aplicada.</summary>
+    private int DisplayFrame(int tick)
     {
-        if (_seq.Count == 0) { _seqOn = false; return; }
-        var id = _seq[_seqIdx % _seq.Count];
-        if (!_clips.Contains(id)) { _seqIdx = (_seqIdx + 1) % _seq.Count; return; }
-        var clip = _clips[id];
-        double keep = _camX;
-        bool changed = _cur?.Id != clip.Id;
-        _cur = clip; _curMissing = null;
-        _clipView.Visibility = Visibility.Visible; _missingView.Visibility = Visibility.Collapsed;
-        ShowClipInfo(clip);
-        if (changed) BuildStrip();
-        ResetPlayback();
-        _camX = keep;
-        int loops = int.TryParse(_loopsBox.Text, out int l) ? Math.Clamp(l, 1, 10) : 1;
-        _doneAt = clip.Loop ? clip.FrameCount * loops : clip.FrameCount;
-        RefreshChips();
-        RefreshList();
+        var step = CurStep;
+        var def = CurClipDef;
+        int n = Math.Max(1, def.FrameCount);
+        int f = tick <= 0 ? 0 : (step.Loop && def.Loop) ? tick % n : Math.Min(tick, n - 1);
+        return step.Reverse ? n - 1 - f : f;
     }
-
-    private double _last;
 
     private void Step()
     {
         double now = _clock.Elapsed.TotalSeconds;
         double dt = Math.Min(0.1, now - _last);
         _last = now;
-        if (_cur is null) return;
+        if (_plan.Count == 0) return;
 
-        double fps = Fps;
-        if (_playing && now > _holdUntil)
+        var def = CurClipDef;
+        if (_playing && now > _holdUntil && !_editOpen)
         {
             _t += dt * _speed;
-            int tick = (int)Math.Floor(_t * fps);
-            var adv = Advance();
-            while (_tick < tick)
+            int target = (int)Math.Floor(_t * def.Fps);
+            while (_tick < target)
             {
                 _tick++;
-                int f = FrameOfTick(_tick);
-                if (On("mov") && _tick > 0) _camX += adv[f % adv.Length];
-                if (_seqOn && _tick >= _doneAt)
+                int f = DisplayFrame(_tick);
+                if (On("mov") && _tick > 0) _camX += def.AdvanceOf(f);
+                var step = CurStep;
+                if (!step.Loop && _tick >= def.FrameCount)
                 {
-                    _seqIdx = (_seqIdx + 1) % _seq.Count;
-                    if (_seqIdx == 0 && !On("rep")) { _seqOn = false; _playing = false; RefreshChips(); break; }
-                    StartSeqClip();
+                    if (_stepIdx < _plan.Count - 1) { _stepIdx++; ResetStep(); EnterStep(); }
+                    else _playing = false;
                     break;
                 }
-                if (!_seqOn && !_cur.Loop && _tick >= _cur.FrameCount)
+                if (step.Loop && !def.Loop && _tick >= def.FrameCount)      // acción de una sola pasada: se repite tras una pausa
                 {
-                    if (On("rep")) { _holdUntil = now + 0.6; ResetPlayback(); }
-                    else _playing = false;
+                    _holdUntil = now + 0.6;
+                    ResetStep();
                     break;
                 }
             }
         }
 
-        _frame = FrameOfTick(Math.Max(0, _tick));
-        if (_playButton.Content as string != (_playing ? "Pausa" : "Reproducir"))
-            _playButton.Content = _playing ? "Pausa" : "Reproducir";
+        _frame = DisplayFrame(Math.Max(0, _tick));
+        if (_playButton.Content as string != (_playing ? "Pausa" : "Reproducir")) _playButton.Content = _playing ? "Pausa" : "Reproducir";
         for (int i = 0; i < _thumbs.Count; i++)
-            _thumbs[i].BorderBrush = i == _frame ? (Brush)Application.Current.FindResource("AccentBrush") : Transparent;
-        var a = Advance();
-        double speed = a.Average() * fps;
-        _readout.Text = $"cuadro {_frame + 1}/{FrameCount} · avance {a[_frame % a.Length]} · velocidad {speed:0} casillas/s";
+            _thumbs[i].BorderBrush = i == _frame ? Accent : Transparent;
+        double speed = (def.Advance is { Length: > 0 } adv ? adv.Average() : 0) * def.Fps;
+        _readout.Text = $"cuadro {_frame + 1}/{def.FrameCount} · avance {def.AdvanceOf(_frame)} · velocidad {speed:0} casillas/s";
         Draw();
     }
 
     private void Draw()
     {
-        if (_cur is null) return;
         int gw = _atlas.GridWidth, gh = _atlas.GridHeight;
-        bool zones = On("zones") || On("cells");
-        string key = $"{_skin}|{_cur.Id}|{_frame}|{_zoom}|{On("mirror")}|{zones}|{On("cells")}";
+        string clip = CurStep.Clip;
+        string key = $"{_skin}|{clip}|{_frame}|{_zoom}|{On("mirror")}|{On("zones")}|{_atlas.IsEdited(_skin, clip, _frame)}|{_drawRevision}";
         if (key != _shownKey)
         {
             _shownKey = key;
-            _frameImage.Source = _atlas.Frame(_skin, _cur.Id, _frame, On("mirror"), _zoom);
+            // Se pide el cuadro a tamaño 1:1 y lo amplía WPF (vecino más cercano): así no se guardan en la caché del atlas
+            // imágenes enormes por cada zoom (un cuadro a zoom 6 ocupa más de 3 MB).
+            _frameImage.Source = _atlas.Frame(_skin, clip, _frame, On("mirror"));
             _frameImage.Width = gw * _zoom; _frameImage.Height = gh * _zoom;
-            _overlayImage.Source = zones
-                ? ZoneOverlay.Get("cat", gw, gh, _atlas.ExtraZones, _atlas.Main, _zoom, cellLines: On("cells") && _zoom >= 4)
-                : null;
+            _overlayImage.Source = On("zones") ? ZoneOverlay.Get("cat", gw, gh, _atlas.ExtraZones, _atlas.Main, _zoom) : null;
             _overlayImage.Width = gw * _zoom; _overlayImage.Height = gh * _zoom;
             _stage.Height = gh * _zoom + 26;
         }
-        _ground.Set(_camX, _zoom, _atlas.BaseRows, gw);
+        _ground.Set(_camX, _zoom, _atlas.BaseRows);
     }
 
-    private void CopySettings()
-    {
-        if (_cur is null) return;
-        CopyText($"{{\"id\":\"{_cur.Id}\",\"fps\":{Fps.ToString("0.##", CultureInfo.InvariantCulture)},\"advance\":[{string.Join(",", Advance())}]}}");
-    }
+    private int _drawRevision;
 
-    private static void CopyText(string text)
+    /// <summary>El dibujo de algún cuadro cambió (se guardó un retoque): rehacer la imagen y las miniaturas.</summary>
+    private void DrawingChanged()
     {
-        try { Clipboard.SetText(text); }
-        catch (System.Runtime.InteropServices.COMException) { /* el portapapeles lo tiene otra aplicación */ }
+        _drawRevision++;
+        _stripClip = "";
+        if (_plan.Count > 0) EnterStep();
     }
 
     // ---------------------------------------------------------------- suelo con marcas
     /// <summary>Línea del suelo con marcas cada 20 casillas que se desplazan con el avance del gato.</summary>
     private sealed class GroundView : FrameworkElement
     {
-        private double _camX, _baseRows, _cellW;
-        private int _zoom = 3;
+        private double _camX, _baseRows;
+        private int _zoom = 4;
         private bool _ready;
         private static readonly Pen LinePen = MakePen(0x59FFFFFF);
         private static readonly Brush LabelBrush = Frozen(0x8CFFFFFF);
@@ -842,11 +913,11 @@ public sealed class VisorWindow : Window
             return p;
         }
 
-        public void Set(double camX, int zoom, double baseRows, double cellW)
+        public void Set(double camX, int zoom, double baseRows)
         {
             if (_ready && camX == _camX && zoom == _zoom) return;
             _ready = true;
-            _camX = camX; _zoom = zoom; _baseRows = baseRows; _cellW = cellW;
+            _camX = camX; _zoom = zoom; _baseRows = baseRows;
             InvalidateVisual();
         }
 

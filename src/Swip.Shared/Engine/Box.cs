@@ -17,18 +17,21 @@ public sealed class BoxBody
 
     /// <summary>Inclinación máxima del tambaleo (grados).</summary>
     public const double MaxWobble = 6;
-    internal BoxBody(double width, double height, double topInsetClosed, double topInsetOpen)
+    internal BoxBody(double width, double height, double topInsetClosed, double topInsetOpen, double cellSize = 1)
     {
         Width = width;
         Height = height;
         TopInsetClosed = topInsetClosed;
         TopInsetOpen = topInsetOpen;
+        _cellSize = cellSize;
     }
+
+    internal double _cellSize;
 
     public double X { get; internal set; }
     public double Y { get; internal set; }
-    public double Width { get; }
-    public double Height { get; }
+    public double Width { get; internal set; }
+    public double Height { get; internal set; }
     public double Vx { get; internal set; }
     public double Vy { get; internal set; }
     /// <summary>Estado pedido: abierta o cerrada. Las solapas llegan a él fotograma a fotograma (<see cref="Lid"/>).</summary>
@@ -62,7 +65,7 @@ public sealed class BoxBody
     /// Borde superior VISIBLE: el margen de cada estado y, cerrada, lo que esté aplastada (el gato que
     /// está encima baja con la tapa).
     /// </summary>
-    public double VisibleTop => Y + Height * (Open ? TopInsetOpen : TopInsetClosed) + (Open ? 0 : Squash);
+    public double VisibleTop => Y + Height * (Open ? TopInsetOpen : TopInsetClosed) + (Open ? 0 : Squash * _cellSize);
 
     /// <summary>Empujón de tambaleo (grados por segundo). Suave: la mitad del impulso.</summary>
     internal void Shake(double impulse) => WobbleVelocity += impulse * 0.5;

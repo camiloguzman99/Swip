@@ -14,6 +14,9 @@ public sealed class ServiceClient
 {
     private const int ConnectTimeoutMs = 2000;
 
+    /// <summary>Tope de la respuesta: una lista de sesiones, usuarios o apps ocupa unos pocos KB.</summary>
+    private const int MaxResponseChars = 4 << 20;
+
     public Task<IReadOnlyList<SessionInfo>> GetSessionsAsync(CancellationToken ct = default) =>
         SendAsync(new IpcRequest { Kind = RequestKind.ListSessions }, ct,
             r => (IReadOnlyList<SessionInfo>)r.Sessions);
@@ -60,6 +63,11 @@ public sealed class ServiceClient
                 "No se pudo contactar el servicio Swip. ¿Está instalado y en ejecución?");
         }
 
+        // Solo se habla con el servicio de verdad (sesión 0): si un proceso de usuario se hubiera adelantado a crear
+        // el pipe, no se le envía nada ni se cree lo que conteste.
+        if (!Native.InteropNative.PipeServerIsInServicesSession(client.SafePipeHandle))
+            throw new ServiceUnavailableException("El pipe de Swip no lo atiende el servicio: se ignora.");
+
         using var writer = new StreamWriter(client, new UTF8Encoding(false), 1024, leaveOpen: true)
         {
             AutoFlush = true,
@@ -68,7 +76,7 @@ public sealed class ServiceClient
 
         await writer.WriteLineAsync(JsonSerializer.Serialize(request, IpcProtocol.Json));
 
-        string? line = await reader.ReadLineAsync(ct);
+        string? line = await BoundedLine.ReadAsync(reader, MaxResponseChars, ct);
         if (line is null)
             throw new ServiceUnavailableException("El servicio Swip cerró la conexión sin responder.");
 

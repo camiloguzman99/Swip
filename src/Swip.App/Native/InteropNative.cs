@@ -20,6 +20,22 @@ internal static class InteropNative
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNamedPipeServerProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint serverProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+
+    /// <summary>
+    /// True si quien atiende el pipe corre en la sesión 0 (la de los servicios). El servicio de Swip siempre está
+    /// ahí; un proceso de otro usuario que se hubiera adelantado a crear el pipe correría en una sesión de usuario.
+    /// Si Windows no permite averiguarlo se devuelve true: lo que se rechaza es lo que se sabe seguro que no es.
+    /// </summary>
+    public static bool PipeServerIsInServicesSession(Microsoft.Win32.SafeHandles.SafePipeHandle pipe) =>
+        !GetNamedPipeServerProcessId(pipe, out uint pid)
+        || !ProcessIdToSessionId(pid, out uint session)
+        || session == 0;
+
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TRANSPARENT = 0x00000020;
     public const int WS_EX_LAYERED = 0x00080000;

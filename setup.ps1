@@ -80,7 +80,7 @@ try {
 
     Write-Host ""
     Write-Host "Swip reinstalado correctamente (servicio recreado desde cero)." -ForegroundColor Green
-    Write-Host "Ahora abre el menú del gato en segundo plano y revisa: $env:ProgramData\Swip\service.log" -ForegroundColor Green
+    Write-Host "Ahora abre el menú del gato en segundo plano y revisa: $env:ProgramFiles\Swip\logs\service.log" -ForegroundColor Green
     Write-Host ""
     Read-Host "Pulsa Enter para cerrar"
 }

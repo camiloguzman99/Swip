@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Swip.Shared.Art;
 
 namespace Swip.Shared.Engine;
 
@@ -46,9 +47,32 @@ public sealed record ClipDef(string Id, int FrameCount, double Fps, bool Loop, s
 public sealed class ClipLibrary
 {
     private readonly Dictionary<string, ClipDef> _clips;
+    private readonly Dictionary<string, ClipDef> _original;   // los de art/clips.json, para poder deshacer un retoque
 
-    public ClipLibrary(IEnumerable<ClipDef> clips) =>
+    public ClipLibrary(IEnumerable<ClipDef> clips)
+    {
         _clips = clips.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        _original = new Dictionary<string, ClipDef>(_clips, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Cambia la velocidad (y, si se da, el avance por cuadro) de un clip: los retoques de tiempo que se hacen en
+    /// el Visor. El motor lee el clip en cada paso, así que vale al instante. Ignora un clip que no existe.
+    /// </summary>
+    public void Override(string id, double fps, int[]? advance)
+    {
+        if (!_original.TryGetValue(id, out var original)) return;
+        _clips[id] = original with { Fps = ClipTimingFile.ClampFps(fps), Advance = advance ?? original.Advance };
+    }
+
+    /// <summary>Devuelve un clip a lo que dice art/clips.json.</summary>
+    public void Reset(string id)
+    {
+        if (_original.TryGetValue(id, out var original)) _clips[id] = original;
+    }
+
+    /// <summary>El clip tal como está en art/clips.json (sin retoques).</summary>
+    public ClipDef Original(string id) => _original[id];
 
     public IReadOnlyCollection<ClipDef> All => _clips.Values;
 

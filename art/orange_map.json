@@ -440,5 +440,17 @@
    "g2c3",
    "g7c2"
   ]
+ },
+ "stand_idle": {
+  "frames": [
+   "g2c3",
+   "g2c3"
+  ]
+ },
+ "loaf_idle": {
+  "frames": [
+   "r5c1",
+   "r5c2"
+  ]
  }
 }

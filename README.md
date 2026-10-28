@@ -25,10 +25,16 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   gustan más las cajas que las casas.
 - 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
   dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
-- 🔍 **Visor** (opción de la caja): una ventana emergente con el estilo de los menús donde se ve cada movimiento del
-  gato como lo anima el motor (fps y avance editables, secuencias para probar transiciones), cuáles están listos, cuáles
-  usan una pose prestada y cuáles aún no tienen arte (con el texto para pedirlos a Gemini). Los datos salen de
-  `src/Swip.App/Assets/atlas/visor.json` (`tools/art/build_viewer.py`).
+- 🔍 **Visor** (opción de la caja): una ventana emergente con el estilo de los menús, con una pestaña por gato.
+  A la izquierda, las acciones básicas y debajo las transiciones; a la derecha (75 % del ancho), el visor: al elegir una
+  acción se ve esa acción, y al elegir otra distinta se ve la transición desde la anterior (encadenando las que hagan
+  falta) hasta terminar en la elegida. Desde ahí también se puede **cambiar el tiempo de cada transición** (fps o
+  duración y avance por cuadro), **colorear y corregir el dibujo** cuadro a cuadro (lápiz, borrador, gotero, relleno,
+  reemplazo de color, deshacer; el original se puede restablecer) y **cambiar el tamaño de las piezas**. Lo retocado
+  se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en `<gato>\<clip>_<cuadro>.png`) y el
+  tamaño en `settings.json`, así que lo ven todas las sesiones. Las acciones que faltan por dibujar salen en la lista con
+  el texto para pedirlas a Gemini. Los datos de estado salen de `src/Swip.App/Assets/atlas/visor.json`
+  (`tools/art/build_viewer.py`).
 - 🏷️ **Etiquetas** (opción de la caja): el nombre del usuario **sobre** cada gato, en el color de
   énfasis de Windows; si tiene dos palabras, en dos filas centradas. No se puede seleccionar ni
   estorba al clic.
@@ -192,7 +198,7 @@ parar el servicio y escribir en Archivos de programa). Va así:
    relanza el gato en cada sesión (sin privilegios de administrador). Si ves que el gato
    desaparece unos segundos y vuelve, ha ido bien.
 
-El resultado queda en `C:\ProgramData\Swip\update.log`. Si falla, el script muestra un aviso con
+El resultado queda en `C:\Program Files\Swip\logs\update.log`. Si falla, el script muestra un aviso con
 el motivo. Lanzado a mano (`update.ps1` sin `-Silent`) muestra la consola, con una pausa al final.
 
 ### Arranque y cierre
@@ -206,12 +212,16 @@ el motivo. Lanzado a mano (`update.ps1` sin `-Silent`) muestra la consola, con u
 
 ### Registros y diagnóstico
 
-Todos en `C:\ProgramData\Swip\`, con tamaño acotado (rotan a `.1` al pasar de 256 KB):
+Con tamaño acotado (rotan a `.1` al pasar de 256 KB). Los que escriben el servicio y el actualizador (que corren
+con privilegios) están en la carpeta de la instalación, `C:\Program Files\Swip\logs\`, donde solo los administradores
+pueden escribir: así un usuario no puede usarlos para sobrescribir otros archivos. Los de cada gato, en
+`C:\ProgramData\Swip\`.
 
-| Archivo           | Contenido                                                         |
-|-------------------|-------------------------------------------------------------------|
-| `service.log`     | Servicio: arranque, relanzamientos, publicaciones y lecturas.     |
-| `app-s{N}.log`    | El gato de la sesión `N`: pausas/reanudaciones y apps publicadas. |
+| Archivo                                  | Contenido                                                         |
+|------------------------------------------|-------------------------------------------------------------------|
+| `Program Files\Swip\logs\service.log`   | Servicio: arranque, relanzamientos, publicaciones y lecturas.     |
+| `Program Files\Swip\logs\update.log`    | Actualizador (modo silencioso).                                   |
+| `ProgramData\Swip\app-s{N}.log`          | El gato de la sesión `N`: pausas/reanudaciones y apps publicadas. |
 
 Para ver todas las sesiones que Windows reporta y cuáles cuenta Swip como usuario (consola de
 **administrador**):

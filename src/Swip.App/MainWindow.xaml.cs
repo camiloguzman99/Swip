@@ -20,10 +20,11 @@ using Microsoft.Win32;
 
 namespace Swip.App;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IVisorHost
 {
     private readonly ServiceClient _client = new();
     private readonly SettingsStore _store = new();
+    private readonly ArtStore _art = new();                        // retoques del Visor (dibujo y tiempos), compartidos
     private readonly Dictionary<string, CatAgent> _agents = new();
     private readonly Dictionary<string, CatSprite> _sprites = new();
     private readonly DispatcherTimer _loop = new(DispatcherPriority.Render);
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
             if (_openAgent is not null)
             {
                 _openAgent.MenuOpen = false;
+                _openAgent.ConfirmingLogon = false;
                 _world?.SetAttention(_openAgent.Key, false);
             }
             _openAgent = null;
@@ -109,9 +111,9 @@ public partial class MainWindow : Window
     }
 
     // Tamaños fijos (ya no configurables): la franja es toda la pantalla.
-    // Para el motor la caja es el cuadro principal de su cuadrícula: 1 casilla = 1 px lógico (32x32).
-    private static double BoxH => BoxSprites.Main.Height;
-    private static double BoxW => BoxSprites.Main.Width;
+    // Para el motor la caja es el cuadro principal de su cuadrícula (66x66 casillas de ArtScale.CellSize px).
+    private static double BoxH => BoxSprites.Main.Height * ArtScale.CellSize;
+    private static double BoxW => BoxSprites.Main.Width * ArtScale.CellSize;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -124,14 +126,19 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = _store.Load();
+        ArtScale.CellSize = _settings.CellSize;   // tamaño de las piezas (se cambia desde el Visor)
 
-        // Motor: medidas en DIP = casillas. Para el motor el gato es su cuadro PRINCIPAL (100x100, con los
-        // pies en la base); las zonas extra (40 a cada lado y 30 debajo) solo se dibujan.
+        // Motor: medidas en DIP. Para el motor el gato es su cuadro PRINCIPAL (100x100 casillas, con los pies en
+        // la base); las zonas extra (40 casillas a cada lado y 30 debajo) solo se dibujan. Cada casilla mide
+        // ArtScale.CellSize px lógicos: el dibujo conserva todas sus casillas pero se ve más pequeño.
         _atlas = CatAtlas.Default;
+        ReloadArtFromDisk();   // retoques de tiempo y de dibujo hechos en el Visor (por esta u otra sesión)
+        double cell = ArtScale.CellSize;
         _world = new SwipWorld(new WorldConfig(
-            CatWidth: _atlas.Main.Width, CatHeight: _atlas.BaseRows,
+            CatWidth: _atlas.Main.Width * cell, CatHeight: _atlas.BaseRows * cell,
             BoxWidth: BoxW, BoxHeight: BoxH,
-            BoxTopInsetClosed: BoxSprites.TopInsetClosed, BoxTopInsetOpen: BoxSprites.TopInsetOpen));
+            BoxTopInsetClosed: BoxSprites.TopInsetClosed, BoxTopInsetOpen: BoxSprites.TopInsetOpen,
+            CellSize: cell));
         // El atlas mide la cabeza sobre el cuadro entero (130 filas); el motor, sobre las 100 de encima de la base.
         _world.HeadFraction = clip => _atlas.HeadFraction("orange", clip) * _atlas.GridHeight / _atlas.BaseRows;
 
@@ -194,6 +201,7 @@ public partial class MainWindow : Window
             if (_settingsWatcher is not null) _settingsWatcher.EnableRaisingEvents = true;
 
             _lastTicks = _clock.ElapsedTicks; // sin esto el primer tick vería un salto de tiempo enorme
+            VisorWindow.SetActive(true);
             _loop.Start();
             _refresh.Start();
             _publish.Start();
@@ -221,6 +229,7 @@ public partial class MainWindow : Window
 
         InfoPopup.IsOpen = false;
         ConfigPopup.IsOpen = false;
+        VisorWindow.SetActive(false);
         Effects.Clear();
         if (!_clickThrough)
         {
@@ -363,6 +372,9 @@ public partial class MainWindow : Window
     {
         if (!delta.Any) return;
 
+        if (delta.Size) ApplyCellSize();
+        if (delta.Art) ReloadArtFromDisk();
+
         if (delta.ShowLabels)
             foreach (var sprite in _sprites.Values)
                 sprite.ShowLabel(_settings.ShowLabels);
@@ -436,7 +448,7 @@ public partial class MainWindow : Window
         // La ventana baja además, sobre la barra de tareas, lo que los gatos dibujan por debajo de la
         // base (24 filas): la cola que cuelga, algo que se cae... El suelo del motor sigue siendo el
         // borde del área de trabajo.
-        double below = _atlas.GridHeight - _atlas.BaseRows;
+        double below = (_atlas.GridHeight - _atlas.BaseRows) * ArtScale.CellSize;
         if (_hwnd != IntPtr.Zero && DisplayNative.PrimaryWorkArea() is { } work)
         {
             DisplayNative.PlaceWindow(_hwnd, work.Pixels);
@@ -490,11 +502,16 @@ public partial class MainWindow : Window
     /// <summary>Coloca la caja en su posición guardada, o por defecto en la esquina inferior izquierda.</summary>
     private void RepositionBox()
     {
-        // El cuadro de dibujo de la caja tiene margen para la caja inclinada (BoxSprites).
-        Box.Width = BoxBack.Width = BoxZones.Width = BoxSprites.FrameWidth;
-        Box.Height = BoxBack.Height = BoxZones.Height = BoxSprites.FrameHeight;
+        ResizeBoxImages();
         _world.PlaceBox(_settings.BoxLeft ?? 8); // la caja siempre descansa en el suelo
         RenderBox();
+    }
+
+    /// <summary>El cuadro de dibujo de la caja tiene margen para la caja inclinada (BoxSprites).</summary>
+    private void ResizeBoxImages()
+    {
+        Box.Width = BoxBack.Width = BoxSprites.FrameWidth * ArtScale.CellSize;
+        Box.Height = BoxBack.Height = BoxSprites.FrameHeight * ArtScale.CellSize;
     }
 
     // --- Bucle de animación -----------------------------------------------------
@@ -535,27 +552,24 @@ public partial class MainWindow : Window
         var b = _world.Box;
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
         // El cuadro de dibujo empieza Side/Top casillas antes que la caja; todo sobre píxeles reales.
-        double left = PixelScale.Snap(b.X - BoxSprites.Main.X, scale);
-        double top = PixelScale.Snap(b.Y - BoxSprites.Main.Y, scale);
+        double perCell = scale * ArtScale.CellSize;   // píxeles reales por casilla
+        double left = PixelScale.Snap(b.X - BoxSprites.Main.X * ArtScale.CellSize, scale);
+        double top = PixelScale.Snap(b.Y - BoxSprites.Main.Y * ArtScale.CellSize, scale);
         Canvas.SetLeft(Box, left);
         Canvas.SetTop(Box, top);
         Canvas.SetLeft(BoxBack, left);
         Canvas.SetTop(BoxBack, top);
-        Canvas.SetLeft(BoxZones, left);
-        Canvas.SetTop(BoxZones, top);
-        BoxZones.Source = ZoneOverlay.Get("box", BoxSprites.FrameWidth, BoxSprites.FrameHeight,
-            BoxSprites.ExtraZones, BoxSprites.Main, ZoneOverlay.FactorFor(scale));
 
         // Fotograma según las solapas y el aplastamiento; el tambaleo se dibuja con píxeles (la caja
         // gira dentro de su cuadrícula), a grados enteros. La capa trasera (el interior) va detrás del
         // gato que está dentro y la delantera, delante.
-        var shown = (BoxSprites.FrameName(b.Lid, b.Squash), (int)Math.Round(b.Wobble), PixelScale.Prescale(scale));
+        var shown = (BoxSprites.FrameName(b.Lid, b.Squash), (int)Math.Round(b.Wobble), PixelScale.Prescale(perCell));
         if (_boxShown != shown)
         {
             _boxShown = shown;
             Box.Source = BoxSprites.Get(shown.Item1, back: false, shown.Item2, shown.Item3);
             BoxBack.Source = BoxSprites.Get(shown.Item1, back: true, shown.Item2, shown.Item3);
-            var mode = PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality;
+            var mode = PixelScale.IsWhole(perCell) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality;
             RenderOptions.SetBitmapScalingMode(Box, mode);
             RenderOptions.SetBitmapScalingMode(BoxBack, mode);
         }
@@ -661,7 +675,7 @@ public partial class MainWindow : Window
                 _agents.Remove(gone);
             }
 
-            double maxX = Math.Max(0, _world.Width - _atlas.Main.Width);
+            double maxX = Math.Max(0, _world.Width - _atlas.Main.Width * ArtScale.CellSize);
             bool placedNewCat = false; // algún gato recibió una X aleatoria que hay que compartir
 
             foreach (var u in users)
@@ -823,6 +837,7 @@ public partial class MainWindow : Window
             _world.SetAttention(_openAgent.Key, false);
         }
         _openAgent = sprite.Agent;
+        _openAgent.ConfirmingLogon = false; // siempre se abre con las aplicaciones, no con el aviso
         _openAgent.MenuOpen = true;
         _world.SetAttention(_openAgent.Key, true); // te mira mientras ves su menú (dormido, no se entera)
         InfoPopup.DataContext = sprite.Agent;
@@ -880,7 +895,7 @@ public partial class MainWindow : Window
         _boxStartTop = _world.Box.Y;
         // Punto agarrado respecto a la caja recta (el cuadro de dibujo empieza antes, por el margen).
         var grab = e.GetPosition(Box);
-        _boxGrab = new Point(grab.X - BoxSprites.Main.X, grab.Y - BoxSprites.Main.Y);
+        _boxGrab = new Point(grab.X - BoxSprites.Main.X * ArtScale.CellSize, grab.Y - BoxSprites.Main.Y * ArtScale.CellSize);
         Box.CaptureMouse();
     }
 
@@ -1035,13 +1050,20 @@ public partial class MainWindow : Window
 
     // --- Cambio de sesión -------------------------------------------------------
 
-    private async void StartLogon_Click(object sender, RoutedEventArgs e)
+    /// <summary>«Iniciar sesión»: en vez de una ventana emergente, el menú pide confirmar en su sitio.</summary>
+    private void StartLogon_Click(object sender, RoutedEventArgs e)
     {
-        var confirm = MessageBox.Show(
-            "Se mostrará la pantalla de inicio de sesión de Windows para que inicies esta cuenta. " +
-            "Tu sesión actual quedará abierta en segundo plano. ¿Continuar?",
-            "Swip", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if ((sender as FrameworkElement)?.DataContext is CatAgent agent) agent.ConfirmingLogon = true;
+    }
+
+    private void StartLogonNo_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is CatAgent agent) agent.ConfirmingLogon = false;
+    }
+
+    private async void StartLogonYes_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is CatAgent agent) agent.ConfirmingLogon = false;
         try
         {
             InfoPopup.IsOpen = false;
@@ -1099,11 +1121,47 @@ public partial class MainWindow : Window
 
     // --- Opciones ---------------------------------------------------------------
 
+    // --- IVisorHost: lo que el Visor pide a la ventana de los gatos --------------------
+
+    double IVisorHost.CellSize => ArtScale.CellSize;
+
+    void IVisorHost.SetCellSize(double value) => UpdateSettings(s => s.CellSize = ArtScale.Clamp(value));
+
+    void IVisorHost.ArtChanged() => UpdateSettings(s => s.ArtRevision = unchecked(s.ArtRevision + 1));
+
+    /// <summary>Aplica el tamaño de las piezas guardado en los ajustes: gatos, caja, suelo y ventana.</summary>
+    private void ApplyCellSize()
+    {
+        double cell = ArtScale.Clamp(_settings.CellSize);
+        ArtScale.CellSize = cell;
+        _world.SetCellSize(cell);
+        foreach (var sprite in _sprites.Values) sprite.ApplyCellSize();
+        _boxShown = null;
+        ApplyStripBounds();   // la ventana baja bajo la base lo que dibujan los gatos por debajo de ella
+        // Si hay un gato dentro o encima de la caja, o la estás arrastrando, no se recoloca (se cambiaría lo que está pasando).
+        if (_world.Box.OccupantId is null && !Box.IsMouseCaptured) RepositionBox();
+        else { ResizeBoxImages(); RenderBox(); }
+    }
+
+    /// <summary>Vuelve a leer los retoques del Visor: tiempos de los clips y cuadros retocados (ArtStore).</summary>
+    private void ReloadArtFromDisk()
+    {
+        ClipTimingFile.Apply(ClipLibrary.Default, _art.LoadTiming(ClipLibrary.Default));
+        // Los PNG solo se vuelven a decodificar si cambiaron (un retoque de tiempo no toca ninguno).
+        string signature = _art.FramesSignature();
+        if (signature == _artSignature) return;
+        _artSignature = signature;
+        _atlas.ReloadOverrides(_art);
+        foreach (var sprite in _sprites.Values) sprite.UpdateScale();
+    }
+
+    private string _artSignature = "";
+
     /// <summary>Abre el Visor (ventana emergente con cada movimiento del gato y lo que falta por dibujar).</summary>
     private void Visor_Click(object sender, RoutedEventArgs e)
     {
         ConfigPopup.IsOpen = false;
-        VisorWindow.ShowOrActivate(_settings.MenuBlur);
+        VisorWindow.ShowOrActivate(_settings.MenuBlur, this);
     }
 
     private void ToggleLabels_Click(object sender, RoutedEventArgs e)
@@ -1126,6 +1184,19 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Se ejecuta con privilegios de administrador: solo el script de la instalación (Archivos de programa, donde
+        // únicamente escriben los administradores), nunca uno que esté en una carpeta que cualquier usuario pueda cambiar.
+        string installDir = Path.GetFullPath(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Swip")) + Path.DirectorySeparatorChar;
+        if (!scriptPath.StartsWith(installDir, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "Por seguridad, la actualización solo se ejecuta desde la instalación en Archivos de programa " +
+                "(" + installDir.TrimEnd(Path.DirectorySeparatorChar) + "). Instala Swip con install.ps1 para poder actualizar.",
+                "Swip", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
             ConfigPopup.IsOpen = false;
@@ -1133,7 +1204,7 @@ public partial class MainWindow : Window
             // En segundo plano: elevado (el aviso de UAC es inevitable, hay que parar el servicio y
             // escribir en Archivos de programa) pero SIN ventana. -Silent quita las pausas "Pulsa
             // Enter" (ocultas esperarían una tecla para siempre); el resultado queda en
-            // %ProgramData%\Swip\update.log y, si falla, el propio script muestra un aviso.
+            // <instalación>\logs\update.log y, si falla, el propio script muestra un aviso.
             // Si va bien, se nota porque el gato desaparece unos segundos y vuelve.
             var psi = new ProcessStartInfo
             {

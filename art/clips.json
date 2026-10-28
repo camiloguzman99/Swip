@@ -1470,6 +1470,40 @@
      "frame": 0
     }
    ]
+  },
+  {
+   "id": "stand_idle",
+   "fps": 1.0,
+   "loop": true,
+   "status": "placeholder",
+   "description": "De pie quieto, visto de lado (acción básica: punto de partida de las transiciones).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
+  },
+  {
+   "id": "loaf_idle",
+   "fps": 1.2,
+   "loop": true,
+   "status": "placeholder",
+   "description": "Acostado en pan, visto de lado, respirando (acción básica).",
+   "reference": [
+    {
+     "base": "walk",
+     "frame": 0
+    },
+    {
+     "base": "walk",
+     "frame": 0
+    }
+   ]
   }
  ]
 }

@@ -12,7 +12,7 @@ namespace Swip.App.Controls;
 /// <summary>
 /// Vista de un gato. El motor (<see cref="SwipWorld"/>) decide todo; este control solo dibuja la
 /// pose: la cuadrícula del fotograma con la paleta del gato, sombra y rótulo. El dibujo siempre mide
-/// lo mismo en px lógicos (100 de alto) y se adapta a la escala de cada pantalla sin deformarse.
+/// lo mismo en px lógicos (100 casillas de alto, a ArtScale.CellSize px cada una) y se adapta a la escala de cada pantalla sin deformarse.
 /// </summary>
 public partial class CatSprite : UserControl
 {
@@ -34,12 +34,23 @@ public partial class CatSprite : UserControl
         NameLabel.Text = LabelFormat.Split(agent.DisplayName); // dos palabras = dos filas
         LabelBox.SizeChanged += (_, _) => PositionLabel(_lastPose);
 
-        // El cuadro de dibujo mide lo que la cuadrícula: 1 casilla = 1 px lógico, siempre.
-        Cell.Width = Img.Width = Zones.Width = atlas.GridWidth;
-        Cell.Height = Img.Height = Zones.Height = atlas.GridHeight;
-        Width = atlas.GridWidth;
-        Height = atlas.GridHeight;
-        Shadow.Margin = new Thickness(0, atlas.BaseRows - Shadow.Height / 2, 0, 0); // sobre la base
+        ApplyCellSize();
+    }
+
+    /// <summary>
+    /// El cuadro de dibujo mide lo que la cuadrícula: 1 casilla = ArtScale.CellSize px lógicos, siempre. Se vuelve a
+    /// llamar cuando se cambia el tamaño de las piezas desde el Visor.
+    /// </summary>
+    public void ApplyCellSize()
+    {
+        double cell = ArtScale.CellSize;
+        Cell.Width = Img.Width = _atlas.GridWidth * cell;
+        Cell.Height = Img.Height = _atlas.GridHeight * cell;
+        Width = _atlas.GridWidth * cell;
+        Height = _atlas.GridHeight * cell;
+        Shadow.Width = 52 * cell;          // la sombra acompaña al tamaño del gato (26 x 6 px a 0,5)
+        Shadow.Height = 12 * cell;
+        Shadow.Margin = new Thickness(0, _atlas.BaseRows * cell - Shadow.Height / 2, 0, 0); // sobre la base
         UpdateScale();
     }
 
@@ -53,12 +64,12 @@ public partial class CatSprite : UserControl
         double scale = newScale ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
         if (scale <= 0) scale = 1;
         _scale = scale;
-        _prescale = PixelScale.Prescale(scale);
-        // Marcos con líneas de exactamente 1 píxel real, alineadas con las casillas.
-        Zones.Source = ZoneOverlay.Get("cat", _atlas.GridWidth, _atlas.GridHeight, _atlas.ExtraZones, _atlas.Main,
-            ZoneOverlay.FactorFor(scale));
+        // Píxeles reales por casilla: con casillas de media unidad lógica, a 100 % son 0,5 (reducción suave) y a
+        // 200 % exactamente 1 (nítido); las posiciones, en cambio, se ajustan con la escala de la pantalla.
+        double perCell = scale * ArtScale.CellSize;
+        _prescale = PixelScale.Prescale(perCell);
         RenderOptions.SetBitmapScalingMode(Img,
-            PixelScale.IsWhole(scale) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
+            PixelScale.IsWhole(perCell) ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
         Img.Source = null; // se vuelve a pedir el fotograma con la ampliación nueva
         Render();
     }
@@ -67,8 +78,8 @@ public partial class CatSprite : UserControl
     public double Scale => _scale;
 
     /// <summary>Dónde empieza el cuadro principal (el gato para el motor) dentro del cuadro de dibujo.</summary>
-    public double MainOffsetX => _atlas.Main.X;
-    public double MainOffsetY => _atlas.Main.Y;
+    public double MainOffsetX => _atlas.Main.X * ArtScale.CellSize;
+    public double MainOffsetY => _atlas.Main.Y * ArtScale.CellSize;
 
 
     /// <summary>Dibuja la pose actual del gato (se llama en cada fotograma).</summary>

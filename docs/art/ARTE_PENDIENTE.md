@@ -23,7 +23,7 @@ para correr o estirarse y 30 filas debajo para lo que cuelga. La guarda en letra
 Cada gato tiene su propio dibujo (naranja y atigrado); no hay más colores ni variantes.
 La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 
-**Total:** 42 clips, 202 fotogramas por piel (404 contando naranja y atigrado).
+**Total:** 44 clips, 206 fotogramas por piel (412 contando naranja y atigrado).
 
 | Clip | Fotogramas | Velocidad | Qué debe mostrar | Referencia actual |
 |---|---|---|---|---|
@@ -69,6 +69,8 @@ La hoja de referencia de cada clip está en `docs/art/reference/<clip>.png`.
 | `turn_sit8` | 8 | 6 fps, una vez | Sentado girando por las 8 direcciones (espalda, 3/4, perfil, frente...). | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
 | `turn_stand8` | 8 | 6 fps, una vez | De pie girando por las 8 direcciones. | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
 | `turn_loaf8` | 8 | 6 fps, una vez | Acostado girando por las 8 direcciones. | #0: pose walk #0<br>#1: pose walk #0<br>#2: pose walk #0<br>#3: pose walk #0<br>#4: pose walk #0<br>#5: pose walk #0<br>#6: pose walk #0<br>#7: pose walk #0 |
+| `stand_idle` | 2 | 1.0 fps, bucle | De pie quieto, visto de lado (acción básica: punto de partida de las transiciones). | #0: pose walk #0<br>#1: pose walk #0 |
+| `loaf_idle` | 2 | 1.2 fps, bucle | Acostado en pan, visto de lado, respirando (acción básica). | #0: pose walk #0<br>#1: pose walk #0 |
 
 ## Ya con arte final
 

@@ -6,7 +6,8 @@ string output = args.Length > 0 ? args[0] : "trace.json";
 double seconds = args.Length > 1 ? double.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 120;
 int seed = args.Length > 2 ? int.Parse(args[2]) : 4;
 
-var world = new SwipWorld(new WorldConfig(100, 100, 66, 66, 0, 0), seed: seed); // principal del gato 100x100 y de la caja 66x66
+const double cell = 0.5; // px lógicos por casilla (ArtScale.CellSize): el gato 100x100 casillas se ve de 50 px
+var world = new SwipWorld(new WorldConfig(100 * cell, 100 * cell, 66 * cell, 66 * cell, 0, 0, CellSize: cell), seed: seed);
 world.Resize(900, 230);
 world.PlaceBox(430);
 world.AddCat("activo", 150, CatMode.Walk);
@@ -41,6 +42,6 @@ for (double t = 0; t < seconds; t += dt, step++)
     });
 }
 
-File.WriteAllText(output, JsonSerializer.Serialize(new { width = world.Width, height = world.Height, frames, log }));
+File.WriteAllText(output, JsonSerializer.Serialize(new { width = world.Width, height = world.Height, cell, frames, log }));
 Console.WriteLine($"{frames.Count} instantáneas, {log.Count} comportamientos -> {output}");
 foreach (var g in log.GroupBy(x => x).OrderByDescending(g => g.Count())) Console.WriteLine($"  {g.Count(),3}  {g.Key}");

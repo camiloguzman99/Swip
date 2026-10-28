@@ -25,6 +25,10 @@ public sealed class CatAtlas
     private readonly Dictionary<string, ClipFrames> _clips = new(StringComparer.Ordinal);
     private readonly Dictionary<(string Skin, string Clip, int Frame, bool Mirrored, int Prescale), ImageSource> _cache = new();
     private readonly Dictionary<(string Skin, string Clip), double> _headCache = new();
+    // Cuadros retocados desde el Visor (ArtStore): píxeles BGRA de la cuadrícula entera. Tienen prioridad sobre la hoja.
+    private readonly Dictionary<(string Skin, string Clip, int Frame), byte[]> _overrides = new();
+    private readonly Dictionary<(string Skin, string Clip, int Frame), Rect> _overrideBounds = new();
+    private const byte VisibleAlpha = 20;
 
     private sealed record FrameMeta(int Cell, Dictionary<string, Rect> Bounds);
     private sealed record ClipFrames(FrameMeta[] Frames);
@@ -83,13 +87,8 @@ public sealed class CatAtlas
         var key = (skin, clip, frame, mirrored, prescale);
         if (_cache.TryGetValue(key, out var cached)) return cached;
 
-        var sheet = _sheets.TryGetValue(skin, out var s) ? s : _sheets.Values.First();
-        int col = meta.Cell % _columns, row = meta.Cell / _columns;
-        var crop = new CroppedBitmap(sheet, new Int32Rect(col * _cellW, row * _cellH, _cellW, _cellH));
-        var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
         int stride = _cellW * 4;
-        var pixels = new byte[stride * _cellH];
-        bgra.CopyPixels(pixels, stride, 0);
+        var pixels = FramePixels(skin, clip, frame);
 
         // Espejo y ampliación entera: cada casilla pasa a ser un bloque de prescale x prescale píxeles.
         int w = _cellW * prescale, h = _cellH * prescale, outStride = w * 4;
@@ -108,6 +107,64 @@ public sealed class CatAtlas
         result.Freeze();
         _cache[key] = result;
         return result;
+    }
+
+    /// <summary>
+    /// Píxeles BGRA (GridWidth x GridHeight) de un fotograma tal como se dibuja: el retocado si lo hay y, si no, el
+    /// de la hoja. Es una copia: se puede modificar (el editor del Visor parte de aquí).
+    /// </summary>
+    public byte[] FramePixels(string skin, string clip, int frame)
+    {
+        skin = CatSkins.Normalize(skin);
+        var meta = Meta(clip, frame);
+        if (meta is null) { clip = "sleep_curl"; frame = 0; meta = Meta(clip, 0)!; }
+        frame = Math.Clamp(frame, 0, _clips[clip].Frames.Length - 1);
+        if (_overrides.TryGetValue((skin, clip, frame), out var edited)) return (byte[])edited.Clone();
+
+        var sheet = _sheets.TryGetValue(skin, out var s) ? s : _sheets.Values.First();
+        int col = meta.Cell % _columns, row = meta.Cell / _columns;
+        var crop = new CroppedBitmap(sheet, new Int32Rect(col * _cellW, row * _cellH, _cellW, _cellH));
+        var bgra = new FormatConvertedBitmap(crop, PixelFormats.Bgra32, null, 0);
+        var pixels = new byte[_cellW * 4 * _cellH];
+        bgra.CopyPixels(pixels, _cellW * 4, 0);
+        return pixels;
+    }
+
+    /// <summary>True si el fotograma tiene un retoque guardado.</summary>
+    public bool IsEdited(string skin, string clip, int frame) =>
+        _overrides.ContainsKey((CatSkins.Normalize(skin), clip, frame));
+
+    /// <summary>Cuántos fotogramas tiene un clip (0 si no existe).</summary>
+    public int FrameCount(string clip) => _clips.TryGetValue(clip, out var c) ? c.Frames.Length : 0;
+
+    /// <summary>Pone (o quita, con null) el retoque de un fotograma y borra lo que se había dibujado con el anterior.</summary>
+    public void SetOverride(string skin, string clip, int frame, byte[]? bgra)
+    {
+        skin = CatSkins.Normalize(skin);
+        var key = (skin, clip, frame);
+        if (bgra is null) { _overrides.Remove(key); _overrideBounds.Remove(key); }
+        else if (bgra.Length == _cellW * _cellH * 4) { _overrides[key] = bgra; _overrideBounds.Remove(key); }
+        Invalidate(skin, clip, frame);
+    }
+
+    /// <summary>Vuelve a leer TODOS los retoques de la carpeta compartida (otra sesión pudo cambiarlos).</summary>
+    public void ReloadOverrides(ArtStore store)
+    {
+        _overrides.Clear();
+        _overrideBounds.Clear();
+        foreach (string skin in CatSkins.All)
+            foreach (var ((clip, frame), pixels) in store.LoadFrames(skin, _cellW, _cellH))
+                if (_clips.TryGetValue(clip, out var c) && frame < c.Frames.Length)
+                    _overrides[(skin, clip, frame)] = pixels;
+        _cache.Clear();
+        _headCache.Clear();
+    }
+
+    private void Invalidate(string skin, string clip, int frame)
+    {
+        foreach (var key in _cache.Keys.Where(k => k.Skin == skin && k.Clip == clip && k.Frame == frame).ToList())
+            _cache.Remove(key);
+        _headCache.Remove((skin, clip));
     }
 
     /// <summary>Tamaño de la cuadrícula de cada fotograma (casillas = px lógicos).</summary>
@@ -140,6 +197,13 @@ public sealed class CatAtlas
         var meta = Meta(clip, frame);
         if (meta is null) return new Rect(0, 0, 1, 1);
         skin = CatSkins.Normalize(skin);
+        int index = Math.Clamp(frame, 0, _clips[clip].Frames.Length - 1);
+        if (_overrides.TryGetValue((skin, clip, index), out var edited))
+        {
+            if (!_overrideBounds.TryGetValue((skin, clip, index), out var box))
+                _overrideBounds[(skin, clip, index)] = box = OpaqueBounds(edited);
+            return box;
+        }
         return meta.Bounds.TryGetValue(skin, out var r) ? r : meta.Bounds.Values.First();
     }
 
@@ -153,9 +217,27 @@ public sealed class CatAtlas
         if (_headCache.TryGetValue((skin, clip), out var v)) return v;
         double top = 0.3;
         if (_clips.TryGetValue(clip, out var c) && c.Frames.Length > 0)
-            top = c.Frames.Min(f => f.Bounds.TryGetValue(skin, out var r) ? r.Y : 0.3);
+            top = Enumerable.Range(0, c.Frames.Length).Min(i => Bounds(skin, clip, i).Y);
         _headCache[(skin, clip)] = top;
         return top;
+    }
+
+    /// <summary>Caja de los píxeles visibles de un fotograma retocado (0..1 sobre la cuadrícula).</summary>
+    private Rect OpaqueBounds(byte[] bgra)
+    {
+        int minX = _cellW, minY = _cellH, maxX = -1, maxY = -1;
+        for (int y = 0; y < _cellH; y++)
+            for (int x = 0; x < _cellW; x++)
+                if (bgra[(y * _cellW + x) * 4 + 3] > VisibleAlpha)
+                {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+        if (maxX < 0) return new Rect(0, 0, 0.01, 0.01);
+        return new Rect(minX / (double)_cellW, minY / (double)_cellH,
+            (maxX - minX + 1) / (double)_cellW, (maxY - minY + 1) / (double)_cellH);
     }
 
     private FrameMeta? Meta(string clip, int frame) =>

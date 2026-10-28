@@ -323,6 +323,10 @@ internal sealed class SessionManager
         if (targetSessionId == console)
             return; // ya está en pantalla
 
+        // Solo sesiones de usuario reales (no la de servicios, ni listeners, ni números inventados).
+        if (!EnumerateRaw().Any(r => r.SessionId == targetSessionId && IsUserSession(r)))
+            throw new InvalidOperationException("La sesión indicada no existe o no es la de un usuario.");
+
         if (!WtsInterop.WTSConnectSession(targetSessionId, console, string.Empty, true))
         {
             throw new InvalidOperationException(
@@ -386,9 +390,22 @@ internal sealed class SessionManager
         catch { /* si no se puede, seguimos */ }
     }
 
-    /// <summary>Log en %ProgramData%\Swip\service.log (rotativo: nunca pasa de ~512 KB).</summary>
-    private static readonly SwipLog Logger = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Swip", "service.log"));
+    /// <summary>
+    /// Log del servicio (rotativo: nunca pasa de ~512 KB), en la carpeta <c>logs</c> de la instalación
+    /// (C:\Program Files\Swip\logs\service.log): solo la puede escribir un administrador o SYSTEM. Antes estaba en
+    /// %ProgramData%\Swip, donde puede escribir cualquier usuario, y desde allí un enlace simbólico habría llevado
+    /// las escrituras y la rotación de SYSTEM a otros archivos.
+    /// </summary>
+    private static readonly SwipLog Logger = new(ServiceLogPath());
+
+    internal static string ServiceLogPath()
+    {
+        string? exe = Environment.ProcessPath;
+        string? installRoot = string.IsNullOrEmpty(exe) ? null : Directory.GetParent(Path.GetDirectoryName(exe)!)?.FullName;
+        return installRoot is null
+            ? Path.Combine(Path.GetTempPath(), "swip-service.log")
+            : Path.Combine(installRoot, "logs", "service.log");
+    }
 
     internal static void Log(string message) => Logger.Write(message);
 

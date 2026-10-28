@@ -29,7 +29,8 @@ SKIN_OF = {"activo": "orange", "fondo": "gray", "dormido": "orange"}
 meta = json.load(open(os.path.join(ATLAS, "atlas.json"), encoding="utf-8"))
 sheets = {s: Image.open(os.path.join(ATLAS, f)).convert("RGBA") for s, f in meta["skins"].items()}
 cw, ch = meta["cell"]
-MAIN_X, MAIN_Y, CAT_W, CAT_H = meta["main"]   # para el motor el gato es su cuadro principal
+MAIN_X, MAIN_Y, CAT_W, CAT_H = meta["main"]   # para el motor el gato es su cuadro principal (en casillas)
+CELL = 1.0   # px lógicos por casilla: lo fija render() con el valor de la simulación (ArtScale.CellSize)
 box_img = {f[4:-4]: Image.open(os.path.join(BOX, f)).convert("RGBA")
            for f in os.listdir(BOX) if f.startswith("box_") and f.endswith(".png")}
 
@@ -86,27 +87,32 @@ def cat_frame(skin, clip, frame):
 
 def draw_cat(canvas, c, skin):
     # El dibujo no se deforma: cuadrícula ampliada píxel a píxel, espejo y desplazamiento en casillas enteras.
-    img = cat_frame(skin, c["clip"], c["frame"]).resize((cw * SCALE, ch * SCALE), Image.NEAREST)
+    k = SCALE * CELL   # píxeles de la imagen por casilla
+    img = cat_frame(skin, c["clip"], c["frame"]).resize((round(cw * k), round(ch * k)),
+                                                       Image.NEAREST if k >= 1 else Image.BOX)
     if not c["facingRight"]:
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    B.draw_zones(img, B.cat_zones(), SCALE)   # marcos, como en la app
-    left = (round(c["X"] + c["ox"]) - MAIN_X) * SCALE
-    top = (round(c["Y"] + c["oy"]) - MAIN_Y) * SCALE
+    if k >= 1 and float(k).is_integer():
+        B.draw_zones(img, B.cat_zones(), int(k))   # marcos, como en la app (solo si cada casilla es un número entero de píxeles)
+    left = (round(c["X"] + c["ox"]) - MAIN_X * CELL) * SCALE
+    top = (round(c["Y"] + c["oy"]) - MAIN_Y * CELL) * SCALE
     canvas.alpha_composite(img, (round(left), round(top)))
 
 
 def draw_shadow(d, c):
     if c["shadow"] < 0:
         return
-    cx = (c["X"] + CAT_W / 2) * SCALE
-    y = (c["Y"] + CAT_H + c["oy"] + c["shadow"]) * SCALE
+    cx = (c["X"] + CAT_W * CELL / 2) * SCALE
+    y = (c["Y"] + CAT_H * CELL + c["oy"] + c["shadow"]) * SCALE
     k = 1 / (1 + c["shadow"] / 40)
     rx, ry = 14 * SCALE * k, 3 * SCALE * k
     d.ellipse([cx - rx, y - ry, cx + rx, y + ry], fill=(0, 0, 0, round(70 * k)))
 
 
-def render(snapshot, width, height):
-    W, H = round(width * SCALE), round((height + BELOW) * SCALE)
+def render(snapshot, width, height, cell=1.0):
+    global CELL
+    CELL = cell
+    W, H = round(width * SCALE), round((height + BELOW * cell) * SCALE)
     canvas = Image.new("RGBA", (W, H), (58, 62, 70, 255))
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -117,10 +123,13 @@ def render(snapshot, width, height):
     name = box_frame(box.get("Lid", 4 if box["Open"] else 0), box.get("Squash", 0))
     front = tilt_box(box_img[name], box["Wobble"])            # tambaleo con píxeles, como en la app
     back = tilt_box(box_img[name + "_back"], box["Wobble"], pivot_of=box_img[name])
-    bimg = front.resize((front.width * SCALE, front.height * SCALE), Image.NEAREST)
-    bback = back.resize((back.width * SCALE, back.height * SCALE), Image.NEAREST)
-    B.draw_zones(bimg, B.box_zones(), SCALE)
-    bx, by = (box["X"] - BOX_SIDE) * SCALE, (box["Y"] - BOX_TOP) * SCALE
+    kb = SCALE * cell
+    mode = Image.NEAREST if kb >= 1 else Image.BOX
+    bimg = front.resize((round(front.width * kb), round(front.height * kb)), mode)
+    bback = back.resize((round(back.width * kb), round(back.height * kb)), mode)
+    if kb >= 1 and float(kb).is_integer():
+        B.draw_zones(bimg, B.box_zones(), int(kb))
+    bx, by = (box["X"] - BOX_SIDE * cell) * SCALE, (box["Y"] - BOX_TOP * cell) * SCALE
 
     cats = snapshot["cats"]
     for c in cats:
@@ -145,7 +154,7 @@ def render(snapshot, width, height):
         else:
             fd.text((x, y), GLYPH.get(p["kind"], "*"), fill=col, font=F_FX, anchor="mm")
     for c in cats:
-        fd.text(((c["X"] + CAT_W / 2) * SCALE, (c["Y"] - 8) * SCALE),
+        fd.text(((c["X"] + CAT_W * CELL / 2) * SCALE, (c["Y"] - 8) * SCALE),
                 f"{c['Id']}: {c['behavior']}", fill=(255, 214, 120, 255), font=F_SMALL, anchor="mb")
     fd.text((6, 4), f"t = {snapshot['t']:.1f} s", fill=(230, 230, 230, 255), font=F_SMALL)
     canvas.alpha_composite(fx)
@@ -159,13 +168,13 @@ def main():
     if "--gif" in sys.argv:
         i = sys.argv.index("--gif")
         a, b = float(sys.argv[i + 1]), float(sys.argv[i + 2])
-        imgs = [render(f, trace["width"], trace["height"]).convert("P", palette=Image.ADAPTIVE)
+        imgs = [render(f, trace["width"], trace["height"], trace.get("cell", 1.0)).convert("P", palette=Image.ADAPTIVE)
                 for f in frames if a <= f["t"] <= b]
         imgs[0].save(out, save_all=True, append_images=imgs[1:], duration=100, loop=0)
         return
     times = [float(t) for t in sys.argv[3].split(",")] if len(sys.argv) > 3 else [10, 40, 70, 100]
     picks = [min(frames, key=lambda f: abs(f["t"] - t)) for t in times]
-    rendered = [render(f, trace["width"], trace["height"]) for f in picks]
+    rendered = [render(f, trace["width"], trace["height"], trace.get("cell", 1.0)) for f in picks]
     sheet = Image.new("RGBA", (rendered[0].width, sum(r.height for r in rendered) + 4 * len(rendered)), (20, 20, 24, 255))
     y = 0
     for r in rendered:

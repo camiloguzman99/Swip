@@ -25,10 +25,6 @@
             <Image x:Name="Box" Cursor="Hand" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"
                    MouseLeftButtonDown="Box_Down" MouseMove="Box_Move" MouseLeftButtonUp="Box_Up"
                    MouseRightButtonUp="BoxRight_Click" />
-            <!-- Marcos del cuadro de dibujo de la caja (siempre visibles): zonas en azul, principal en
-                 verde, base en magenta. -->
-            <Image x:Name="BoxZones" Stretch="Fill" IsHitTestVisible="False"
-                   RenderOptions.BitmapScalingMode="NearestNeighbor" />
         </Canvas>
 
         <!-- Partículas del motor (zzz, corazones, polvo...). Encima de todo y sin recibir clics. -->
@@ -37,51 +33,70 @@
         <!-- Menú de cada gato (clic derecho), en 3 niveles. El encabezado se puede arrastrar. -->
         <Popup x:Name="InfoPopup" Placement="Custom" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" Opened="Popup_Opened">
-            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="{StaticResource MenuCornerRadius}" Padding="12" MinWidth="260">
+            <Border Background="{StaticResource MenuPanelBrush}" CornerRadius="{StaticResource MenuCornerRadius}" Padding="12" Width="320">
                 <StackPanel>
-                    <!-- NIVEL 1: nombre (arrastrable) -->
+                    <!-- NIVEL 1: nombre (50 %), CPU (25 %) y RAM (25 %). Arrastrable. Las mismas proporciones
+                         y colores que las filas de las aplicaciones, para entenderlo de un vistazo. -->
                     <Border x:Name="CatHeader" Style="{StaticResource ListCard}"
                             Cursor="SizeAll"
                             MouseLeftButtonDown="InfoHeader_Down" MouseMove="InfoHeader_Move"
                             MouseLeftButtonUp="InfoHeader_Up">
                         <Grid>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayName}" Foreground="#FFFFFFFF"
-                                           FontWeight="Bold" FontSize="13" FontFamily="Consolas" />
-                            </StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Foreground="#FFFFFFFF"
+                                       FontWeight="Bold" FontSize="13" FontFamily="Consolas"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="CPU" Foreground="#FF8FD0FF" FontWeight="SemiBold"
+                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="RAM" Foreground="#FFB7E39C" FontWeight="SemiBold"
+                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right"
+                                       VerticalAlignment="Center" />
                         </Grid>
                     </Border>
 
                     <!-- Separador 1px (encima de las apps) -->
                     <Border Height="1" Background="#40FFFFFF" Margin="2,6,2,2" />
 
-                    <!-- NIVEL 2: apps abiertas en la otra sesión -->
-                    <ItemsControl ItemsSource="{Binding Apps}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource ListCard}" Padding="10,6">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="#FFDADCE0"
-                                                   FontSize="11" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Cpu}" Foreground="#FF8FD0FF"
-                                                   FontSize="11" FontFamily="Consolas" MinWidth="34"
-                                                   TextAlignment="Right" Margin="8,0,0,0" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Ram}" Foreground="#FFB7E39C"
-                                                   FontSize="11" FontFamily="Consolas" MinWidth="34"
-                                                   TextAlignment="Right" Margin="6,0,0,0" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <Border Style="{StaticResource ListCard}" Padding="10,6"
-                            Visibility="{Binding AppsLoading, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Cargando…" Foreground="#FF808080" FontSize="11" />
+                    <!-- NIVEL 2: apps abiertas en la otra sesión (50 % / 25 % / 25 %). Al pedir confirmar el
+                         inicio de sesión se oculta y en su lugar va el aviso. -->
+                    <StackPanel Visibility="{Binding ShowApps, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl ItemsSource="{Binding Apps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ListCard}" Padding="12,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="#FFDADCE0"
+                                                       FontSize="11" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Cpu}" Foreground="#FF8FD0FF"
+                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Ram}" Foreground="#FFB7E39C"
+                                                       FontSize="11" FontFamily="Consolas" TextAlignment="Right" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Style="{StaticResource ListCard}" Padding="12,6"
+                                Visibility="{Binding AppsLoading, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Cargando…" Foreground="#FF808080" FontSize="11" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Aviso de «Iniciar sesión» (antes una ventana emergente): ocupa el sitio de las aplicaciones. -->
+                    <Border Style="{StaticResource ListCard}" Padding="12,6"
+                            Visibility="{Binding ConfirmingLogon, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Foreground="#FFDADCE0" FontSize="12" TextWrapping="Wrap"
+                                   Text="Se mostrará la pantalla de inicio de sesión de Windows para que inicies esta cuenta. Tu sesión actual quedará abierta en segundo plano. ¿Continuar?" />
                     </Border>
 
                     <!-- Separador 1px (debajo de las apps) -->
@@ -99,7 +114,20 @@
                     </Border>
                     <Button Content="Iniciar sesión" Style="{StaticResource ListRowAccent}"
                             Margin="0,8,0,0" Click="StartLogon_Click"
-                            Visibility="{Binding ShowNoSession, Converter={StaticResource BoolToVis}}" />
+                            Visibility="{Binding ShowStartButton, Converter={StaticResource BoolToVis}}" />
+                    <!-- Sí / No: donde estaba «Iniciar sesión» -->
+                    <Grid Margin="0,8,0,0"
+                          Visibility="{Binding ShowConfirmButtons, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="Sí" Style="{StaticResource ListRowAccent}"
+                                Margin="0" Click="StartLogonYes_Click" />
+                        <Button Grid.Column="2" Content="No" Style="{StaticResource ListRowAccent}"
+                                Margin="0" Click="StartLogonNo_Click" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </Popup>

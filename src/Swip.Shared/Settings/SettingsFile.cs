@@ -12,6 +12,12 @@ public sealed class SettingsFile
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
+    /// <summary>
+    /// Tamaño máximo que se lee. La carpeta compartida la puede escribir cualquier usuario: un settings.json enorme no
+    /// debe agotar la memoria de la app de todas las sesiones (el normal ocupa unos pocos KB).
+    /// </summary>
+    public const long MaxBytes = 1 << 20;
+
     private readonly string _path;
     private readonly string _lockPath;
 
@@ -34,7 +40,7 @@ public sealed class SettingsFile
         {
             try
             {
-                if (!File.Exists(_path)) return new AppSettings();
+                if (!File.Exists(_path) || new FileInfo(_path).Length > MaxBytes) return new AppSettings();
                 // FileShare.Delete: otro proceso puede estar reemplazando el archivo (escritura atómica).
                 using var fs = new FileStream(_path, FileMode.Open, FileAccess.Read,
                     FileShare.ReadWrite | FileShare.Delete);

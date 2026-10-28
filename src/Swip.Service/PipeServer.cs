@@ -79,16 +79,23 @@ internal sealed class PipeServer
 
     private static NamedPipeServerStream CreatePipe()
     {
-        // ACL: SYSTEM control total; usuarios interactivos pueden leer/escribir para poder
-        // consultar y pedir el cambio. El gato corre en la sesión interactiva del usuario.
+        // ACL: SYSTEM control total; usuarios interactivos pueden leer/escribir para poder consultar y pedir el
+        // cambio. El gato corre en la sesión interactiva del usuario. Nadie más que el servicio puede crear
+        // instancias del pipe (si no, otro usuario podría ponerse a atender las peticiones de los gatos con datos
+        // falsos) y las conexiones de red se deniegan expresamente.
         var security = new PipeSecurity();
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.NetworkSid, null),
+            PipeAccessRights.FullControl, AccessControlType.Deny));
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.InteractiveSid, null),
+            PipeAccessRights.CreateNewInstance, AccessControlType.Deny));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
             PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.InteractiveSid, null),
-            PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance,
-            AccessControlType.Allow));
+            PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
         return NamedPipeServerStreamAcl.Create(
             IpcProtocol.PipeName,
@@ -173,13 +180,15 @@ internal sealed class PipeServer
         // Publicar y salir actúan SIEMPRE sobre la sesión real del cliente: nadie puede falsear
         // la lista de otra sesión ni impedirle el gato a otro usuario.
         RequestKind.PublishApps => OwnSession(clientSession, session =>
-            _sessions.PublishApps(session, request.Apps.Take(MaxAppsPerPublish).ToList())),
+            _sessions.PublishApps(session, AppInfoSanitizer.Clean(request.Apps.Take(MaxAppsPerPublish)))),
 
         RequestKind.QuitSession => OwnSession(clientSession, _sessions.QuitSession),
 
-        RequestKind.SwitchToSession => SwitchResponse(request.TargetSessionId),
+        // Cambiar de sesión o abrir la pantalla de inicio solo lo puede pedir el gato de la sesión que está en pantalla
+        // (quien tiene el teclado): un usuario en segundo plano no puede sacar al que está trabajando.
+        RequestKind.SwitchToSession => OnlyFromConsole(clientSession, () => _sessions.SwitchToSession(request.TargetSessionId)),
 
-        RequestKind.StartLogon => StartLogonResponse(),
+        RequestKind.StartLogon => OnlyFromConsole(clientSession, _sessions.StartLogon),
 
         _ => new IpcResponse { Ok = false, Error = "Petición no reconocida." },
     };
@@ -192,15 +201,14 @@ internal sealed class PipeServer
         return new IpcResponse { Ok = true };
     }
 
-    private IpcResponse SwitchResponse(int targetSessionId)
+    private static IpcResponse OnlyFromConsole(int? clientSession, Action action)
     {
-        _sessions.SwitchToSession(targetSessionId);
-        return new IpcResponse { Ok = true };
-    }
-
-    private IpcResponse StartLogonResponse()
-    {
-        _sessions.StartLogon();
+        if (clientSession is null || clientSession.Value != WtsInterop.WTSGetActiveConsoleSessionId())
+        {
+            SessionManager.Log($"Rechazado: la sesión {clientSession?.ToString() ?? "desconocida"} pidió cambiar de sesión sin estar en pantalla.");
+            return new IpcResponse { Ok = false, Error = "Solo la sesión que está en pantalla puede cambiar de sesión." };
+        }
+        action();
         return new IpcResponse { Ok = true };
     }
 }

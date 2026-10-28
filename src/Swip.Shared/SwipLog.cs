@@ -26,6 +26,7 @@ public sealed class SwipLog
             {
                 string? dir = Path.GetDirectoryName(_path);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                if (IsLink(_path) || IsLink(_path + ".1")) return;   // un enlace podría llevar la escritura a otro archivo
                 RotateIfNeeded();
                 File.AppendAllText(_path,
                     $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
@@ -47,6 +48,12 @@ public sealed class SwipLog
         }
         Write(message);
         return true;
+    }
+
+    private static bool IsLink(string path)
+    {
+        var info = new FileInfo(path);
+        return info.Exists && (info.Attributes.HasFlag(FileAttributes.ReparsePoint) || info.LinkTarget is not null);
     }
 
     private void RotateIfNeeded()
