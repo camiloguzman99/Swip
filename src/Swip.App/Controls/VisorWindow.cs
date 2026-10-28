@@ -390,20 +390,21 @@ public sealed partial class VisorWindow : Window
         button.MouseEnter += (_, _) => button.Background = Hover;
         button.MouseLeave += (_, _) => button.Background = Transparent;
 
-        var options = new StackPanel { Margin = new Thickness(4) };
-        var panel = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), Child = options, Margin = new Thickness(0, 0, 0, 4) };
+        // El desplegable es una copia del recuadro de abajo (mismo ancho, mismo botón) y se abre justo encima de él.
+        var options = new StackPanel();
+        var panel = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Child = options };
         _selectorPopup = new System.Windows.Controls.Primitives.Popup
         {
             PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, StaysOpen = false,
-            AllowsTransparency = true, Child = panel,
+            AllowsTransparency = false, Child = panel,
         };
 
-        // Solo ofrece el cambio: el otro gato (el elegido ya está en el botón). Tiene el ancho del botón.
+        // Solo ofrece el cambio: el otro gato (el elegido ya está en el botón).
         void Open()
         {
             options.Children.Clear();
             string target = _skin == CatSkins.Gray ? CatSkins.Orange : CatSkins.Gray;
-            var item = new Border { Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(8), Background = Transparent, Cursor = Cursors.Hand };
+            var item = new Border { Padding = new Thickness(8), CornerRadius = new CornerRadius(9), Background = Transparent, Cursor = Cursors.Hand, Margin = new Thickness(8, 10, 8, 8) };
             var line = new StackPanel { Orientation = Orientation.Horizontal };
             var face = Face(target, 30);
             face.Margin = new Thickness(0, 0, 10, 0);
@@ -414,7 +415,10 @@ public sealed partial class VisorWindow : Window
             item.MouseLeave += (_, _) => item.Background = Transparent;
             item.MouseLeftButtonUp += (_, _) => { _selectorPopup.IsOpen = false; SelectSkin(target); };
             options.Children.Add(item);
-            panel.Width = button.ActualWidth;
+            // Ancho de toda la zona de abajo (el botón más su margen) y apoyado en su línea de arriba.
+            panel.Width = button.ActualWidth + button.Margin.Left + button.Margin.Right;
+            _selectorPopup.HorizontalOffset = -button.Margin.Left;
+            _selectorPopup.VerticalOffset = -button.Margin.Top;
             _selectorPopup.IsOpen = true;
         }
         button.MouseLeftButtonUp += (_, _) => { if (_selectorPopup.IsOpen) _selectorPopup.IsOpen = false; else Open(); };
@@ -428,7 +432,14 @@ public sealed partial class VisorWindow : Window
         _list = new StackPanel { Margin = new Thickness(10, 0, 10, 6) };
         // La barra de desplazamiento es fina y con los colores del tema; la lista nunca toca el borde de arriba.
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list };
-        scroll.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), ThinScrollBarStyle());
+        // El estilo se pone directamente a la barra de la plantilla: el implícito no siempre llega a ella.
+        var barStyle = ThinScrollBarStyle();
+        scroll.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), barStyle);
+        scroll.Loaded += (_, _) =>
+        {
+            scroll.ApplyTemplate();
+            if (scroll.Template.FindName("PART_VerticalScrollBar", scroll) is System.Windows.Controls.Primitives.ScrollBar bar) bar.Style = barStyle;
+        };
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -998,11 +1009,11 @@ public sealed partial class VisorWindow : Window
     {
         string thumb = _thumbColor();
         string xaml = "<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ScrollBar'>" +
-            "<Setter Property='Width' Value='4'/><Setter Property='Background' Value='Transparent'/>" +
+            "<Setter Property='Width' Value='8'/><Setter Property='Background' Value='Transparent'/>" +
             "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'>" +
             "<Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True'>" +
             "<Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType='Thumb'>" +
-            $"<Border Background='{thumb}' CornerRadius='2'/>" +
+            $"<Border Background='{thumb}' CornerRadius='4' Margin='1,0'/>" +
             "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb></Track></Grid>" +
             "</ControlTemplate></Setter.Value></Setter></Style>";
         return (Style)System.Windows.Markup.XamlReader.Parse(xaml);
