@@ -34,7 +34,7 @@ public sealed partial class VisorWindow
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromMilliseconds(900) };
     private Button _editToggle = null!;
     private Border _colorSwatch = null!;
-    private TextBox _hexBox = null!;
+    private readonly List<(Border Circle, System.Windows.Shapes.Path Icon)> _toolButtons = new();
     private WrapPanel _palette = null!;
     private const int MaxUndo = 60;
 
@@ -52,25 +52,72 @@ public sealed partial class VisorWindow
         _editToggle.Click += (_, _) => ToggleEditing();
         card.Children.Add(_editToggle);
 
-        card.Children.Add(Segments(new[] { "Lápiz", "Borrador", "Cuentagotas", "Bote" }, 0, i => _tool = (Tool)i));
-
-        var color = new StackPanel { Orientation = Orientation.Horizontal };
-        _colorSwatch = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1), BorderBrush = Muted, Margin = new Thickness(0, 0, 8, 6) };
-        var (hexFrame, hex) = Field(80);
-        _hexBox = hex;
-        _hexBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) UseHex(); };
-        _hexBox.LostFocus += (_, _) => UseHex();
-        color.Children.Add(_colorSwatch);
-        color.Children.Add(hexFrame);
-        color.Children.Add(Pill("Deshacer", Undo, compact: true));
-        card.Children.Add(FormRow("Color", color));
+        // Herramientas: iconos en círculos (lápiz, borrador, cuentagotas, bote) y, al final, el color elegido.
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        void AddTool(Tool tool, string path, string tip)
+        {
+            var (circle, icon) = Circle(path, tip, () => { _tool = tool; PaintTools(); });
+            _toolButtons.Add((circle, icon));
+            tools.Children.Add(circle);
+        }
+        AddTool(Tool.Pencil, "M2,14 L2.8,10.2 L11.6,1.4 L14.6,4.4 L5.8,13.2 Z M9.6,3.4 L12.6,6.4", "Lápiz");
+        AddTool(Tool.Eraser, "M2.5,9.5 L9,2.5 L14,7 L8.5,13.5 L5,13.5 Z M5.2,6.2 L10.6,11", "Borrador");
+        AddTool(Tool.Picker, "M13,1.5 L14.5,3 L12.3,5.2 L10.8,3.7 Z M10.8,3.7 L3.5,11 L2.5,14 L5.5,13 L12.3,5.2", "Cuentagotas");
+        AddTool(Tool.Fill, "M2.5,7.5 L8,2 L13.5,7.5 L8,13 Z M13,9.5 C14.2,11.2 14.4,12.3 13.2,13", "Bote de pintura");
+        _colorSwatch = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(1), BorderBrush = Muted, Margin = new Thickness(8, 0, 0, 0), ToolTip = "Color elegido" };
+        tools.Children.Add(_colorSwatch);
+        card.Children.Add(tools);
+        PaintTools();
 
         card.Children.Add(GroupLabel("Colores del gato"));
-        _palette = new WrapPanel();
+        _palette = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
         card.Children.Add(_palette);
+
+        // Abajo: deshacer (icono en círculo), restablecer y guardar.
+        var bottom = new StackPanel { Orientation = Orientation.Horizontal };
+        var (undo, undoIcon) = Circle("", "Deshacer", Undo, glyph: "↶");
+        bottom.Children.Add(undo);
+        var reset = Pill("Restablecer", RestoreOriginal);
+        reset.Margin = new Thickness(8, 0, 6, 0);
+        bottom.Children.Add(reset);
+        bottom.Children.Add(Pill("Guardar", () => { FlushEdit(); }));
+        card.Children.Add(bottom);
+
         SetColor(_color);
         RefreshPalette();
         return border;
+    }
+
+    /// <summary>Un botón redondo con un icono dibujado (o un símbolo de texto).</summary>
+    private static (Border Circle, System.Windows.Shapes.Path Icon) Circle(string path, string tip, Action click, string? glyph = null)
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = path.Length > 0 ? Geometry.Parse(path) : Geometry.Empty, Stroke = Text, StrokeThickness = 1.5, StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Stretch = Stretch.None,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        UIElement content = glyph is null
+            ? icon
+            : new TextBlock { Text = glyph, FontSize = 17, FontFamily = new FontFamily("Segoe UI Symbol"), Foreground = Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var circle = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Card, Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand, ToolTip = tip, Child = content, Tag = Card };
+        circle.MouseEnter += (_, _) => circle.Background = ReferenceEquals(circle.Tag, Accent) ? AccentHover : Hover;
+        circle.MouseLeave += (_, _) => circle.Background = circle.Tag as Brush ?? Card;
+        circle.MouseLeftButtonUp += (_, _) => click();
+        return (circle, icon);
+    }
+
+    /// <summary>Marca la herramienta elegida con el color de énfasis.</summary>
+    private void PaintTools()
+    {
+        for (int i = 0; i < _toolButtons.Count; i++)
+        {
+            bool on = i == (int)_tool;
+            var (circle, icon) = _toolButtons[i];
+            circle.Tag = on ? Accent : Card;
+            circle.Background = on ? Accent : Card;
+            icon.Stroke = on ? AccentFg : Text;
+        }
     }
 
     /// <summary>Engancha al escenario el pintado (botón izquierdo) y el desplazamiento del dibujo ampliado (botón derecho).</summary>
@@ -274,16 +321,6 @@ public sealed partial class VisorWindow
     {
         _color = c;
         _colorSwatch.Background = new SolidColorBrush(c);
-        _hexBox.Text = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-    }
-
-    private void UseHex()
-    {
-        string text = _hexBox.Text.Trim().TrimStart('#');
-        if (text.Length == 6 && int.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int v))
-            SetColor(Color.FromRgb((byte)(v >> 16), (byte)(v >> 8), (byte)v));
-        else
-            _hexBox.Text = $"#{_color.R:X2}{_color.G:X2}{_color.B:X2}";
     }
 
     /// <summary>Los colores de este gato: los mismos para todas sus acciones y transiciones (los más usados de todos sus cuadros).</summary>
@@ -322,6 +359,28 @@ public sealed partial class VisorWindow
             swatch.MouseLeftButtonUp += (_, _) => SetColor(color);
             _palette.Children.Add(swatch);
         }
+    }
+
+    /// <summary>Vuelve el cuadro que se ve a lo que traía la hoja (borra su retoque).</summary>
+    private void RestoreOriginal()
+    {
+        if (!_editing || _edKey.Length == 0) { SetStatus("Activa Editar para restablecer el cuadro."); return; }
+        _flushTimer.Stop();
+        _editDirty = false;
+        try
+        {
+            _store.DeleteFrame(_edSkin, _edClip, _edFrame);
+            _atlas.SetOverride(_edSkin, _edClip, _edFrame, null);
+            _host.ArtChanged();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus("No se pudo borrar el retoque: " + ex.Message);
+            return;
+        }
+        _undo.Clear();
+        _edKey = "";   // se vuelve a leer en el siguiente cuadro dibujado
+        DrawingChanged();
     }
 
     // ---------------------------------------------------------------- guardar
