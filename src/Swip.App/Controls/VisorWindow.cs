@@ -297,9 +297,9 @@ public sealed partial class VisorWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         });
         var lights = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        lights.Children.Add(Light(0xFF62C942, 0xFF2B6B18, "M0,0 L7,0 L0,7 Z M9,9 L2,9 L9,2 Z", "Ampliar", ToggleMaximize, filled: true));
-        lights.Children.Add(Light(0xFFF5BD3F, 0xFF8A6410, "M0,4 L9,4", "Minimizar", () => WindowState = WindowState.Minimized, filled: false));
-        lights.Children.Add(Light(0xFFEC5B57, 0xFF8E1F1C, "M0,0 L9,9 M9,0 L0,9", "Cerrar", () => Close(), filled: false));
+        lights.Children.Add(Light(0xFF62C942, "Ampliar", ToggleMaximize));
+        lights.Children.Add(Light(0xFFF5BD3F, "Minimizar", () => WindowState = WindowState.Minimized));
+        lights.Children.Add(Light(0xFFEC5B57, "Cerrar", () => Close()));
         bar.Children.Add(lights);
         right.Children.Add(bar);
         // Una línea de 1 px bajo la barra superior para separarla del visor (a todo el ancho del lado derecho).
@@ -317,20 +317,13 @@ public sealed partial class VisorWindow : Window
     private void ToggleMaximize() =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
-    /// <summary>Un círculo de color con su icono (ampliar, minimizar, cerrar), como en las ventanas de referencia.</summary>
-    private static UIElement Light(uint fill, uint glyph, string path, string tip, Action click, bool filled)
+    /// <summary>Un círculo de color liso (ampliar, minimizar, cerrar), como en las ventanas de referencia.</summary>
+    private static UIElement Light(uint fill, string tip, Action click)
     {
-        var shape = new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse(path), Stretch = Stretch.None, SnapsToDevicePixels = true,
-            Stroke = filled ? null : Frozen(glyph), StrokeThickness = 2, Fill = filled ? Frozen(glyph) : null,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            StrokeStartLineCap = PenLineCap.Flat, StrokeEndLineCap = PenLineCap.Flat,
-        };
         var circle = new Border
         {
-            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = Frozen(fill), Margin = new Thickness(6, 0, 0, 0),
-            Cursor = Cursors.Hand, ToolTip = tip, Child = shape,
+            Width = 14, Height = 14, CornerRadius = new CornerRadius(7), Background = Frozen(fill), Margin = new Thickness(6, 0, 0, 0),
+            Cursor = Cursors.Hand, ToolTip = tip,
         };
         circle.MouseLeftButtonUp += (_, _) => click();
         circle.MouseLeftButtonDown += (_, e) => e.Handled = true;   // no arrastra la ventana
