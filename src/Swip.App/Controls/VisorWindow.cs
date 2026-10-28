@@ -126,7 +126,11 @@ public sealed partial class VisorWindow : Window
 
     // ---------------------------------------------------------------- interfaz
     private Border _root = null!;
-    private StackPanel _list = null!, _strip = null!, _tabs = null!;
+    private StackPanel _list = null!, _strip = null!;
+    private Border _side = null!, _selectorFace = null!;
+    private TextBlock _selectorName = null!;
+    private System.Windows.Controls.Primitives.Popup _selectorPopup = null!;
+    private bool _dark;
     private Grid _viewPanel = null!;
     private TextBlock _readout = null!, _status = null!, _timingTitle = null!, _sizeInfo = null!;
     private WrapPanel _timingRow = null!;
@@ -166,6 +170,8 @@ public sealed partial class VisorWindow : Window
         _data = LoadData();
         _layered = MenuCorners.Choose(Environment.OSVersion.Version.Build, blur) == MenuCornerMode.Layered;
         _timing = _store.LoadTiming(_clips);
+        _dark = WindowsIsDark();
+        ApplyTheme(_dark);
 
         // Una ventana de aplicación normal: sale en la barra de tareas y en Alt+Tab con el icono de Swip, se puede
         // minimizar y NO se queda siempre encima de las demás.
@@ -175,7 +181,14 @@ public sealed partial class VisorWindow : Window
         Background = Brushes.Transparent;
         ShowInTaskbar = true;
         Topmost = false;
-        ResizeMode = ResizeMode.CanMinimize;
+        ResizeMode = ResizeMode.CanResize;
+        MinWidth = 960;
+        MinHeight = 600;
+        System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
+        {
+            CaptionHeight = 0, ResizeBorderThickness = new Thickness(6), GlassFrameThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0), UseAeroCaptionButtons = false,
+        });
         try { Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/swip.ico", UriKind.Absolute)); }
         catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException) { /* sin icono: no pasa nada */ }
         UseLayoutRounding = true;
@@ -217,9 +230,8 @@ public sealed partial class VisorWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Igual que los menús: desenfoque y esquinas según la versión de Windows (ver MainWindow.Popup_Opened).
-        bool blurred = _blur && BlurHelper.Apply(_root);
-        _root.Background = (Brush)Application.Current.FindResource(blurred ? "MenuPanelBlurBrush" : "MenuPanelBrush");
+        // Esquinas según la versión de Windows (ver MainWindow.Popup_Opened). El fondo es sólido: blanco o negro según el tono de Windows.
+        _root.Background = MainBg;
         if (!_layered)
         {
             _root.CornerRadius = new CornerRadius(MenuCorners.DwmRadius);
@@ -256,71 +268,169 @@ public sealed partial class VisorWindow : Window
     {
         _root = new Border
         {
-            Background = (Brush)Application.Current.FindResource("MenuPanelBrush"),
+            Background = MainBg, ClipToBounds = true,
             CornerRadius = (CornerRadius)Application.Current.FindResource("MenuCornerRadius"),
-            Padding = new Thickness(12),
         };
         var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
         _root.Child = grid;
 
-        // Encabezado arrastrable, como el de cada gato; con las dos pestañas (una por gato).
-        var header = new Border { Style = (Style)Application.Current.FindResource("ListCard"), Cursor = Cursors.SizeAll };
-        header.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); };
-        var hg = new Grid();
-        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock
-        {
-            Text = "Visor", Foreground = White, FontWeight = FontWeights.Bold, FontSize = 13,
-            FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0),
-        };
-        hg.Children.Add(title);
-        _tabs = Segments(new[] { "Gato naranja", "Gato gris" }, 0, i =>
-        {
-            if (_editOpen) { SetStatus("Pulsa Aceptar o Cancelar antes de cambiar de gato."); Select(_tabs!, SkinIndex()); return; }
-            _skin = i == 0 ? CatSkins.Orange : CatSkins.Gray;
-            _shownKey = "";
-            BuildStrip();
-        });
-        _tabs.Margin = new Thickness(0);
-        Grid.SetColumn(_tabs, 1);
-        hg.Children.Add(_tabs);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var minimize = Pill("Minimizar", () => WindowState = WindowState.Minimized);
-        var close = Pill("Cerrar", () => Close());
-        close.Margin = new Thickness(0);
-        buttons.Children.Add(minimize);
-        buttons.Children.Add(close);
-        Grid.SetColumn(buttons, 3);
-        hg.Children.Add(buttons);
-        header.Child = hg;
-        grid.Children.Add(header);
+        grid.Children.Add(BuildLeft());
 
-        // Cuerpo: la lista ocupa el 25 % y el visor el 75 %.
-        var body = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-        Grid.SetRow(body, 1);
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
-        body.Children.Add(BuildLeft());
-        var right = BuildRight();
-        Grid.SetColumn(right, 2);
-        body.Children.Add(right);
-        grid.Children.Add(body);
+        // Lado derecho: barra superior (arrastrable) con los tres círculos y, debajo, el visor.
+        var right = new Grid { Margin = new Thickness(14, 0, 14, 12) };
+        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var bar = new Grid { Background = Transparent, Height = 44, Cursor = Cursors.Arrow };
+        bar.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 2) ToggleMaximize();
+            else if (e.ButtonState == MouseButtonState.Pressed && WindowState == WindowState.Normal) DragMove();
+        };
+        bar.Children.Add(new TextBlock
+        {
+            Text = "Visor", Foreground = Muted, FontSize = 12, FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var lights = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        lights.Children.Add(Light(0xFF62C942, 0xFF2B6B18, "M0,0 L7,0 L0,7 Z M9,9 L2,9 L9,2 Z", "Ampliar", ToggleMaximize, filled: true));
+        lights.Children.Add(Light(0xFFF5BD3F, 0xFF8A6410, "M0,4 L9,4", "Minimizar", () => WindowState = WindowState.Minimized, filled: false));
+        lights.Children.Add(Light(0xFFEC5B57, 0xFF8E1F1C, "M0,0 L9,9 M9,0 L0,9", "Cerrar", () => Close(), filled: false));
+        bar.Children.Add(lights);
+        right.Children.Add(bar);
+        var content = BuildRight();
+        Grid.SetRow(content, 1);
+        right.Children.Add(content);
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
         return _root;
     }
 
-    private int SkinIndex() => _skin == CatSkins.Gray ? 1 : 0;
+    private void ToggleMaximize() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
+    /// <summary>Un círculo de color con su icono (ampliar, minimizar, cerrar), como en las ventanas de referencia.</summary>
+    private static UIElement Light(uint fill, uint glyph, string path, string tip, Action click, bool filled)
+    {
+        var shape = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(path), Stretch = Stretch.None, SnapsToDevicePixels = true,
+            Stroke = filled ? null : Frozen(glyph), StrokeThickness = 2, Fill = filled ? Frozen(glyph) : null,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            StrokeStartLineCap = PenLineCap.Flat, StrokeEndLineCap = PenLineCap.Flat,
+        };
+        var circle = new Border
+        {
+            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = Frozen(fill), Margin = new Thickness(6, 0, 0, 0),
+            Cursor = Cursors.Hand, ToolTip = tip, Child = shape,
+        };
+        circle.MouseLeftButtonUp += (_, _) => click();
+        circle.MouseLeftButtonDown += (_, e) => e.Handled = true;   // no arrastra la ventana
+        return circle;
+    }
+
+    private void SelectSkin(string skin)
+    {
+        if (skin == _skin) return;
+        if (_editOpen) { SetStatus("Pulsa Aceptar o Cancelar antes de cambiar de gato."); return; }
+        _skin = skin;
+        _shownKey = "";
+        BuildStrip();
+        RefreshSelector();
+    }
+
+    private static string SkinName(string skin) => skin == CatSkins.Gray ? "Gris" : "Naranja";
+
+    /// <summary>La cara del gato (recortada de un cuadro sentado) para el selector.</summary>
+    private Border Face(string skin, double size)
+    {
+        var face = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = Card, ClipToBounds = true };
+        try
+        {
+            if (_atlas.Frame(skin, "sit_look", 0) is System.Windows.Media.Imaging.BitmapSource bmp)
+            {
+                var b = _atlas.Bounds(skin, "sit_look", 0);
+                double side = Math.Max(8, Math.Min(b.Height * 0.46, b.Width));
+                double x = Math.Clamp(b.Right - side, 0, bmp.PixelWidth - side), y = Math.Clamp(b.Top, 0, bmp.PixelHeight - side);
+                var crop = new System.Windows.Media.Imaging.CroppedBitmap(bmp, new Int32Rect((int)x, (int)y, (int)side, (int)side));
+                var img = new Image { Source = crop, Stretch = Stretch.UniformToFill };
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor);
+                face.Child = img;
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException) { /* sin cara: queda el círculo */ }
+        return face;
+    }
+
+    private void RefreshSelector()
+    {
+        _selectorName.Text = SkinName(_skin);
+        _selectorFace.Child = Face(_skin, 30);
+    }
+
+    /// <summary>Abajo a la izquierda: la cara y el nombre del gato elegido; al pulsarlo se elige el otro.</summary>
+    private UIElement BuildSelector()
+    {
+        _selectorFace = new Border { Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) };
+        _selectorName = new TextBlock { Foreground = Text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var chevron = new TextBlock { Text = "⌃", Foreground = Muted, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(_selectorFace);
+        Grid.SetColumn(_selectorName, 1);
+        row.Children.Add(_selectorName);
+        Grid.SetColumn(chevron, 2);
+        row.Children.Add(chevron);
+        var button = new Border { Padding = new Thickness(8), CornerRadius = new CornerRadius(9), Background = Transparent, Cursor = Cursors.Hand, Child = row, Margin = new Thickness(8) };
+        button.MouseEnter += (_, _) => button.Background = Hover;
+        button.MouseLeave += (_, _) => button.Background = Transparent;
+
+        var options = new StackPanel { Margin = new Thickness(4) };
+        foreach (string skin in new[] { CatSkins.Orange, CatSkins.Gray })
+        {
+            string target = skin;
+            var item = new Border { Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(8), Background = Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 2) };
+            var line = new StackPanel { Orientation = Orientation.Horizontal };
+            var face = Face(skin, 28);
+            face.Margin = new Thickness(0, 0, 10, 0);
+            line.Children.Add(face);
+            line.Children.Add(new TextBlock { Text = SkinName(skin), Foreground = Text, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Width = 150 });
+            item.Child = line;
+            item.MouseEnter += (_, _) => item.Background = Hover;
+            item.MouseLeave += (_, _) => item.Background = Transparent;
+            item.MouseLeftButtonUp += (_, _) => { _selectorPopup.IsOpen = false; SelectSkin(target); };
+            options.Children.Add(item);
+        }
+        _selectorPopup = new System.Windows.Controls.Primitives.Popup
+        {
+            PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, StaysOpen = false,
+            AllowsTransparency = true,
+            Child = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Child = options, Margin = new Thickness(0, 0, 0, 4) },
+        };
+        button.MouseLeftButtonUp += (_, _) => _selectorPopup.IsOpen = !_selectorPopup.IsOpen;
+        RefreshSelector();
+        return button;
+    }
+
+    /// <summary>La lista de la izquierda sobre fondo claro u oscuro (según Windows) y, abajo, el selector de gato.</summary>
     private UIElement BuildLeft()
     {
-        _list = new StackPanel();
+        _list = new StackPanel { Margin = new Thickness(10, 6, 10, 6) };
         // Sin barra visible: la lista cabe entera; si la pantalla fuera muy pequeña, la rueda del ratón la desplaza.
-        return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, Content = _list };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, Content = _list };
+        var grid = new Grid();
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.Children.Add(scroll);
+        var selector = BuildSelector();
+        Grid.SetRow(selector, 1);
+        grid.Children.Add(selector);
+        _side = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = grid };
+        _side.SizeChanged += (_, e) => { if (e.WidthChanged && _list.Children.Count > 0) RefreshList(); };
+        return _side;
     }
 
     private UIElement BuildRight()
@@ -426,7 +536,7 @@ public sealed partial class VisorWindow : Window
     private void RefreshList()
     {
         _list.Children.Clear();
-        double width = Math.Max(150, (Width - 24) / 4 - 30);   // la lista es el 25 % del ancho (menos relleno)
+        double width = Math.Max(150, (_side.ActualWidth > 0 ? _side.ActualWidth : Width / 4) - 36);
 
         _list.Children.Add(GroupLabel("Acciones"));
         foreach (var a in Actions)
@@ -434,37 +544,28 @@ public sealed partial class VisorWindow : Window
             var action = a;
             string key = "a:" + action.Id;
             var b = Behaviors.Get(action.Behavior);
-            var item = ListItem(action.Name, QualityOf(b.Clip), "", () => { _selectedKey = key; ShowAction(action); RefreshList(); }, _selectedKey == key, width);
-            item.Padding = new Thickness(8, 4, 8, 4);
-            item.Margin = new Thickness(0, 0, 0, 1);
-            _list.Children.Add(item);
+            _list.Children.Add(Row(action.Name, QualityOf(b.Clip), () => { _selectedKey = key; ShowAction(action); RefreshList(); }, _selectedKey == key, width));
         }
 
+        // Las transiciones, en formato lista: punto verde si está dibujada (↺ si se reproduce al revés), rojo si es un corte.
         _list.Children.Add(GroupLabel("Transiciones entre posturas"));
-        var chips = new WrapPanel();
-        foreach (var edge in Behaviors.Edges.Where(e => e.Via is not null))
-            chips.Children.Add(Chip(edge, width));
-        foreach (var edge in Behaviors.Edges.Where(e => e.Via is null))
-            chips.Children.Add(Chip(edge, width));
-        _list.Children.Add(chips);
+        foreach (var edge in Behaviors.Edges.Where(e => e.Via is not null).Concat(Behaviors.Edges.Where(e => e.Via is null)))
+        {
+            var ed = edge;
+            string key = $"e:{ed.From}:{ed.To}";
+            string name = $"{PostureName(ed.From)} → {PostureName(ed.To)}" + (ed.Via is { Reverse: true } ? " ↺" : "");
+            var row = Row(name, ed.Via is null ? "falta" : QualityOf(ed.Via.Clip), () => { _selectedKey = key; ShowEdge(ed); RefreshList(); }, _selectedKey == key, width);
+            row.ToolTip = ed.Via is null ? "Sin transición dibujada: el motor la une con un corte directo." : $"Clip «{ed.Via.Clip}»";
+            _list.Children.Add(row);
+        }
     }
 
-    /// <summary>Una transición como botón pequeño: punto verde si está dibujada (↺ si se reproduce al revés), rojo si es un corte.</summary>
-    private Button Chip(PostureEdge edge, double listWidth)
+    private static Button Row(string name, string quality, Action click, bool selected, double width)
     {
-        string key = $"e:{edge.From}:{edge.To}";
-        string quality = edge.Via is null ? "falta" : QualityOf(edge.Via.Clip);
-        string name = $"{PostureName(edge.From)} → {PostureName(edge.To)}" + (edge.Via is { Reverse: true } ? " ↺" : "");
-        var b = new Button { Style = RowStyle, Margin = new Thickness(0, 0, 3, 3), Padding = new Thickness(6, 3, 6, 3), FontSize = 10 };
-        Rest(b, _selectedKey == key ? CardSel : Card);
-        AttachHover(b);
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = Dots[quality], Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
-        row.Children.Add(new TextBlock { Text = name, Foreground = Text, FontSize = 10.5 });
-        b.Content = row;
-        b.ToolTip = edge.Via is null ? "Sin transición dibujada: el motor la une con un corte directo." : $"Clip «{edge.Via.Clip}»";
-        b.Click += (_, _) => { _selectedKey = key; ShowEdge(edge); RefreshList(); };
-        return b;
+        var item = ListItem(name, quality, "", click, selected, width);
+        item.Padding = new Thickness(8, 3, 8, 3);
+        item.Margin = new Thickness(0, 0, 0, 1);
+        return item;
     }
 
     // ---------------------------------------------------------------- qué reproducir: acciones y transiciones
@@ -805,15 +906,6 @@ public sealed partial class VisorWindow : Window
         private double _camX, _baseRows;
         private int _zoom = 4;
         private bool _ready;
-        private static readonly Pen LinePen = MakePen(0x59FFFFFF);
-        private static readonly Brush LabelBrush = Frozen(0x8CFFFFFF);
-
-        private static Pen MakePen(uint argb)
-        {
-            var p = new Pen(Frozen(argb), 1);
-            p.Freeze();
-            return p;
-        }
 
         public void Set(double camX, int zoom, double baseRows)
         {
@@ -825,6 +917,8 @@ public sealed partial class VisorWindow : Window
 
         protected override void OnRender(DrawingContext dc)
         {
+            var LinePen = new Pen(GridLine, 1);
+            var LabelBrush = Muted;
             double w = ActualWidth, gy = Math.Round(_baseRows * _zoom) + 0.5;
             dc.DrawLine(LinePen, new Point(0, gy), new Point(w, gy));
             double centre = w / 2;

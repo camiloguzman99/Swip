@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,9 +11,41 @@ namespace Swip.App.Controls;
 /// </summary>
 internal static class VisorUi
 {
-    public static readonly Brush Muted = Frozen(0xFF9AA1AE), Text = Frozen(0xFFE8EAED), White = Frozen(0xFFFFFFFF);
-    public static readonly Brush Card = Frozen(0x22FFFFFF), CardSel = Frozen(0x40FFFFFF), Hover = Frozen(0x40FFFFFF);
+    // Los colores siguen el tono de Windows (claro u oscuro): ApplyTheme los fija al abrir el Visor.
+    public static Brush Muted = Frozen(0xFF9AA1AE), Text = Frozen(0xFFE8EAED), White = Frozen(0xFFFFFFFF);
+    public static Brush Card = Frozen(0x22FFFFFF), CardSel = Frozen(0x40FFFFFF), Hover = Frozen(0x40FFFFFF);
+    public static Brush SideBg = Frozen(0xFF1C1D21), MainBg = Frozen(0xFF121316), Line = Frozen(0xFF2A2C31), GridLine = Frozen(0x59FFFFFF);
     public static readonly Brush Transparent = Brushes.Transparent;
+
+    /// <summary>True si Windows está en tono oscuro para las aplicaciones (si no se puede leer, oscuro).</summary>
+    public static bool WindowsIsDark()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") is not int light || light == 0;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    public static void ApplyTheme(bool dark)
+    {
+        if (dark)
+        {
+            Muted = Frozen(0xFF9AA1AE); Text = Frozen(0xFFE8EAED); White = Frozen(0xFFFFFFFF);
+            Card = Frozen(0x22FFFFFF); CardSel = Frozen(0x40FFFFFF); Hover = Frozen(0x40FFFFFF);
+            SideBg = Frozen(0xFF1C1D21); MainBg = Frozen(0xFF121316); Line = Frozen(0xFF2A2C31); GridLine = Frozen(0x59FFFFFF);
+        }
+        else
+        {
+            Muted = Frozen(0xFF6B7280); Text = Frozen(0xFF1F2328); White = Frozen(0xFF000000);
+            Card = Frozen(0x0F000000); CardSel = Frozen(0x1F000000); Hover = Frozen(0x1A000000);
+            SideBg = Frozen(0xFFFFFFFF); MainBg = Frozen(0xFFF5F6F8); Line = Frozen(0xFFE5E7EB); GridLine = Frozen(0x66000000);
+        }
+    }
 
     public static readonly Dictionary<string, Brush> Dots = new()
     {
@@ -58,7 +91,7 @@ internal static class VisorUi
     {
         var b = new Button
         {
-            Content = text, Style = RowStyle, FontSize = 11, Margin = new Thickness(0, 0, 6, 6),
+            Content = text, Style = RowStyle, Foreground = Text, FontSize = 11, Margin = new Thickness(0, 0, 6, 6),
             Padding = compact ? new Thickness(8, 3, 8, 3) : new Thickness(10, 5, 10, 5),
         };
         Rest(b, Card);
@@ -84,7 +117,7 @@ internal static class VisorUi
         for (int i = 0; i < labels.Length; i++)
         {
             int index = i;
-            var b = new Button { Content = labels[i], Style = RowStyle, Padding = new Thickness(9, 5, 9, 5), FontSize = 11, Margin = new Thickness(0, 0, 2, 0) };
+            var b = new Button { Content = labels[i], Style = RowStyle, Foreground = Text, Padding = new Thickness(9, 5, 9, 5), FontSize = 11, Margin = new Thickness(0, 0, 2, 0) };
             AttachHover(b);
             b.Click += (_, _) => { Repaint(index); changed(index); };
             buttons.Add(b);

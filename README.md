@@ -25,10 +25,11 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   gustan más las cajas que las casas.
 - 🫥 **Click-through ajustado a cada figura**: el espacio vacío (y el margen transparente de cada
   dibujo) deja pasar los clics al escritorio; solo la figura visible del gato o de la caja los captura.
-- 🔍 **Visor** (opción de la caja): una ventana normal de aplicación (con el icono de Swip en la barra de tareas, se
-  puede minimizar y no se queda encima de las demás) con una pestaña por gato. A la izquierda, las **14 acciones** y las
-  transiciones entre posturas (en rojo las que aún no tienen arte); a la derecha (75 % del ancho), arriba del todo el
-  visor: al elegir una acción se ve esa acción precedida de las transiciones que haría el motor desde la postura
+- 🔍 **Visor** (opción de la caja): una ventana normal de aplicación (con el icono de Swip en la barra de tareas, no se
+  queda encima de las demás) de fondo blanco o negro según el tono de Windows, con tres círculos arriba a la derecha
+  (ampliar, minimizar y cerrar). A la izquierda, en una lista, las **14 acciones** y las transiciones entre posturas (en
+  rojo las que aún no tienen arte) y abajo el **selector de gato** (la cara del gato y el color de su sesión); a la
+  derecha, el visor: al elegir una acción se ve esa acción precedida de las transiciones que haría el motor desde la postura
   anterior, y al elegir una transición se ve de una postura a la otra. Debajo, los controles, los cuadros del clip y, en
   dos columnas, los **tiempos** (fps o duración y avance por cuadro) y el **tamaño de las piezas**. «Editar dibujo» cambia
   el visor por el editor de píxeles dentro de la misma ventana: **todos los cuadros** del clip a la vez, la paleta y las
