@@ -135,11 +135,12 @@ public sealed partial class VisorWindow : Window
     private System.Windows.Controls.Primitives.Popup _selectorPopup = null!;
     private bool _dark;
     private Grid _viewPanel = null!;
-    private TextBlock _readout = null!, _status = null!, _timingTitle = null!, _sizeInfo = null!;
+    private TextBlock _readout = null!, _status = null!;
     private StackPanel _timingRow = null!;
     private TextBox _sizeBox = null!;
     private Image _frameImage = null!, _overlayImage = null!;
     private GroundView _ground = null!;
+    private PixelGrid _pixelGrid = null!;
     private Grid _stage = null!;
     private Button _playButton = null!;
     private StackPanel _sizeSegments = null!;
@@ -209,7 +210,6 @@ public sealed partial class VisorWindow : Window
         _timer.Tick += (_, _) => Step();
 
         RefreshList();
-        UpdateSizeInfo();
         ShowAction(Actions.First(a => a.Id == "walk"));
         _clock.Start();
         _timer.Start();
@@ -249,22 +249,12 @@ public sealed partial class VisorWindow : Window
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is TextBox) return;   // en un cuadro de texto, Esc y Ctrl+Z son del propio cuadro
-        if (e.Key == Key.Escape && !_editOpen) Close();
-        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _editOpen) Undo();
+        if (e.Key == Key.Escape) Close();
+        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _editing) Undo();
     }
 
-    private bool _closeWarned;
-
-    /// <summary>Con cambios del editor sin aceptar, el primer intento de cerrar avisa; el segundo los descarta.</summary>
-    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
-    {
-        if (_editOpen && _editDirty && !_closeWarned)
-        {
-            _closeWarned = true;
-            e.Cancel = true;
-            SetStatus("Hay cambios sin aceptar. Pulsa Cerrar otra vez para descartarlos, o pulsa Aceptar antes.");
-        }
-    }
+    /// <summary>Lo pintado se guarda solo; al cerrar se guarda lo que quede pendiente.</summary>
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e) => FlushEdit();
 
     // ---------------------------------------------------------------- construcción de la interfaz
     private UIElement BuildUi()
@@ -333,10 +323,11 @@ public sealed partial class VisorWindow : Window
     private void SelectSkin(string skin)
     {
         if (skin == _skin) return;
-        if (_editOpen) { SetStatus("Pulsa Aceptar o Cancelar antes de cambiar de gato."); return; }
+        FlushEdit();
         _skin = skin;
         _shownKey = "";
         BuildStrip();
+        RefreshPalette();
         RefreshSelector();
     }
 
@@ -392,7 +383,7 @@ public sealed partial class VisorWindow : Window
 
         // El desplegable es una copia del recuadro de abajo (mismo ancho, mismo botón) y se abre justo encima de él.
         var options = new StackPanel();
-        var panel = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Child = options };
+        var panel = new Border { Background = SideBg, BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 1), Child = options };
         _selectorPopup = new System.Windows.Controls.Primitives.Popup
         {
             PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Top, StaysOpen = false,
@@ -430,16 +421,11 @@ public sealed partial class VisorWindow : Window
     private UIElement BuildLeft()
     {
         _list = new StackPanel { Margin = new Thickness(10, 0, 10, 6) };
-        // La barra de desplazamiento es fina y con los colores del tema; la lista nunca toca el borde de arriba.
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list };
-        // El estilo se pone directamente a la barra de la plantilla: el implícito no siempre llega a ella.
-        var barStyle = ThinScrollBarStyle();
-        scroll.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), barStyle);
-        scroll.Loaded += (_, _) =>
-        {
-            scroll.ApplyTemplate();
-            if (scroll.Template.FindName("PART_VerticalScrollBar", scroll) is System.Windows.Controls.Primitives.ScrollBar bar) bar.Style = barStyle;
-        };
+        // Sin barra de Windows: una barra propia, fina y con los colores del tema, dibujada encima. La lista nunca toca el borde de arriba.
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, Content = _list };
+        var host = new Grid();
+        host.Children.Add(scroll);
+        host.Children.Add(ThinScrollBar(scroll));
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -451,8 +437,8 @@ public sealed partial class VisorWindow : Window
             Child = new TextBlock { Text = "Swip", Foreground = White, FontSize = 14, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         grid.Children.Add(topRule);
-        Grid.SetRow(scroll, 1);
-        grid.Children.Add(scroll);
+        Grid.SetRow(host, 1);
+        grid.Children.Add(host);
         var selector = (FrameworkElement)BuildSelector();
         selector.Margin = new Thickness(8, 10, 8, 8);
         var bottom = new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Child = selector };   // línea sobre el usuario
@@ -478,13 +464,16 @@ public sealed partial class VisorWindow : Window
         // El escenario tiene el alto que deje la ventana y no cambia con el zoom: el dibujo se amplía o se aleja dentro de él.
         _stage = new Grid { ClipToBounds = true, Margin = new Thickness(0, 8, 0, 6), Background = Transparent };
         _ground = new GroundView();
-        _frameImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
-        _overlayImage = new Image { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.None, IsHitTestVisible = false, SnapsToDevicePixels = true };
+        _frameImage = new Image { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+        _overlayImage = new Image { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Stretch = Stretch.None, IsHitTestVisible = false, SnapsToDevicePixels = true };
         RenderOptions.SetBitmapScalingMode(_frameImage, BitmapScalingMode.NearestNeighbor);
         RenderOptions.SetBitmapScalingMode(_overlayImage, BitmapScalingMode.NearestNeighbor);
         _stage.Children.Add(_ground);
         _stage.Children.Add(_frameImage);
         _stage.Children.Add(_overlayImage);
+        _pixelGrid = new PixelGrid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+        _stage.Children.Add(_pixelGrid);
+        HookStageEditing();
         _stage.MouseWheel += (_, e) => { ChangeZoom(e.Delta > 0 ? 1 : -1); e.Handled = true; };
         Grid.SetRow(_stage, 0);
         _viewPanel.Children.Add(_stage);
@@ -504,22 +493,16 @@ public sealed partial class VisorWindow : Window
         for (int i = 0; i < 5; i++)
             cards.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 1 ? new GridLength(8) : new GridLength(1, GridUnitType.Star) });
         var playCard = BuildPlayCard();
-        var timingCard = BuildTimingCard();
+        var editCard = BuildEditCard();
         var sizeCard = BuildSizeCard();
-        Grid.SetColumn(timingCard, 2);
+        Grid.SetColumn(editCard, 2);
         Grid.SetColumn(sizeCard, 4);
         cards.Children.Add(playCard);
-        cards.Children.Add(timingCard);
+        cards.Children.Add(editCard);
         cards.Children.Add(sizeCard);
         Grid.SetRow(cards, 2);
         _viewPanel.Children.Add(cards);
         root.Children.Add(_viewPanel);
-
-        // ---- editor (VisorWindow.Editor.cs): ocupa el sitio del visor mientras está abierto
-        var editor = BuildEditorPanel();
-        editor.Visibility = Visibility.Collapsed;
-        root.Children.Add(editor);
-        _editPanel = editor;
 
         _status = new TextBlock { Foreground = Frozen(0xFFFF8A65), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 2, 0, 0), Visibility = Visibility.Collapsed };
         Grid.SetRow(_status, 1);
@@ -557,7 +540,7 @@ public sealed partial class VisorWindow : Window
         _playButton = new Button { Content = GlyphIcon(PauseIcon), Style = RowStyle, Foreground = Text, Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 6, 6), ToolTip = "Pausa / reproducir" };
         Rest(_playButton, Card);
         AttachHover(_playButton);
-        _playButton.Click += (_, _) => _playing = !_playing;
+        _playButton.Click += (_, _) => { if (!_editing) _playing = !_playing; };
         var restart = new Button
         {
             Content = new TextBlock { Text = "↻", FontSize = 16, FontFamily = new FontFamily("Segoe UI Symbol"), Foreground = Text, VerticalAlignment = VerticalAlignment.Center },
@@ -565,7 +548,7 @@ public sealed partial class VisorWindow : Window
         };
         Rest(restart, Card);
         AttachHover(restart);
-        restart.Click += (_, _) => { _stepIdx = 0; ResetStep(); _playing = true; };
+        restart.Click += (_, _) => { if (_editing) return; _stepIdx = 0; ResetStep(); _playing = true; };
         buttons.Children.Add(_playButton);
         buttons.Children.Add(restart);
         _readout = new TextBlock { Foreground = Muted, FontSize = 11, FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), TextTrimming = TextTrimming.CharacterEllipsis };
@@ -587,8 +570,12 @@ public sealed partial class VisorWindow : Window
         var view = new StackPanel { Orientation = Orientation.Horizontal };
         view.Children.Add(Flag("Cambiar dirección", "mirror", false));
         view.Children.Add(Flag("Recuadro", "zones", false));
-        view.Children.Add(Pill("Editar", OpenEditor));
         card.Children.Add(FormRow("Ver", view));
+
+        // Configuración (justo debajo): fps, duración y desplazamiento del clip que se ve.
+        card.Children.Add(GroupLabel("Configuración"));
+        _timingRow = new StackPanel();
+        card.Children.Add(_timingRow);
         return border;
     }
 
@@ -629,7 +616,6 @@ public sealed partial class VisorWindow : Window
         _list.Children.Clear();
         double width = Math.Max(150, (_side.ActualWidth > 0 ? _side.ActualWidth : Width / 4) - 36);
 
-        _list.Children.Add(Spacer());
         _list.Children.Add(GroupLabel("Acciones"));
         foreach (var a in Actions)
         {
@@ -641,7 +627,7 @@ public sealed partial class VisorWindow : Window
 
         // Las transiciones, en formato lista: punto verde si está dibujada (↺ si se reproduce al revés), rojo si es un corte.
         _list.Children.Add(Spacer());
-        _list.Children.Add(GroupLabel("Transiciones entre posturas"));
+        _list.Children.Add(GroupLabel("Transiciones"));
         foreach (var edge in Behaviors.Edges.Where(e => e.Via is not null).Concat(Behaviors.Edges.Where(e => e.Via is null)))
         {
             var ed = edge;
@@ -703,7 +689,7 @@ public sealed partial class VisorWindow : Window
 
     private void StartPlan(List<PlanStep> steps, string? note)
     {
-        if (_editOpen) { SetStatus("Pulsa Aceptar o Cancelar antes de cambiar de movimiento."); return; }
+        FlushEdit();
         _plan = steps;
         _stepIdx = 0;
         ResetStep();
@@ -746,22 +732,6 @@ public sealed partial class VisorWindow : Window
     }
 
     // ---------------------------------------------------------------- tiempos
-    private UIElement BuildTimingCard()
-    {
-        var border = NewCard("Configuración (vale para los dos gatos)", out var card);
-        border.Margin = new Thickness(0, 2, 0, 0);
-        _timingTitle = new TextBlock { Foreground = White, FontFamily = new FontFamily("Consolas"), FontSize = 12, Margin = new Thickness(2, 0, 0, 6) };
-        card.Children.Add(_timingTitle);
-        _timingRow = new StackPanel();
-        card.Children.Add(_timingRow);
-        card.Children.Add(new TextBlock
-        {
-            Text = "Escribe y pulsa Intro. Velocidad: tamaños del gato que avanza por segundo (0 = quieto; caminar, por ejemplo 0,4). Es lo que se mueve el gato y el suelo del visor.",
-            Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0),
-        });
-        return border;
-    }
-
     private void RefreshTimingRow()
     {
         _timingRow.Children.Clear();
@@ -769,21 +739,16 @@ public sealed partial class VisorWindow : Window
         string id = CurStep.Clip;
         var def = _clips[id];
         var original = _clips.Original(id);
-        _timingTitle.Text = $"{id} · {def.FrameCount} cuadros · {(def.Loop ? "bucle" : "una vez")}";
 
         var (fpsFrame, fpsBox) = Field(70);
         fpsBox.Text = def.Fps.ToString("0.##", CultureInfo.InvariantCulture);
-        _timingRow.Children.Add(FormRow("fps", fpsFrame));
+        _timingRow.Children.Add(FormRow("Fps", fpsFrame));
         var (durFrame, durBox) = Field(70);
         durBox.Text = (def.FrameCount / def.Fps).ToString("0.00", CultureInfo.InvariantCulture);
         _timingRow.Children.Add(FormRow("Duración (s)", durFrame));
         var (spdFrame, spdBox) = Field(70);
         spdBox.Text = SpeedText(def);
-        _timingRow.Children.Add(FormRow("Velocidad", spdFrame));
-
-        var reset = Pill("Restablecer", () => { ResetTiming(id); RefreshTimingRow(); }, compact: true);
-        reset.IsEnabled = _timing.ContainsKey(id);
-        reset.ToolTip = $"Vuelve a {original.Fps:0.##} fps";
+        _timingRow.Children.Add(FormRow("Desplazamiento", spdFrame));
 
         void Commit(bool fromDuration)
         {
@@ -800,7 +765,6 @@ public sealed partial class VisorWindow : Window
             durBox.Text = (now.FrameCount / now.Fps).ToString("0.00", CultureInfo.InvariantCulture);
             spdBox.Text = SpeedText(now);
             def = now;
-            reset.IsEnabled = _timing.ContainsKey(id);
         }
         fpsBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
         fpsBox.LostFocus += (_, _) => Commit(false);
@@ -808,8 +772,6 @@ public sealed partial class VisorWindow : Window
         durBox.LostFocus += (_, _) => Commit(true);
         spdBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(false); };
         spdBox.LostFocus += (_, _) => Commit(false);
-        reset.HorizontalAlignment = HorizontalAlignment.Left;
-        _timingRow.Children.Add(FormRow("", reset));
     }
 
     /// <summary>Velocidad en tamaños del gato por segundo: la casilla es 1/100 del alto del gato.</summary>
@@ -885,8 +847,6 @@ public sealed partial class VisorWindow : Window
         custom.Children.Add(frame);
         custom.Children.Add(Pill("Aplicar", () => { if (TryNumber(_sizeBox.Text, out double v)) ApplySize(v); }, compact: true));
         card.Children.Add(FormRow("Casilla (px)", custom));
-        _sizeInfo = new TextBlock { Foreground = Muted, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 0) };
-        card.Children.Add(_sizeInfo);
         return border;
     }
 
@@ -900,10 +860,8 @@ public sealed partial class VisorWindow : Window
 
     private void UpdateSizeInfo()
     {
-        double c = _host.CellSize;
-        int index = Array.FindIndex(SizePresets, p => Math.Abs(p - c) < 1e-6);
+        int index = Array.FindIndex(SizePresets, p => Math.Abs(p - _host.CellSize) < 1e-6);
         if (index >= 0) Select(_sizeSegments, index);
-        _sizeInfo.Text = $"Gato: {100 * c:0} px · caja: {66 * c:0} px. No cambia la cantidad de píxeles. Vale para todas las sesiones (de 0,25 a 1,5).";
     }
 
     // ---------------------------------------------------------------- reproducción (como el motor)
@@ -931,10 +889,10 @@ public sealed partial class VisorWindow : Window
         double now = _clock.Elapsed.TotalSeconds;
         double dt = Math.Min(0.1, now - _last);
         _last = now;
-        if (_plan.Count == 0 || _editOpen) return;
+        if (_plan.Count == 0) return;
 
         var def = CurClipDef;
-        if (_playing && now > _holdUntil)
+        if (_playing && !_editing && now > _holdUntil)
         {
             _t += dt * _speed;
             int target = (int)Math.Floor(_t * def.Fps);
@@ -987,39 +945,67 @@ public sealed partial class VisorWindow : Window
         int zoom = Math.Max(1, _zoom);
         _zoomText.Text = $"{zoom}×";
         string clip = CurStep.Clip;
-        double top = Math.Round(_stage.ActualHeight * GroundFraction) - _atlas.BaseRows * zoom;   // los pies siempre en la misma línea
-        string key = $"{_skin}|{clip}|{_frame}|{zoom}|{On("mirror")}|{On("zones")}|{_atlas.IsEdited(_skin, clip, _frame)}|{_drawRevision}|{top}";
+        bool mirror = On("mirror") && !_editing;   // al editar, el dibujo se ve sin espejo para pintar donde se ve
+        if (_editing) EnsureEditFrame(clip, _frame);
+        double top = Math.Round(_stage.ActualHeight * GroundFraction) - _atlas.BaseRows * zoom + _panY;   // los pies, en la misma línea
+        double left = Math.Round((_stage.ActualWidth - gw * zoom) / 2 + _panX);
+        string key = $"{_skin}|{clip}|{_frame}|{zoom}|{mirror}|{On("zones")}|{_atlas.IsEdited(_skin, clip, _frame)}|{_drawRevision}|{top}|{left}|{_editing}";
         if (key != _shownKey)
         {
             _shownKey = key;
             // Se pide el cuadro a tamaño 1:1 y lo amplía WPF (vecino más cercano): así no se guardan en la caché del atlas
             // imágenes enormes por cada zoom (un cuadro a zoom 6 ocupa más de 3 MB).
-            _frameImage.Source = _atlas.Frame(_skin, clip, _frame, On("mirror"));
+            _frameImage.Source = _editing && EditBitmap is { } wb ? wb : _atlas.Frame(_skin, clip, _frame, mirror);
+            var margin = new Thickness(left, top, 0, 0);
             _frameImage.Width = gw * zoom; _frameImage.Height = gh * zoom;
-            _frameImage.Margin = new Thickness(0, top, 0, 0);
+            _frameImage.Margin = margin;
             _overlayImage.Source = On("zones") ? ZoneOverlay.Get("cat", gw, gh, _atlas.ExtraZones, _atlas.Main, zoom) : null;
             _overlayImage.Width = gw * zoom; _overlayImage.Height = gh * zoom;
-            _overlayImage.Margin = new Thickness(0, top, 0, 0);
+            _overlayImage.Margin = margin;
+            _pixelGrid.Visibility = _editing && zoom >= 3 ? Visibility.Visible : Visibility.Collapsed;
+            _pixelGrid.Set(gw, gh, zoom);
+            _pixelGrid.Margin = margin;
         }
         _ground.Set(_camX, zoom, _atlas.BaseRows, GroundFraction);
     }
 
-    /// <summary>Barra de desplazamiento vertical fina y redondeada, con los colores del tema (en vez de la de Windows).</summary>
-    private static Style ThinScrollBarStyle()
-    {
-        string thumb = _thumbColor();
-        string xaml = "<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ScrollBar'>" +
-            "<Setter Property='Width' Value='8'/><Setter Property='Background' Value='Transparent'/>" +
-            "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'>" +
-            "<Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True'>" +
-            "<Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType='Thumb'>" +
-            $"<Border Background='{thumb}' CornerRadius='4' Margin='1,0'/>" +
-            "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb></Track></Grid>" +
-            "</ControlTemplate></Setter.Value></Setter></Style>";
-        return (Style)System.Windows.Markup.XamlReader.Parse(xaml);
-    }
+    /// <summary>Ancho de la barra de desplazamiento de la lista (px independientes del dispositivo).</summary>
+    private const double ScrollBarWidth = 5;
 
-    private static string _thumbColor() => ((SolidColorBrush)Muted).Color is var c ? $"#80{c.R:X2}{c.G:X2}{c.B:X2}" : "#80888888";
+    /// <summary>
+    /// Barra de desplazamiento vertical fina y redondeada que sigue a un ScrollViewer (se puede arrastrar). Solo se ve si
+    /// hay algo que desplazar.
+    /// </summary>
+    private static UIElement ThinScrollBar(ScrollViewer scroll)
+    {
+        var c = ((SolidColorBrush)Muted).Color;
+        var thumb = new Border { Width = ScrollBarWidth, CornerRadius = new CornerRadius(ScrollBarWidth / 2), Background = Frozen(0x99000000u | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B), HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 2, 0) };
+        var hit = new Border { Width = ScrollBarWidth + 8, Background = Transparent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Child = thumb, Visibility = Visibility.Collapsed };
+
+        void Update()
+        {
+            double extent = scroll.ExtentHeight, view = scroll.ViewportHeight;
+            if (view <= 0 || extent <= view + 0.5) { hit.Visibility = Visibility.Collapsed; return; }
+            hit.Visibility = Visibility.Visible;
+            double height = Math.Max(28, view * view / extent);
+            hit.Height = height;
+            hit.Margin = new Thickness(0, (view - height) * scroll.VerticalOffset / (extent - view), 0, 0);
+        }
+        scroll.ScrollChanged += (_, _) => Update();
+        scroll.SizeChanged += (_, _) => Update();
+
+        double startY = 0, startOffset = 0;
+        hit.MouseLeftButtonDown += (_, e) => { startY = e.GetPosition(scroll).Y; startOffset = scroll.VerticalOffset; hit.CaptureMouse(); e.Handled = true; };
+        hit.MouseMove += (_, e) =>
+        {
+            if (!hit.IsMouseCaptured) return;
+            double track = scroll.ViewportHeight - hit.Height;
+            if (track <= 0) return;
+            scroll.ScrollToVerticalOffset(startOffset + (e.GetPosition(scroll).Y - startY) * (scroll.ExtentHeight - scroll.ViewportHeight) / track);
+        };
+        hit.MouseLeftButtonUp += (_, _) => hit.ReleaseMouseCapture();
+        return hit;
+    }
 
     private int _drawRevision;
 
@@ -1029,6 +1015,28 @@ public sealed partial class VisorWindow : Window
         _drawRevision++;
         _stripClip = "";
         if (_plan.Count > 0) EnterStep();
+    }
+
+    // ---------------------------------------------------------------- cuadrícula de píxeles (al editar)
+    /// <summary>Una línea por casilla del dibujo, para ver dónde va cada color al pintar.</summary>
+    private sealed class PixelGrid : FrameworkElement
+    {
+        private int _w, _h, _zoom = 1;
+
+        public void Set(int width, int height, int zoom)
+        {
+            if (width == _w && height == _h && zoom == _zoom) return;
+            _w = width; _h = height; _zoom = zoom;
+            Width = width * zoom; Height = height * zoom;
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var pen = new Pen(GridLine, 1);   // tenue, del color del tema
+            for (int x = 0; x <= _w; x++) dc.DrawLine(pen, new Point(x * _zoom + 0.5, 0), new Point(x * _zoom + 0.5, _h * _zoom));
+            for (int y = 0; y <= _h; y++) dc.DrawLine(pen, new Point(0, y * _zoom + 0.5), new Point(_w * _zoom, y * _zoom + 0.5));
+        }
     }
 
     // ---------------------------------------------------------------- suelo con marcas

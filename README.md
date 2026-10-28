@@ -30,11 +30,11 @@ escribir la contraseña** y **ver qué aplicaciones tiene abiertas** cada sesió
   (ampliar, minimizar y cerrar). A la izquierda, en una lista, las **14 acciones** y las transiciones entre posturas (en
   rojo las que aún no tienen arte) y abajo el **selector de gato** (la cara del gato y el color de su sesión); a la
   derecha, el visor: al elegir una acción se ve esa acción precedida de las transiciones que haría el motor desde la postura
-  anterior, y al elegir una transición se ve de una postura a la otra. Debajo, los controles, los cuadros del clip y, en
-  dos columnas, la **configuración** (fps, duración y velocidad de desplazamiento en tamaños del gato por segundo) y el **tamaño de las piezas**. «Editar dibujo» cambia
-  el visor por el editor de píxeles dentro de la misma ventana: **todos los cuadros** del clip a la vez, la paleta y las
-  herramientas (lápiz, borrador, gotero, relleno, reemplazo de color, deshacer) a la derecha y **Aceptar / Cancelar /
-  Restablecer** debajo. Lo retocado se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en
+  anterior, y al elegir una transición se ve de una postura a la otra. Debajo del dibujo, los cuadros del clip y tres tarjetas: **Reproducción** (con la **configuración** del clip justo
+  debajo: fps, duración y velocidad de desplazamiento en tamaños del gato por segundo), **Dibujo** y **Tamaño de las piezas**.
+  Con **Editar** activado se pinta directamente sobre el visor: aparece la cuadrícula de casillas, hay lápiz, borrador,
+  cuentagotas y bote de pintura, y los colores del gato (los mismos para todas sus acciones); botón derecho mueve el dibujo
+  ampliado y lo pintado se guarda solo. Lo retocado se guarda en `%ProgramData%\Swip\art` (tiempos en `timing.json`, cuadros en
   `<gato>\<clip>_<cuadro>.png`) y el tamaño en `settings.json`, así que lo ven todas las sesiones. La calidad del arte
   sale de `src/Swip.App/Assets/atlas/visor.json` (`tools/art/build_viewer.py`) y el plan completo está en
   **[`docs/art/PLAN_TRANSICIONES.md`](docs/art/PLAN_TRANSICIONES.md)**.
